@@ -2,6 +2,7 @@ export * from "./contracts/backend/leaderboard-contracts.ts";
 export * from "./rules/map-generation.ts";
 export * from "./contracts/backend/run-contracts.ts";
 export * from "./contracts/backend/run-state.ts";
+export * from "./contracts/gameplay/skill-contract.ts";
 export * from "./content/types.ts";
 export * from "./content/equipment.ts";
 export * from "./content/relics.ts";
