@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { CompleteRunRequest, RunState } from "@typing-roguelike/shared";
+import { generateNodeChoices, type CompleteRunRequest, type RunState } from "@typing-roguelike/shared";
 import { database } from "../config/database.ts";
 
 const now = (): string => new Date().toISOString();
 const hashState = (state: RunState): string =>
   createHash("sha256").update(JSON.stringify(state)).digest("hex");
 
-const defaultState = (nodeId: string): RunState => ({
+const defaultState = (seed: number): RunState => ({
   schemaVersion: 1,
   character: {},
   inventory: { itemInstances: [], relicInstances: [] },
@@ -14,20 +14,21 @@ const defaultState = (nodeId: string): RunState => ({
   build: { equippedRelicIds: [] },
   map: {
     mapId: "tower-v1",
-    currentNodeId: nodeId,
-    visitedNodeIds: [],
-    nodeStatuses: { [nodeId]: "current" },
+    seed,
+    currentRound: 1,
+    choicePath: [],
+    nodeStatuses: {},
   },
   runCurrency: 0,
 });
 
-export const createRun = (playerId: string, nodeId = "start") => {
+export const createRun = (playerId: string) => {
   const runId = randomUUID();
   const timestamp = now();
-  const state = defaultState(nodeId);
+  const mapSeed = Math.floor(Math.random() * 2_147_483_647);
+  const state = defaultState(mapSeed);
   const stateJson = JSON.stringify(state);
   const stateHash = hashState(state);
-  const mapSeed = Math.floor(Math.random() * 2_147_483_647);
 
   const transaction = database.transaction(() => {
     const activeRun = database.prepare(
@@ -37,18 +38,18 @@ export const createRun = (playerId: string, nodeId = "start") => {
 
     database.prepare(`
       INSERT INTO game_runs
-        (id, anonymous_player_id, current_node_id, current_floor, map_seed, state_snapshot,
+        (id, anonymous_player_id, current_node_id, current_floor, state_snapshot,
          state_version, state_hash, started_at, last_saved_at)
-      VALUES (?, ?, ?, 0, ?, ?, 1, ?, ?, ?)
-    `).run(runId, playerId, nodeId, mapSeed, stateJson, stateHash, timestamp, timestamp);
+      VALUES (?, ?, 'start', 1, ?, 1, ?, ?, ?)
+    `).run(runId, playerId, stateJson, stateHash, timestamp, timestamp);
     database.prepare(`
       INSERT INTO run_checkpoints
         (id, run_id, sequence_no, reason, node_id, floor, state_snapshot, state_hash, created_at)
-      VALUES (?, ?, 1, 'run_started', ?, 0, ?, ?, ?)
-    `).run(randomUUID(), runId, nodeId, stateJson, stateHash, timestamp);
+      VALUES (?, ?, 1, 'run_started', 'start', 1, ?, ?, ?)
+    `).run(randomUUID(), runId, stateJson, stateHash, timestamp);
   });
   transaction();
-  return { runId, stateVersion: 1, checkpoint: state };
+  return { runId, stateVersion: 1, checkpoint: state, nodeChoices: generateNodeChoices(mapSeed, 1, []) };
 };
 
 export const getActiveRun = (playerId: string) => {
@@ -64,12 +65,15 @@ export const getActiveRun = (playerId: string) => {
 export const saveCheckpoint = (
   playerId: string,
   runId: string,
-  nodeId: string,
-  floor: number,
+  round: number,
+  choice: 1 | 2 | 3,
   expectedVersion: number,
   state: RunState,
 ) => {
-  if (state.map.currentNodeId !== nodeId) throw new Error("NODE_STATE_MISMATCH");
+  const nodeKey = `${round}-${choice}`;
+  if (state.map.currentRound !== round || state.map.choicePath.at(-1) !== choice) {
+    throw new Error("NODE_STATE_MISMATCH");
+  }
   const stateJson = JSON.stringify(state);
   const stateHash = hashState(state);
   const timestamp = now();
@@ -79,16 +83,20 @@ export const saveCheckpoint = (
       SET current_node_id = ?, current_floor = ?, state_snapshot = ?, state_hash = ?,
           state_version = state_version + 1, last_saved_at = ?
       WHERE id = ? AND anonymous_player_id = ? AND status = 'active' AND state_version = ?
-    `).run(nodeId, floor, stateJson, stateHash, timestamp, runId, playerId, expectedVersion);
+    `).run(nodeKey, round, stateJson, stateHash, timestamp, runId, playerId, expectedVersion);
     if (result.changes === 0) throw new Error("STALE_STATE_VERSION");
     database.prepare(`
       INSERT INTO run_checkpoints
         (id, run_id, sequence_no, reason, node_id, floor, state_snapshot, state_hash, created_at)
       SELECT ?, ?, state_version, 'node_entered', ?, ?, ?, ?, ? FROM game_runs WHERE id = ?
-    `).run(randomUUID(), runId, nodeId, floor, stateJson, stateHash, timestamp, runId);
+    `).run(randomUUID(), runId, nodeKey, round, stateJson, stateHash, timestamp, runId);
   });
   transaction();
-  return { stateVersion: expectedVersion + 1, savedAt: timestamp };
+  return {
+    stateVersion: expectedVersion + 1,
+    savedAt: timestamp,
+    nodeChoices: generateNodeChoices(state.map.seed, round + 1, state.map.choicePath),
+  };
 };
 
 export const completeRun = (playerId: string, runId: string, input: CompleteRunRequest) => {

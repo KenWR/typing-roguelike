@@ -32,11 +32,12 @@ export const openApiDocument = {
           build: { type: "object", additionalProperties: true },
           map: {
             type: "object",
-            required: ["mapId", "currentNodeId", "visitedNodeIds", "nodeStatuses"],
+            required: ["mapId", "seed", "currentRound", "choicePath", "nodeStatuses"],
             properties: {
               mapId: { type: "string", example: "tower-v1" },
-              currentNodeId: { type: "string", example: "node-2-1" },
-              visitedNodeIds: { type: "array", items: { type: "string" } },
+              seed: { type: "integer", example: 123456789 },
+              currentRound: { type: "integer", minimum: 1, example: 2 },
+              choicePath: { type: "array", items: { type: "integer", minimum: 1, maximum: 3 }, example: [2, 1, 3] },
               nodeStatuses: { type: "object", additionalProperties: { type: "string" } },
             },
           },
@@ -45,10 +46,10 @@ export const openApiDocument = {
       },
       CheckpointRequest: {
         type: "object",
-        required: ["nodeId", "floor", "stateVersion", "state"],
+        required: ["round", "choice", "stateVersion", "state"],
         properties: {
-          nodeId: { type: "string", example: "node-2-1" },
-          floor: { type: "integer", minimum: 0, example: 1 },
+          round: { type: "integer", minimum: 1, example: 2 },
+          choice: { type: "integer", enum: [1, 2, 3], example: 1 },
           stateVersion: { type: "integer", minimum: 1, example: 1 },
           state: { $ref: "#/components/schemas/RunState" },
         },
@@ -84,10 +85,6 @@ export const openApiDocument = {
         tags: ["Runs"],
         summary: "새 게임 런 시작",
         security: [{ anonymousPlayerCookie: [] }],
-        requestBody: {
-          required: false,
-          content: { "application/json": { schema: { type: "object", properties: { nodeId: { type: "string", default: "start" } } } } },
-        },
         responses: {
           "201": { description: "런 생성 및 첫 체크포인트 저장" },
           "409": { description: "활성 런이 이미 존재", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },

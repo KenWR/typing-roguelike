@@ -24,7 +24,6 @@ database.exec(`
     status TEXT NOT NULL CHECK (status IN ('active', 'dead', 'cleared', 'abandoned')) DEFAULT 'active',
     current_node_id TEXT NOT NULL,
     current_floor INTEGER NOT NULL CHECK (current_floor >= 0),
-    map_seed INTEGER NOT NULL,
     state_snapshot TEXT NOT NULL,
     state_version INTEGER NOT NULL CHECK (state_version > 0),
     state_hash TEXT,
@@ -72,4 +71,9 @@ for (const column of ["play_time_ms", "max_combo", "defeated_enemy_count", "earn
   if (resultColumns.some((resultColumn) => resultColumn.name === column)) {
     database.exec(`ALTER TABLE run_results DROP COLUMN ${column}`);
   }
+}
+
+const gameRunColumns = database.prepare("PRAGMA table_info(game_runs)").all() as Array<{ name: string }>;
+if (gameRunColumns.some((column) => column.name === "map_seed")) {
+  database.exec("ALTER TABLE game_runs DROP COLUMN map_seed");
 }

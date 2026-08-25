@@ -24,6 +24,10 @@ API는 별도 DB 서버 없이 `apps/api/data/game.sqlite`에 익명 플레이�
 노드 진입 체크포인트 이력, 종료 결과를 저장합니다. 로컬 개발에서는 기본적으로
 `http://localhost:5173`을 CORS 허용 origin으로 사용합니다.
 
+맵 seed는 `RunState.map.seed`에 저장하며, 선택 경로(`choicePath`)와 seed를 사용해
+라운드별 3개 노드와 전투 몬스터를 결정적으로 재생성합니다. 1라운드는 상점을 제외하고,
+9라운드는 휴식, 10라운드는 보스를 포함합니다.
+
 주요 엔드포인트:
 
 - `POST /runs`: 익명 런 시작
