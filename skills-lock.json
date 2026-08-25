@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "phaser-gamedev": {
+      "source": "pmarashian/cursor-agent-skills",
+      "sourceType": "github",
+      "skillPath": "phaser-gamedev/SKILL.md",
+      "computedHash": "6372f81b1ceb9ffad8ce9da986d64a46fb4e0a717b3940eac04923af041e665f"
+    }
+  }
+}
