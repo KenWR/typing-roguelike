@@ -1,26 +1,18 @@
 import { createHash, randomUUID } from "node:crypto";
-import { generateNodeChoices, type CompleteRunRequest, type RunState } from "@typing-roguelike/shared";
+import {
+  createInitialRunState,
+  generateNodeChoices,
+  type CompleteRunRequest,
+  type RunState,
+} from "@typing-roguelike/shared";
 import { database } from "../config/database.ts";
 
 const now = (): string => new Date().toISOString();
 const hashState = (state: RunState): string =>
   createHash("sha256").update(JSON.stringify(state)).digest("hex");
 
-const defaultState = (seed: number): RunState => ({
-  schemaVersion: 1,
-  character: {},
-  inventory: { itemInstances: [], relicInstances: [] },
-  loadout: { weaponId: null, subweaponId: null, ring1Id: null, ring2Id: null },
-  build: { equippedRelicIds: [] },
-  map: {
-    mapId: "tower-v1",
-    seed,
-    currentRound: 1,
-    choicePath: [],
-    nodeStatuses: {},
-  },
-  runCurrency: 0,
-});
+const defaultState = (seed: number): RunState =>
+  createInitialRunState({ seed });
 
 export const createRun = (playerId: string) => {
   const runId = randomUUID();
