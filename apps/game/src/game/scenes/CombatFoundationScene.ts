@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import { CombatHud } from "../hud/combat-hud";
+import { CommandHud } from "../hud/command-hud";
+import { CommandInputBuffer } from "../input/command-input-buffer";
 import { createCombatLayout } from "../layout/combat-layout";
 
 const BACKGROUND_WIDTH = 1600;
@@ -15,6 +17,10 @@ export class CombatFoundationScene extends Phaser.Scene {
   private playerPlaceholder!: Phaser.GameObjects.Container;
   private enemyPlaceholder!: Phaser.GameObjects.Container;
   private combatHud!: CombatHud;
+  private commandHud!: CommandHud;
+  private commandInputBuffer!: CommandInputBuffer;
+  private commandInputCleanup?: () => void;
+  private isComposing = false;
 
   constructor() {
     super("CombatFoundationScene");
@@ -36,9 +42,27 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.combatHud = new CombatHud(this, { hp: 80, maxHp: 100, ap: 30, maxAp: 50 });
     this.uiLayer.add(this.combatHud.container);
 
+    this.commandInputBuffer = new CommandInputBuffer("매직실드");
+    this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
+    this.uiLayer.add(this.commandHud.container);
+    this.commandInputBuffer.onCompleted(() => {
+      this.commandHud.showSkillStarted();
+    });
+    this.createCommandInputElement();
+
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseResizeListener, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseResizeListener, this);
+    this.events.once(
+      Phaser.Scenes.Events.SHUTDOWN,
+      this.releaseCommandInputElement,
+      this,
+    );
+    this.events.once(
+      Phaser.Scenes.Events.DESTROY,
+      this.releaseCommandInputElement,
+      this,
+    );
     this.applyLayout(this.scale.gameSize.width, this.scale.gameSize.height);
   }
 
@@ -68,6 +92,77 @@ export class CombatFoundationScene extends Phaser.Scene {
 
     this.combatHud.setPosition(layout.hudReservation.x, layout.hudReservation.y);
     this.combatHud.setSize(layout.hudReservation.width, layout.hudReservation.height);
+    this.commandHud.setPosition(
+      layout.commandHudReservation.x,
+      layout.commandHudReservation.y,
+    );
+    this.commandHud.setSize(
+      layout.commandHudReservation.width,
+      layout.commandHudReservation.height,
+    );
+  }
+
+  private createCommandInputElement(): void {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.id = "command-input";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.setAttribute("aria-label", "커맨드 입력");
+    Object.assign(input.style, {
+      position: "fixed",
+      left: "-10000px",
+      top: "0",
+      width: "1px",
+      height: "1px",
+      opacity: "0",
+      pointerEvents: "none",
+    });
+
+    const updateFromElement = (): void => {
+      this.commandInputBuffer.updateInput(input.value, {
+        isComposing: this.isComposing,
+      });
+      this.commandHud.update(this.commandInputBuffer.snapshot);
+    };
+    const handleCompositionStart = (): void => {
+      this.isComposing = true;
+      updateFromElement();
+    };
+    const handleCompositionUpdate = (): void => {
+      updateFromElement();
+    };
+    const handleCompositionEnd = (): void => {
+      this.isComposing = false;
+      updateFromElement();
+    };
+    const handleInput = (): void => {
+      updateFromElement();
+    };
+
+    input.addEventListener("compositionstart", handleCompositionStart);
+    input.addEventListener("compositionupdate", handleCompositionUpdate);
+    input.addEventListener("compositionend", handleCompositionEnd);
+    input.addEventListener("input", handleInput);
+    document.body.appendChild(input);
+    input.focus({ preventScroll: true });
+    this.commandInputCleanup = () => {
+      input.removeEventListener("compositionstart", handleCompositionStart);
+      input.removeEventListener("compositionupdate", handleCompositionUpdate);
+      input.removeEventListener("compositionend", handleCompositionEnd);
+      input.removeEventListener("input", handleInput);
+      input.remove();
+      this.commandInputCleanup = undefined;
+    };
+  }
+
+  private releaseCommandInputElement(): void {
+    this.commandInputCleanup?.();
+    this.isComposing = false;
   }
 
   private createActorPlaceholder(

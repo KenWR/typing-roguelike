@@ -6,6 +6,7 @@ export type CombatLayout = {
   player: { x: number; y: number };
   enemy: { x: number; y: number };
   hudReservation: Phaser.Geom.Rectangle;
+  commandHudReservation: Phaser.Geom.Rectangle;
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -16,6 +17,7 @@ export function createCombatLayout(width: number, height: number): CombatLayout 
   const safeInset = clamp(shortestSide * 0.035, 12, 48);
   const actorScale = clamp(shortestSide / 760, 0.58, 1.15);
   const hudHeight = clamp(height * 0.18, 72, 156);
+  const commandHudHeight = clamp(height * 0.2, 132, 172);
 
   return {
     width,
@@ -35,6 +37,12 @@ export function createCombatLayout(width: number, height: number): CombatLayout 
       safeInset,
       Math.max(0, width - safeInset * 2),
       hudHeight,
+    ),
+    commandHudReservation: new Phaser.Geom.Rectangle(
+      safeInset,
+      Math.max(safeInset, height - safeInset - commandHudHeight),
+      Math.max(0, width - safeInset * 2),
+      commandHudHeight,
     ),
   };
 }
