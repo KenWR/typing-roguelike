@@ -67,6 +67,10 @@ bun run dev:api
     └── shared              # 클라이언트·서버 공유 계약과 타입
 ```
 
+## UI 구현 참고
+
+게임 UI를 구현하거나 리뷰할 때는 [UI/UX 원칙: Mood & Visual Direction](docs/ui-ux-principles.md)을 먼저 확인합니다. 문서에는 `dark fantasy × magical documents × tower exploration` 무드, 화면별 시각 방향, 판독성 기준, AI/UI 작업 규칙이 정리되어 있습니다.
+
 ## 검증
 
 ```bash
