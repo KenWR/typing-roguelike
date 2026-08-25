@@ -3,6 +3,7 @@
 ## Skills
 
 - `phaser-gamedev`: Phaser 3 구현과 구조를 위한 저장소 스킬입니다.
+- `github-pr`: 변경 검토, 검증, 템플릿 적용, GitHub PR 생성과 상태 확인을 위한 저장소 스킬입니다.
 - `taste-bootstrap`, `create-specification`, `playwright`: 사용자 범위에 설치된 기존 스킬을 사용합니다.
 
 Codex는 저장소 루트의 `.agents/skills`를 자동으로 탐색합니다. 새 스킬이 목록에 보이지 않으면 Codex를 다시 시작합니다.
