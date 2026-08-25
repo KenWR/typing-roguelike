@@ -101,13 +101,11 @@ export const completeRun = (playerId: string, runId: string, input: CompleteRunR
     if (result.changes === 0) throw new Error("RUN_NOT_ACTIVE");
     database.prepare(`
       INSERT INTO run_results
-        (run_id, end_reason, score, cleared_floor, play_time_ms, accuracy, max_combo,
-         defeated_enemy_count, earned_money, result_snapshot, finalized_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (run_id, end_reason, score, cleared_floor, accuracy, result_snapshot, finalized_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
-      runId, input.endReason, input.score, input.clearedFloor, input.playTimeMs,
-      input.accuracy ?? null, input.maxCombo ?? 0, input.defeatedEnemyCount ?? 0,
-      input.earnedMoney ?? 0, JSON.stringify(input.resultSnapshot ?? {}), timestamp,
+      runId, input.endReason, input.score, input.clearedFloor, input.accuracy ?? null,
+      JSON.stringify(input.resultSnapshot ?? {}), timestamp,
     );
   });
   transaction();

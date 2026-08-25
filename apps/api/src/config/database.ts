@@ -59,14 +59,17 @@ database.exec(`
     end_reason TEXT NOT NULL CHECK (end_reason IN ('dead', 'cleared', 'abandoned')),
     score INTEGER NOT NULL CHECK (score >= 0),
     cleared_floor INTEGER NOT NULL CHECK (cleared_floor >= 0),
-    play_time_ms INTEGER NOT NULL CHECK (play_time_ms >= 0),
     accuracy REAL CHECK (accuracy IS NULL OR (accuracy >= 0 AND accuracy <= 100)),
-    max_combo INTEGER NOT NULL DEFAULT 0 CHECK (max_combo >= 0),
-    defeated_enemy_count INTEGER NOT NULL DEFAULT 0 CHECK (defeated_enemy_count >= 0),
-    earned_money INTEGER NOT NULL DEFAULT 0 CHECK (earned_money >= 0),
     result_snapshot TEXT NOT NULL DEFAULT '{}',
     finalized_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS run_results_score_ranking_idx
     ON run_results (score DESC, finalized_at ASC);
 `);
+
+const resultColumns = database.prepare("PRAGMA table_info(run_results)").all() as Array<{ name: string }>;
+for (const column of ["play_time_ms", "max_combo", "defeated_enemy_count", "earned_money"]) {
+  if (resultColumns.some((resultColumn) => resultColumn.name === column)) {
+    database.exec(`ALTER TABLE run_results DROP COLUMN ${column}`);
+  }
+}
