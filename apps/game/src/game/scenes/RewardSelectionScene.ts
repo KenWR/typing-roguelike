@@ -91,9 +91,6 @@ export class RewardSelectionScene extends Phaser.Scene {
 
   create(): void {
     const state = this.adapter.getViewState();
-    this.input.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Phaser.Input.Pointer) => {
-      console.log("FE05 scene pointer", pointer.x, pointer.y);
-    });
 
     this.backdrop = this.add.graphics().setDepth(0);
     this.headerPanel = this.add
@@ -120,7 +117,6 @@ export class RewardSelectionScene extends Phaser.Scene {
       .rectangle(0, 0, 1, 1, COLORS.disabled, 1)
       .setOrigin(0)
       .setDepth(11);
-    this.continueButton.setInteractive({ useHandCursor: true });
     this.continueButton.on(Phaser.Input.Events.POINTER_DOWN, this.handleContinue, this);
     this.continueButton.on(Phaser.Input.Events.POINTER_OVER, () => {
       if (this.adapter.getViewState().status === "selected") {
@@ -149,15 +145,10 @@ export class RewardSelectionScene extends Phaser.Scene {
 
   private createCard(candidate: RewardCandidate): RewardCardView {
     const container = this.add.container(0, 0).setDepth(20);
-    container.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, 1, 1),
-      Phaser.Geom.Rectangle.Contains,
-    );
     const panel = this.add
       .rectangle(0, 0, 1, 1, COLORS.panelRaised, 1)
       .setOrigin(0);
     container.on(Phaser.Input.Events.POINTER_DOWN, () => {
-      console.log("FE05 card pointer", candidate.id);
       this.handleRewardSelection(candidate.id);
     });
     container.on(Phaser.Input.Events.POINTER_OVER, () => {
@@ -342,6 +333,11 @@ export class RewardSelectionScene extends Phaser.Scene {
     this.continueButton
       .setPosition(width / 2 - buttonWidth / 2, footerY + 14)
       .setSize(buttonWidth, buttonHeight);
+    if (this.continueButton.input === null) {
+      this.continueButton.setInteractive({ useHandCursor: true });
+    } else {
+      this.continueButton.input.hitArea.setSize(buttonWidth, buttonHeight);
+    }
     this.continueText.setPosition(width / 2, footerY + 14 + buttonHeight / 2);
     this.feedbackText.setPosition(width / 2, footerY + footerHeight - 9);
   }
@@ -358,10 +354,14 @@ export class RewardSelectionScene extends Phaser.Scene {
     const rarity = RARITY_PRESENTATION[card.candidate.rarity];
     card.container.setPosition(x, y);
     card.container.setSize(width, height);
-    card.container.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, width, height),
-      Phaser.Geom.Rectangle.Contains,
-    );
+    if (card.container.input === null) {
+      card.container.setInteractive(
+        new Phaser.Geom.Rectangle(0, 0, width, height),
+        Phaser.Geom.Rectangle.Contains,
+      );
+    } else {
+      card.container.input.hitArea.setSize(width, height);
+    }
     card.panel.setSize(width, height);
     card.accentBar.setPosition(0, 0).setSize(4, height).setFillStyle(rarity.accent, 1);
     card.rarityText.setPosition(padding, padding);
