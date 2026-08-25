@@ -6,8 +6,9 @@ export type RunState = {
 	build: Record<string, unknown>;
 	map: {
 		mapId: string;
-		currentNodeId: string;
-		visitedNodeIds: string[];
+		seed: number;
+		currentRound: number;
+		choicePath: number[];
 		nodeStatuses: Record<string, string>;
 	};
 	runCurrency: number;

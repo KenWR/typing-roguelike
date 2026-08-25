@@ -1,4 +1,5 @@
 import type { RunState } from "./run-state.ts";
+import type { GeneratedMapNode } from "../../rules/map-generation.ts";
 
 export type RunStatus = "active" | "dead" | "cleared" | "abandoned";
 export type RunEndReason = "dead" | "cleared" | "abandoned";
@@ -7,11 +8,12 @@ export interface CreateRunResponse {
 	runId: string;
 	stateVersion: number;
 	checkpoint: RunState;
+	nodeChoices: GeneratedMapNode[];
 }
 
 export interface CheckpointRequest {
-	nodeId: string;
-	floor: number;
+	round: number;
+	choice: 1 | 2 | 3;
 	stateVersion: number;
 	state: RunState;
 }

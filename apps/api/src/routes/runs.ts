@@ -4,9 +4,9 @@ import { completeRun, createRun, getActiveRun, saveCheckpoint } from "../service
 
 export const runsRouter: Router = Router();
 
-runsRouter.post("/", (request, response) => {
+runsRouter.post("/", (_request, response) => {
   try {
-    response.status(201).json(createRun(response.locals.anonymousPlayerId, request.body.nodeId));
+    response.status(201).json(createRun(response.locals.anonymousPlayerId));
   } catch (error) {
     if (error instanceof Error && error.message === "ACTIVE_RUN_EXISTS") {
       response.status(409).json({ error: "active_run_exists" });
@@ -24,7 +24,7 @@ runsRouter.put("/:runId/checkpoint", (request, response) => {
   try {
     const body = request.body as CheckpointRequest;
     response.json(saveCheckpoint(
-      response.locals.anonymousPlayerId, request.params.runId, body.nodeId, body.floor,
+      response.locals.anonymousPlayerId, request.params.runId, body.round, body.choice,
       body.stateVersion, body.state,
     ));
   } catch (error) {
