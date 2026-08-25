@@ -1,0 +1,117 @@
+import {
+  continueRewardSelection,
+  createRewardSelectionViewState,
+  selectReward,
+  type RewardCandidate,
+  type RewardSelectionViewState,
+} from "./reward-selection-view-state";
+
+export type RewardSelectionRunState = Readonly<{
+  inventory: readonly string[];
+  selectedRewardIds: readonly string[];
+  nextStep: string | null;
+}>;
+
+export type RewardSelectionAdapter<TRunState = RewardSelectionRunState> = Readonly<{
+  getViewState: () => RewardSelectionViewState;
+  getRunState: () => TRunState;
+  selectReward: (rewardId: string) => RewardSelectionViewState;
+  continue: () => RewardSelectionViewState;
+}>;
+
+export type CreateRewardSelectionAdapterOptions<TRunState> = Readonly<{
+  initialViewState: RewardSelectionViewState;
+  initialRunState: TRunState;
+  applySelection: (runState: TRunState, reward: RewardCandidate) => TRunState;
+  onContinue?: (runState: TRunState, reward: RewardCandidate) => void;
+}>;
+
+export function createRewardSelectionAdapter<TRunState>(
+  options: CreateRewardSelectionAdapterOptions<TRunState>,
+): RewardSelectionAdapter<TRunState> {
+  let viewState = options.initialViewState;
+  let runState = options.initialRunState;
+
+  const getSelectedReward = (): RewardCandidate => {
+    const selectedRewardId = viewState.selectedRewardId;
+    if (selectedRewardId === null) {
+      throw new Error("Select a reward before continuing.");
+    }
+
+    const reward = viewState.candidates.find(
+      (candidate) => candidate.id === selectedRewardId,
+    );
+    if (reward === undefined) {
+      throw new Error(`Reward candidate not found: ${selectedRewardId}`);
+    }
+    return reward;
+  };
+
+  return {
+    getViewState: () => viewState,
+    getRunState: () => runState,
+    selectReward: (rewardId) => {
+      viewState = selectReward(viewState, rewardId);
+      return viewState;
+    },
+    continue: () => {
+      const reward = getSelectedReward();
+      viewState = continueRewardSelection(viewState);
+      runState = options.applySelection(runState, reward);
+      options.onContinue?.(runState, reward);
+      return viewState;
+    },
+  };
+}
+
+export const REWARD_SELECTION_FIXTURE_CANDIDATES: readonly RewardCandidate[] = [
+  {
+    id: "ember-blade",
+    kind: "weapon",
+    name: "잿불 칼날",
+    rarity: "rare",
+    description: "불씨를 품은 칼날이 다음 공격을 가볍게 만듭니다.",
+    effect: "공격력 +14 · 화상 확률 +8%",
+    icon: "✦",
+  },
+  {
+    id: "echo-charm",
+    kind: "relic",
+    name: "메아리 부적",
+    rarity: "uncommon",
+    description: "정확한 입력이 이어질수록 작은 메아리가 쌓입니다.",
+    effect: "콤보 보너스 +12%",
+    icon: "◈",
+  },
+  {
+    id: "quiet-focus",
+    kind: "skill",
+    name: "고요한 집중",
+    rarity: "epic",
+    description: "호흡을 고르고 다음 커맨드에 시간을 더합니다.",
+    effect: "AP 회복 +6 · 입력 시간 +1초",
+    icon: "◎",
+  },
+];
+
+export function createRewardSelectionFixtureAdapter(): RewardSelectionAdapter {
+  const initialRunState: RewardSelectionRunState = {
+    inventory: [],
+    selectedRewardIds: [],
+    nextStep: null,
+  };
+
+  return createRewardSelectionAdapter<RewardSelectionRunState>({
+    initialViewState: createRewardSelectionViewState({
+      candidates: REWARD_SELECTION_FIXTURE_CANDIDATES,
+      round: 3,
+      currency: 120,
+    }),
+    initialRunState,
+    applySelection: (runState, reward) => ({
+      ...runState,
+      inventory: [...runState.inventory, reward.id],
+      selectedRewardIds: [...runState.selectedRewardIds, reward.id],
+    }),
+  });
+}
