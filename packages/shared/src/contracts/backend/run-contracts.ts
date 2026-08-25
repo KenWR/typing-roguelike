@@ -1,8 +1,8 @@
-import type { RunState } from "./run-state.ts";
+import type { RunState, RunStateStatus } from "./run-state.ts";
 import type { GeneratedMapNode } from "../../rules/map-generation.ts";
 
-export type RunStatus = "active" | "dead" | "cleared" | "abandoned";
-export type RunEndReason = "dead" | "cleared" | "abandoned";
+export type RunStatus = RunStateStatus;
+export type RunEndReason = Exclude<RunStatus, "active">;
 
 export interface CreateRunResponse {
 	runId: string;
