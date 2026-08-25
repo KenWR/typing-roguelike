@@ -23,24 +23,77 @@ export const openApiDocument = {
     schemas: {
       RunState: {
         type: "object",
-        required: ["schemaVersion", "character", "inventory", "loadout", "build", "map", "runCurrency"],
+        required: [
+          "schemaVersion",
+          "status",
+          "character",
+          "inventory",
+          "loadout",
+          "build",
+          "map",
+          "acquiredItemValue",
+          "runCurrency",
+        ],
         properties: {
           schemaVersion: { type: "integer", example: 1 },
-          character: { type: "object", additionalProperties: true },
-          inventory: { type: "object", additionalProperties: true },
-          loadout: { type: "object", additionalProperties: true },
-          build: { type: "object", additionalProperties: true },
+          status: {
+            type: "string",
+            enum: ["active", "dead", "cleared", "abandoned"],
+            example: "active",
+          },
+          character: {
+            type: "object",
+            required: ["currentHp", "maxHp"],
+            properties: {
+              currentHp: { type: "number", minimum: 0, example: 72 },
+              maxHp: { type: "number", exclusiveMinimum: 0, example: 100 },
+            },
+          },
+          inventory: {
+            type: "object",
+            required: ["itemInstances", "relicInstances"],
+            properties: {
+              itemInstances: { type: "array", items: { type: "string" } },
+              relicInstances: { type: "array", items: { type: "string" } },
+            },
+          },
+          loadout: {
+            type: "object",
+            required: ["weaponId", "subweaponId", "ring1Id", "ring2Id"],
+            properties: {
+              weaponId: { type: "string", nullable: true },
+              subweaponId: { type: "string", nullable: true },
+              ring1Id: { type: "string", nullable: true },
+              ring2Id: { type: "string", nullable: true },
+            },
+          },
+          build: {
+            type: "object",
+            required: ["equippedRelicIds"],
+            properties: {
+              equippedRelicIds: { type: "array", items: { type: "string" } },
+            },
+          },
           map: {
             type: "object",
-            required: ["mapId", "seed", "currentRound", "choicePath", "nodeStatuses"],
+            required: [
+              "mapId",
+              "seed",
+              "currentNodeId",
+              "currentRound",
+              "choicePath",
+              "nodeStatuses",
+            ],
             properties: {
               mapId: { type: "string", example: "tower-v1" },
               seed: { type: "integer", example: 123456789 },
+              currentNodeId: { type: "string", example: "2-1" },
               currentRound: { type: "integer", minimum: 1, example: 2 },
               choicePath: { type: "array", items: { type: "integer", minimum: 1, maximum: 3 }, example: [2, 1, 3] },
               nodeStatuses: { type: "object", additionalProperties: { type: "string" } },
             },
           },
+          acquiredItemValue: { type: "integer", minimum: 0, example: 75 },
           runCurrency: { type: "integer", minimum: 0, example: 120 },
         },
       },
