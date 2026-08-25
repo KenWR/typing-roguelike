@@ -3,6 +3,14 @@ dist/
 .env
 .env.*
 !.env.example
+apps/api/data/
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
 .DS_Store
 *.log
 .idea/

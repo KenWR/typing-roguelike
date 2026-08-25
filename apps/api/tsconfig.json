@@ -6,7 +6,7 @@
     "module": "Preserve",
     "lib": ["ES2022"],
     "moduleResolution": "Bundler",
-    "types": ["node"],
+    "types": ["node", "bun"],
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
