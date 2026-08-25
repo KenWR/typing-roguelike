@@ -17,6 +17,8 @@ bun run dev
 - 게임 클라이언트: `http://localhost:5173`
 - API 서버: `http://localhost:3000`
 - 상태 확인: `http://localhost:3000/health`
+- Swagger UI: `http://localhost:3000/docs`
+- OpenAPI JSON: `http://localhost:3000/openapi.json`
 
 API는 별도 DB 서버 없이 `apps/api/data/game.sqlite`에 익명 플레이어, 활성 런,
 노드 진입 체크포인트 이력, 종료 결과를 저장합니다. 로컬 개발에서는 기본적으로
@@ -28,6 +30,7 @@ API는 별도 DB 서버 없이 `apps/api/data/game.sqlite`에 익명 플레이�
 - `GET /runs/active`: 현재 브라우저의 활성 런 조회
 - `PUT /runs/:runId/checkpoint`: 노드 진입 직후 상태 저장
 - `POST /runs/:runId/complete`: 사망·클리어·포기 결과 저장
+- `GET /leaderboard?limit=20`: 점수순 리더보드 조회 (최대 100개)
 
 개별 앱은 필터로 실행할 수 있습니다.
 

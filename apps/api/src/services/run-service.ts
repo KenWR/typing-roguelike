@@ -111,3 +111,13 @@ export const completeRun = (playerId: string, runId: string, input: CompleteRunR
   transaction();
   return { runId, finalizedAt: timestamp };
 };
+
+export const getLeaderboard = (limit: number) => database.prepare(`
+  SELECT score, cleared_floor AS clearedFloor, accuracy, finalized_at AS finalizedAt
+  FROM run_results
+  ORDER BY score DESC, finalized_at ASC
+  LIMIT ?
+`).all(limit).map((entry, index) => ({
+  rank: index + 1,
+  ...(entry as { score: number; clearedFloor: number; accuracy: number | null; finalizedAt: string }),
+}));

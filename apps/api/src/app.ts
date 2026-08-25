@@ -1,5 +1,8 @@
 import express, { type Express } from "express";
+import swaggerUi from "swagger-ui-express";
+import { openApiDocument } from "./config/openapi.ts";
 import { anonymousPlayerMiddleware } from "./middleware/anonymous-player.ts";
+import { leaderboardRouter } from "./routes/leaderboard.ts";
 import { runsRouter } from "./routes/runs.ts";
 
 export const createApp = (): Express => {
@@ -24,6 +27,11 @@ export const createApp = (): Express => {
   app.get("/health", (_request, response) => {
     response.json({ status: "ok" });
   });
+  app.get("/openapi.json", (_request, response) => {
+    response.json(openApiDocument);
+  });
+  app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
+  app.use("/leaderboard", leaderboardRouter);
   app.use("/runs", runsRouter);
 
   return app;
