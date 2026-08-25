@@ -1,0 +1,4 @@
+interface:
+  display_name: "Notion Kanban Triage"
+  short_description: "Notion 칸반에서 다음 작업을 선정하고 담당자를 배정합니다."
+  default_prompt: "Use $notion-kanban-triage to inspect the Notion project and Kanban, select the next task, and apply the requested order or assignment."
