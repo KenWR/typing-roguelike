@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
+import { CombatHud } from "../hud/combat-hud";
 import { createCombatLayout } from "../layout/combat-layout";
 
 const BACKGROUND_WIDTH = 1600;
@@ -13,8 +14,7 @@ export class CombatFoundationScene extends Phaser.Scene {
   private overlay!: Phaser.GameObjects.Rectangle;
   private playerPlaceholder!: Phaser.GameObjects.Container;
   private enemyPlaceholder!: Phaser.GameObjects.Container;
-  private hudReservation!: Phaser.GameObjects.Rectangle;
-  private hudLabel!: Phaser.GameObjects.Text;
+  private combatHud!: CombatHud;
 
   constructor() {
     super("CombatFoundationScene");
@@ -33,16 +33,8 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.enemyPlaceholder = this.createActorPlaceholder("적", 0x8d4b52);
     this.worldLayer.add([this.playerPlaceholder, this.enemyPlaceholder]);
 
-    this.hudReservation = this.add
-      .rectangle(0, 0, 1, 1, 0x111827, 0.28)
-      .setOrigin(0)
-      .setStrokeStyle(1, 0x64748b, 0.55);
-    this.hudLabel = this.add.text(0, 0, "HUD 예약 영역 · FE-01 이후 사용", {
-      color: "#94a3b8",
-      fontFamily: "Galmuri9, monospace",
-      fontSize: "14px",
-    });
-    this.uiLayer.add([this.hudReservation, this.hudLabel]);
+    this.combatHud = new CombatHud(this, { hp: 80, maxHp: 100, ap: 30, maxAp: 50 });
+    this.uiLayer.add(this.combatHud.container);
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseResizeListener, this);
@@ -74,13 +66,8 @@ export class CombatFoundationScene extends Phaser.Scene {
       .setPosition(layout.enemy.x, layout.enemy.y)
       .setScale(layout.actorScale);
 
-    this.hudReservation
-      .setPosition(layout.hudReservation.x, layout.hudReservation.y)
-      .setSize(layout.hudReservation.width, layout.hudReservation.height);
-    this.hudLabel.setPosition(
-      layout.hudReservation.x + 12,
-      layout.hudReservation.y + 10,
-    );
+    this.combatHud.setPosition(layout.hudReservation.x, layout.hudReservation.y);
+    this.combatHud.setSize(layout.hudReservation.width, layout.hudReservation.height);
   }
 
   private createActorPlaceholder(
