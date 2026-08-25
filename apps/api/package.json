@@ -1,0 +1,21 @@
+{
+  "name": "@typing-roguelike/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/server.ts",
+    "start": "bun src/server.ts",
+    "build": "bun build src/server.ts --outdir dist --target bun",
+    "typecheck": "tsc --noEmit --pretty false"
+  },
+  "dependencies": {
+    "@typing-roguelike/shared": "workspace:*",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./apps/game" },
+    { "path": "./apps/api" },
+    { "path": "./packages/shared" }
+  ]
+}
