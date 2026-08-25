@@ -1,0 +1,70 @@
+file,weapon_type,rarity,name_ko
+192/sword_common_sword.png,검,일반,검
+192/sword_common_rusty.png,검,일반,녹슨 검
+192/sword_uncommon_bloodletting.png,검,고급,피갈이 검
+192/sword_uncommon_wind.png,검,고급,바람결 검
+192/sword_rare_duelist_silver.png,검,희귀,결투가의 은검
+192/sword_rare_pulsing_blood.png,검,희귀,맥동하는 혈검
+192/sword_epic_moon_eclipse.png,검,영웅,월식의 검
+192/sword_epic_infinite_combo.png,검,영웅,무한연격검
+192/sword_legendary_oath_eater.png,검,전설,서약을 먹는 칼
+192/greatsword_common_greatsword.png,대검,일반,대검
+192/greatsword_common_worn.png,대검,일반,낡은 대검
+192/greatsword_uncommon_military_crusher.png,대검,고급,군용 파쇄대검
+192/greatsword_uncommon_ash.png,대검,고급,잿빛 대검
+192/greatsword_rare_earthquake.png,대검,희귀,지진 대검
+192/greatsword_rare_executioner_black_iron.png,대검,희귀,처형인의 흑철검
+192/greatsword_epic_mountain_cleaver.png,대검,영웅,산맥절단검
+192/greatsword_epic_time_knot.png,대검,영웅,시간매듭 대검
+192/greatsword_legendary_stopped_noon.png,대검,전설,멈춘 정오
+192/wand_common_wand.png,완드,일반,완드
+192/wand_common_cracked.png,완드,일반,금이 간 완드
+192/wand_uncommon_ember.png,완드,고급,잿불 완드
+192/wand_uncommon_frost_vein.png,완드,고급,서리맥 완드
+192/wand_rare_lightning_weave.png,완드,희귀,번개결 완드
+192/wand_rare_void_vibration.png,완드,희귀,공허진동 완드
+192/wand_epic_seven_flames.png,완드,영웅,일곱불꽃 완드
+192/wand_epic_storm_heart.png,완드,영웅,폭풍심장 완드
+192/staff_common_staff.png,지팡이,일반,지팡이
+192/staff_common_worn.png,지팡이,일반,낡은 지팡이
+192/staff_uncommon_apprentice_elemental.png,지팡이,고급,수습 원소지팡이
+192/staff_uncommon_blue_focus.png,지팡이,고급,푸른집중 지팡이
+192/staff_rare_three_primary.png,지팡이,희귀,삼원색 지팡이
+192/staff_rare_mana_branch.png,지팡이,희귀,마나분기 지팡이
+192/staff_epic_world_tree_pulse.png,지팡이,영웅,세계수 맥동지팡이
+192/staff_epic_eclipse_record.png,지팡이,영웅,일식 기록지팡이
+192/staff_legendary_thrice_weeping_sentence.png,지팡이,전설,세 번 우는 문장지팡이
+192/bow_common_bow.png,활,일반,활
+192/bow_common_old.png,활,일반,낡은 활
+192/bow_uncommon_venom_fang.png,활,고급,독니 장궁
+192/bow_uncommon_tracker.png,활,고급,추적자의 장궁
+192/bow_rare_twin_moon.png,활,희귀,쌍월궁
+192/bow_rare_wind_trajectory.png,활,희귀,바람궤적궁
+192/bow_epic_star_rain.png,활,영웅,별비 장궁
+192/bow_epic_hunts_end.png,활,영웅,사냥의 종언
+192/bow_legendary_space_eater.png,활,전설,공백을 삼키는 활
+192/crossbow_common_crossbow.png,석궁,일반,석궁
+192/crossbow_common_rusty.png,석궁,일반,녹슨 석궁
+192/crossbow_uncommon_cog.png,석궁,고급,톱니 석궁
+192/crossbow_uncommon_gunpowder.png,석궁,고급,화약식 석궁
+192/crossbow_rare_echo.png,석궁,희귀,메아리 석궁
+192/crossbow_rare_autoload.png,석궁,희귀,자동장전 쇠뇌
+192/crossbow_epic_time_delay.png,석궁,영웅,시간차 석궁
+192/crossbow_epic_fortress_breaker.png,석궁,영웅,성벽 파쇄기
+192/crossbow_legendary_reverser.png,석궁,전설,역행자
+192/mace_common_mace.png,철퇴,일반,철퇴
+192/mace_common_rusty.png,철퇴,일반,녹슨 철퇴
+192/mace_uncommon_fracture.png,철퇴,고급,균열 철퇴
+192/mace_uncommon_pilgrim.png,철퇴,고급,순례자 철퇴
+192/mace_rare_rupture.png,철퇴,희귀,파열 철퇴
+192/mace_rare_bell_tower.png,철퇴,희귀,종루의 철퇴
+192/mace_epic_crown_crusher.png,철퇴,영웅,왕관분쇄자
+192/mace_epic_thunder_judgment.png,철퇴,영웅,천둥심판
+192/club_common_club.png,몽둥이,일반,몽둥이
+192/club_common_worn.png,몽둥이,일반,낡은 몽둥이
+192/club_uncommon_oak_battle.png,몽둥이,고급,참나무 전투봉
+192/club_uncommon_nail_studded.png,몽둥이,고급,못박이 몽둥이
+192/club_rare_goblin.png,몽둥이,희귀,도깨비 방망이
+192/club_rare_combo_manual.png,몽둥이,희귀,연타 교본봉
+192/club_epic_giant_bone.png,몽둥이,영웅,백골 거인봉
+192/club_epic_laughing_destruction.png,몽둥이,영웅,웃는 파괴봉
