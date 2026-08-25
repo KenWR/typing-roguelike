@@ -1,5 +1,9 @@
 import Phaser from "phaser";
+import { defineSkill } from "@typing-roguelike/shared";
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
+import { ActionPointResource } from "../combat/action-point-resource";
+import { CombatState } from "../combat/combat-state";
+import { SkillCommandStarter } from "../combat/skill-command-starter";
 import { CombatHud } from "../hud/combat-hud";
 import { CommandHud } from "../hud/command-hud";
 import { CommandInputBuffer } from "../input/command-input-buffer";
@@ -7,6 +11,18 @@ import { createCombatLayout } from "../layout/combat-layout";
 
 const BACKGROUND_WIDTH = 1600;
 const BACKGROUND_HEIGHT = 900;
+const MAGIC_SHIELD = defineSkill({
+  id: "skill.magic-shield",
+  name: "매직 실드",
+  command: "매직실드",
+  kind: "defense",
+  category: "guard",
+  apCost: 2,
+  windupMs: 300,
+  recoveryMs: 700,
+  effects: [{ type: "guard", damageMultiplier: 0.5, durationMs: 1_000 }],
+  description: "마법 보호막을 전개한다.",
+});
 
 export class CombatFoundationScene extends Phaser.Scene {
   private backgroundLayer!: Phaser.GameObjects.Container;
@@ -20,6 +36,7 @@ export class CombatFoundationScene extends Phaser.Scene {
   private commandHud!: CommandHud;
   private commandInputBuffer!: CommandInputBuffer;
   private commandInputCleanup?: () => void;
+  private commandCompletionCleanup?: () => void;
   private isComposing = false;
 
   constructor() {
@@ -39,15 +56,35 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.enemyPlaceholder = this.createActorPlaceholder("적", 0x8d4b52);
     this.worldLayer.add([this.playerPlaceholder, this.enemyPlaceholder]);
 
-    this.combatHud = new CombatHud(this, { hp: 80, maxHp: 100, ap: 30, maxAp: 50 });
+    const actionPoints = new ActionPointResource();
+    const combat = new CombatState();
+    this.combatHud = new CombatHud(this, {
+      hp: 80,
+      maxHp: 100,
+      ap: actionPoints.snapshot.currentAp,
+      maxAp: actionPoints.snapshot.maxAp,
+    });
     this.uiLayer.add(this.combatHud.container);
 
-    this.commandInputBuffer = new CommandInputBuffer("매직실드");
+    this.commandInputBuffer = new CommandInputBuffer(MAGIC_SHIELD.command);
     this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
     this.uiLayer.add(this.commandHud.container);
-    this.commandInputBuffer.onCompleted(() => {
-      this.commandHud.showSkillStarted();
+    const skillStarter = new SkillCommandStarter({
+      skills: [MAGIC_SHIELD],
+      actionPoints,
+      combat,
+      actorId: "player",
+      targetId: "player",
     });
+    this.commandCompletionCleanup = skillStarter.connect(
+      this.commandInputBuffer,
+      (result) => {
+        this.combatHud.update({ ap: result.ap.currentAp });
+        if (result.started) {
+          this.commandHud.showSkillStarted();
+        }
+      },
+    );
     this.createCommandInputElement();
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
@@ -162,6 +199,8 @@ export class CombatFoundationScene extends Phaser.Scene {
 
   private releaseCommandInputElement(): void {
     this.commandInputCleanup?.();
+    this.commandCompletionCleanup?.();
+    this.commandCompletionCleanup = undefined;
     this.isComposing = false;
   }
 
