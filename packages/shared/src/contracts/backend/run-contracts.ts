@@ -1,5 +1,5 @@
 import type { RunState } from "./run-state.ts";
-import type { GeneratedMapNode } from "./map-generation.ts";
+import type { GeneratedMapNode } from "../../rules/map-generation.ts";
 
 export type RunStatus = "active" | "dead" | "cleared" | "abandoned";
 export type RunEndReason = "dead" | "cleared" | "abandoned";
