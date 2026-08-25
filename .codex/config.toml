@@ -1,0 +1,12 @@
+sandbox_mode = "read-only"
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 20
+default_subagent_model = "gpt-5.6-luna"
+default_subagent_reasoning_effort = "max"
+
+
+## 팀 기준으로 운영 시, 필요하면 스킬 정책을 이곳에 고정합니다.
+# [[skills.config]]
+# path = ".agents/skills/phaser-gamedev/SKILL.md"
+# enabled = true
