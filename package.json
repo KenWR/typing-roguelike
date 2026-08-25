@@ -1,0 +1,16 @@
+{
+  "name": "typing-roguelike",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter './apps/*' dev",
+    "dev:game": "bun run --filter @typing-roguelike/game dev",
+    "dev:api": "bun run --filter @typing-roguelike/api dev",
+    "build": "bun run --filter './apps/*' build",
+    "typecheck": "bun run --filter '*' typecheck"
+  }
+}
