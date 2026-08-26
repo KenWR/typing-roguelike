@@ -43,7 +43,13 @@ export const generateNodeChoices = (seed: number, round: number, choicePath: rea
 	return types.map((type, index) => {
 		const choice = NODE_CHOICES[index]!; const fullPath = [...choicePath, choice]; const key = nodeKey(round, fullPath);
 		const parentKey = round === 1 ? START_NODE_KEY : nodeKey(round - 1, choicePath);
-		const nextNodeKeys = round === MAP_ROUND_COUNT ? [] : round === MAP_ROUND_COUNT - 1 ? [nodeKey(round + 1, [...fullPath, 1])] : NODE_CHOICES.map((nextChoice) => nodeKey(round + 1, [...fullPath, nextChoice]));
+		let nextNodeKeys: string[];
+		if (round === MAP_ROUND_COUNT) nextNodeKeys = [];
+		else if (round >= MAP_ROUND_COUNT - 2) nextNodeKeys = [nodeKey(round + 1, [...fullPath, 1])];
+		else {
+			const nextChoiceCount = getNodeTypes(seed, round + 1, fullPath).length;
+			nextNodeKeys = NODE_CHOICES.slice(0, nextChoiceCount).map((nextChoice) => nodeKey(round + 1, [...fullPath, nextChoice]));
+		}
 		const node: GeneratedMapNode = { choice, icon: type, iconType: type, key, parentKey, nextNodeKeys, round, type };
 		if ((type === "combat" || type === "elite" || type === "boss") && monsterIds.length > 0) node.monsterId = monsterIds[hash(`${seed}:${fullPath.join("")}`) % monsterIds.length];
 		return node;
