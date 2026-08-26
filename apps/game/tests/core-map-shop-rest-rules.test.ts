@@ -52,13 +52,19 @@ describe("core map/shop/rest rules", () => {
 
   test("shop rejects insufficient currency and duplicate purchase while normal purchase applies once", () => {
     const poor = run({ runCurrency: 10 });
-    expect(() => purchaseShopOffer(createShopNodeFlow(poor, "shop", [], [offer]), offer.id)).toThrow();
+    const rejected = purchaseShopOffer(createShopNodeFlow(poor, "shop", [], [offer]), offer.id);
+    expect(rejected.runState).toBe(poor);
+    expect(rejected.runState.runCurrency).toBe(10);
+    expect(rejected.runState.inventory.itemInstances).toEqual([]);
 
     const enough = run({ runCurrency: 100 });
     const first = purchaseShopOffer(createShopNodeFlow(enough, "shop", [], [offer]), offer.id);
     expect(first.runState.runCurrency).toBe(75);
     expect(first.runState.inventory.itemInstances).toEqual(["ember-blade"]);
-    expect(() => purchaseShopOffer(first, offer.id)).toThrow();
+    const duplicate = purchaseShopOffer(first, offer.id);
+    expect(duplicate.runState).toBe(first.runState);
+    expect(duplicate.runState.runCurrency).toBe(75);
+    expect(duplicate.runState.inventory.itemInstances).toEqual(["ember-blade"]);
   });
 
   test("rest recovery is capped at max hp and the same rest result applies only once", () => {
