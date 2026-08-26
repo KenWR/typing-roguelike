@@ -95,6 +95,14 @@ export class RunSession {
     return playable;
   }
 
+  replace(runState: Readonly<RunState>): Readonly<RunState> {
+    const next = ensurePlayableRunLoadout(runState);
+    this.activeRun = next;
+    if (next.status === "active") saveRunState(next, this.storage);
+    else clearSavedRun(this.storage);
+    return next;
+  }
+
   get(): Readonly<RunState> | null {
     return this.activeRun;
   }
