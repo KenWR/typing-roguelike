@@ -1,6 +1,7 @@
 import { EQUIPMENT_CONFIGS, RELIC_CONFIGS, RING_CONFIGS, type ShopOffer } from "@typing-roguelike/shared";
 import { getRelicIconTextureKey } from "../assets/asset-catalog";
 import { resolveEquipmentIconTextureKey } from "../assets/equipment-icon-assets";
+import { formatEquipmentSkillDetails, getEquipmentHandLabel } from "../equipment/equipment-info";
 import { resolveRingIconTextureKey } from "../assets/ring-icon-assets";
 
 export type ShopOfferHoverDetails = Readonly<{
@@ -12,9 +13,6 @@ export type ShopOfferHoverDetails = Readonly<{
 }>;
 
 const equipmentById = new Map(EQUIPMENT_CONFIGS.map((equipment) => [equipment.id, equipment] as const));
-
-const formatEquipmentDescription = (equipment: (typeof EQUIPMENT_CONFIGS)[number]): string =>
-  equipment.skills.map((skill) => `${skill.name} · ${skill.command}\n${skill.description}`).join("\n\n");
 
 export const getShopOfferHoverDetails = (offer: Pick<ShopOffer, "kind" | "itemId">): ShopOfferHoverDetails => {
   if (offer.kind === "relic") {
@@ -47,7 +45,10 @@ export const getShopOfferHoverDetails = (offer: Pick<ShopOffer, "kind" | "itemId
     name: equipment?.name ?? "알 수 없는 장비",
     kindLabel: "장비",
     rarity: equipment?.rarity ?? "unknown",
-    description: equipment === undefined ? "설명 정보가 없습니다." : formatEquipmentDescription(equipment),
+    description:
+      equipment === undefined
+        ? "설명 정보가 없습니다."
+        : `${getEquipmentHandLabel(equipment)}\n${formatEquipmentSkillDetails(equipment)}`,
     textureKey: equipment === undefined ? undefined : resolveEquipmentIconTextureKey(equipment.id),
   };
 };

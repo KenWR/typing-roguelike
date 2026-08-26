@@ -20,6 +20,7 @@ import {
 import { getRelicIconTextureKey } from "../assets/asset-catalog";
 import { resolveEquipmentIconTextureKey } from "../assets/equipment-icon-assets";
 import { resolveRingIconTextureKey } from "../assets/ring-icon-assets";
+import { formatEquipmentSkillDetails, getEquipmentHandLabel } from "../equipment/equipment-info";
 import { SCENE_KEYS } from "../scenes/scene-contract";
 import {
   createRewardSelectionAdapter,
@@ -87,8 +88,9 @@ const toRewardCandidate = (equipment: EquipmentConfig): RewardCandidate => ({
   kind: "weapon",
   name: equipment.name,
   rarity: toRewardRarity(equipment.rarity),
-  description: `${equipment.slot === "weapon" ? "주무기" : "보조무기"} · ${equipment.kind}`,
+  description: `${getEquipmentHandLabel(equipment)} · ${equipment.kind}`,
   effect: `공격 ${equipment.baseAttack ?? 0} · 사용 스킬 ${equipment.skills.length}개`,
+  details: formatEquipmentSkillDetails(equipment),
   icon: equipment.slot === "weapon" ? "⚔" : "◇",
   imageKey: resolveEquipmentIconTextureKey(equipment.id),
 });

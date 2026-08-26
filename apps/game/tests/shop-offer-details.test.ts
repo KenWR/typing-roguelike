@@ -26,6 +26,12 @@ describe("shop offer hover details", () => {
     expect(details.kindLabel).toBe("장비");
     expect(details.name.length).toBeGreaterThan(0);
     expect(details.description.length).toBeGreaterThan(0);
+    expect(details.description).toContain("한손무기");
+    expect(details.description).toContain("기본기술");
+    expect(details.description).toContain("특수기술");
+    expect(details.description).toContain("command:");
+    expect(details.description).toContain("cost:");
+    expect(details.description).toContain("damage:");
     expect(details.textureKey).toBe("equipment-icon:equipment_rusty_sword");
   });
 
@@ -37,6 +43,7 @@ describe("shop offer hover details", () => {
 
     expect(details.kindLabel).toBe("장비");
     expect(details.description.length).toBeGreaterThan(0);
+    expect(details.description).toContain("보조무기");
     expect(details.textureKey).toBe("equipment-icon:equipment_clear_crystal_orb");
   });
 

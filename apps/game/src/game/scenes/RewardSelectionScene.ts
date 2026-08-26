@@ -483,12 +483,12 @@ export class RewardSelectionScene extends Phaser.Scene {
     this.hideRewardTooltip();
 
     const tooltipWidth = 360;
-    const tooltipHeight = 184;
+    const initialTooltipHeight = 184;
     const { width, height } = this.scale.gameSize;
     const tooltip = this.add.container(0, 0).setDepth(900);
     tooltip.add(
       this.add
-        .rectangle(0, 0, tooltipWidth, tooltipHeight, 0x0f172a, 0.98)
+        .rectangle(0, 0, tooltipWidth, initialTooltipHeight, 0x0f172a, 0.98)
         .setOrigin(0)
         .setStrokeStyle(2, RARITY_PRESENTATION[candidate.rarity].accent),
     );
@@ -530,13 +530,18 @@ export class RewardSelectionScene extends Phaser.Scene {
         lineSpacing: 3,
       }),
     );
-    tooltip.add(
-      this.add.text(18, 142, candidate.effect, {
+    const detailsText = tooltip.add(
+      this.add.text(18, 142, candidate.details ?? candidate.effect, {
         ...this.cardEffectStyle(),
         fontSize: "13px",
         wordWrap: { width: tooltipWidth - 36 },
       }),
     );
+    const tooltipHeight = Math.max(initialTooltipHeight, detailsText.y + detailsText.height + 18);
+    const panel = tooltip.list[0];
+    if (panel instanceof Phaser.GameObjects.Rectangle) {
+      panel.setSize(tooltipWidth, tooltipHeight);
+    }
     this.rewardTooltip = tooltip;
     this.rewardTooltipCandidateId = candidate.id;
     this.positionRewardTooltip(tooltip, pointer, width, height, tooltipWidth, tooltipHeight);

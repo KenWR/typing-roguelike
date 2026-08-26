@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import {
   EQUIPMENT_BY_ID,
+  getEquipmentCarryCategory,
   type CombatLoadoutMode,
   type CombatLoadoutOption,
   type Rarity,
@@ -42,6 +43,15 @@ const SLOT_LABELS: Readonly<Record<InventoryEquipmentSlot, string>> = {
   weapon: "무기",
   subweapon: "보조무기",
   unknown: "슬롯 정보 없음",
+};
+
+const getEquipmentDisplaySlotLabel = (equipment: InventoryEquipmentView): string => {
+  const config = EQUIPMENT_BY_ID.get(equipment.id);
+  if (config === undefined) return SLOT_LABELS[equipment.slot];
+  const category = getEquipmentCarryCategory(config);
+  if (category === "two-handed-weapon") return "양손무기";
+  if (category === "one-handed-weapon") return "한손무기";
+  return "보조무기";
 };
 
 type InventoryModalCloseHandler = () => void;
@@ -382,7 +392,7 @@ export class InventoryModal {
       card,
       textX,
       name.y + name.height + 4,
-      `${equipment.isEquipped ? "장착 중 · " : "보유 중 · "}${SLOT_LABELS[equipment.slot]} · ${RARITY_LABELS[equipment.rarity]}`,
+      `${equipment.isEquipped ? "장착 중 · " : "보유 중 · "}${getEquipmentDisplaySlotLabel(equipment)} · ${RARITY_LABELS[equipment.rarity]}`,
       {
         color: this.toColor(RARITY_COLORS[equipment.rarity]),
         fontSize: compact ? "8px" : "10px",
