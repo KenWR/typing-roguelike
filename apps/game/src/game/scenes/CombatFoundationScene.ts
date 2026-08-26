@@ -3,13 +3,17 @@ import {
   defineSkill,
   type GeneratedMapNode,
   type RunState,
+  type SkillDefinition,
 } from "@typing-roguelike/shared";
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import {
   resolveEnemyTextureKey,
   resolveEnemyVisualState,
 } from "../assets/enemy-visual-assets";
-import { resolvePlayerTextureKey } from "../assets/player-visual-assets";
+import {
+  resolvePlayerAttackTextureKey,
+  resolvePlayerTextureKey,
+} from "../assets/player-visual-assets";
 import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
 import { ActionPointResource } from "../combat/action-point-resource";
 import { CombatApEffectController } from "../combat/combat-ap-effects";
@@ -70,6 +74,10 @@ export class CombatFoundationScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Image;
   private overlay!: Phaser.GameObjects.Rectangle;
   private playerPlaceholder!: Phaser.GameObjects.Container;
+  private playerActorImage?: Phaser.GameObjects.Image;
+  private playerRestTextureKey?: string;
+  private playerAttackReset?: Phaser.Time.TimerEvent;
+  private playerAttackTween?: Phaser.Tweens.Tween;
   private enemyPlaceholders: Phaser.GameObjects.Container[] = [];
   private enemyActorImages = new Map<string, Phaser.GameObjects.Image>();
   private enemyTargetMarkers = new Map<string, Phaser.GameObjects.Rectangle>();
@@ -118,6 +126,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.feedback = undefined;
     this.transitionStarted = false;
     this.enemyPlaceholders = [];
+    this.playerActorImage = undefined;
+    this.playerRestTextureKey = undefined;
+    this.playerAttackReset = undefined;
+    this.playerAttackTween = undefined;
     this.enemyActorImages.clear();
     this.enemyTargetMarkers.clear();
     this.displayedEnemyHp.clear();
@@ -155,11 +167,17 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.overlay = this.add.rectangle(0, 0, 1, 1, 0x08101b, 0.3).setOrigin(0);
     this.backgroundLayer.add([this.background, this.overlay]);
 
+    const primaryWeaponId = initialization.player.equipmentIds[0];
+    this.playerRestTextureKey = resolvePlayerTextureKey(primaryWeaponId);
     this.playerPlaceholder = this.createActorPlaceholder(
       "플레이어",
       0x3f7f84,
-      resolvePlayerTextureKey(initialization.player.equipmentIds[0]),
+      this.playerRestTextureKey,
     );
+    const playerActor = this.playerPlaceholder.getAt(0);
+    if (playerActor instanceof Phaser.GameObjects.Image) {
+      this.playerActorImage = playerActor;
+    }
     this.enemyPlaceholders = initialization.enemies.map((enemy) => {
       const placeholder = this.createActorPlaceholder(
         enemy.name,
@@ -327,6 +345,7 @@ export class CombatFoundationScene extends Phaser.Scene {
         if (result.started) {
           this.apEffects.onSkillStarted(result.skill, result.combo.count);
           this.playerCombatRuntime?.registerAction(result.actionId, result.skill);
+          this.playPlayerAttackVisual(primaryWeaponId, result.skill);
           if (result.skill.kind === "defense") {
             this.feedback?.trigger("guard");
           }
@@ -688,6 +707,53 @@ export class CombatFoundationScene extends Phaser.Scene {
       .setOrigin(0.5);
     container.add([silhouette, name]);
     return container;
+  }
+
+  private playPlayerAttackVisual(
+    primaryWeaponId: string | undefined,
+    skill: SkillDefinition,
+  ): void {
+    if (!skill.effects.some((effect) => effect.type === "damage")) return;
+    const actor = this.playerActorImage;
+    const attackTextureKey = resolvePlayerAttackTextureKey(
+      primaryWeaponId,
+      skill.category,
+    );
+    if (
+      actor === undefined ||
+      attackTextureKey === undefined ||
+      !this.textures.exists(attackTextureKey)
+    ) {
+      return;
+    }
+
+    this.playerAttackTween?.stop();
+    this.playerAttackReset?.remove(false);
+    actor.setPosition(0, 0).setTexture(attackTextureKey);
+    actor.setScale(Math.min(220 / actor.width, 260 / actor.height));
+    this.playerAttackTween = this.tweens.add({
+      targets: actor,
+      x: 18,
+      duration: Math.min(160, Math.max(80, skill.windupMs / 2)),
+      yoyo: true,
+      ease: "Sine.Out",
+    });
+
+    this.playerAttackReset = this.time.delayedCall(
+      Math.max(180, skill.windupMs + skill.recoveryMs),
+      () => {
+        actor.setPosition(0, 0);
+        if (
+          this.playerRestTextureKey !== undefined &&
+          this.textures.exists(this.playerRestTextureKey)
+        ) {
+          actor.setTexture(this.playerRestTextureKey);
+          actor.setScale(Math.min(220 / actor.width, 260 / actor.height));
+        }
+        this.playerAttackReset = undefined;
+        this.playerAttackTween = undefined;
+      },
+    );
   }
 
   private releaseResizeListener(): void {

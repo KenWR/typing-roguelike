@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { resolveEffectTextureKey } from "../assets/effect-visual-assets";
 import { MENU_SETTINGS_REGISTRY_KEYS, type CommandLanguage } from "../scenes/menu-settings";
 import type {
   CommandInputSnapshot,
@@ -16,7 +17,7 @@ export type CommandHudEffect = Readonly<{
   description: string;
   durationMs: number | null;
   remainingMs: number | null;
-  placeholderTextureKey: "command-effect-placeholder";
+  textureKey: string;
 }>;
 
 export type CommandHudState = Readonly<{
@@ -36,6 +37,7 @@ type CommandHudPresentation = Readonly<{ labelKo: string; labelEn: string; color
 type SkillEffectLike =
   | Readonly<{ type: "damage"; coefficient: number }>
   | Readonly<{ type: "guard"; damageMultiplier: number; durationMs: number }>
+  | Readonly<{ type: "shield"; amount: number; durationMs: number }>
   | Readonly<{ type: "status"; statusId: string; durationMs: number; stacks?: number }>;
 
 type SkillLike = Readonly<{
@@ -65,6 +67,7 @@ type EffectAwareScene = Phaser.Scene & Readonly<{
 type EffectVisual = Readonly<{
   container: Phaser.GameObjects.Container;
   frame: Phaser.GameObjects.Graphics;
+  icon: Phaser.GameObjects.Image;
   darkness: Phaser.GameObjects.Rectangle;
   darknessMask: Phaser.Display.Masks.GeometryMask;
   hitArea: Phaser.GameObjects.Zone;
@@ -83,7 +86,9 @@ const EFFECT_GAP = 6;
 const EFFECT_TOP = 8;
 const EFFECT_LEFT = 8;
 const EFFECT_RADIUS = 7;
-const PLACEHOLDER_TEXTURE_KEY = "command-effect-placeholder" as const;
+const MISSING_ASSET_TEXTURE_KEY = "placeholder:missing-asset";
+const effectTextureKey = (effectId: string): string =>
+  resolveEffectTextureKey(effectId) ?? MISSING_ASSET_TEXTURE_KEY;
 
 const clamp = (value: number, minimum: number, maximum: number): number => Math.min(Math.max(value, minimum), maximum);
 
@@ -115,7 +120,17 @@ export function createSkillCommandEffects(skill: SkillLike | undefined): Command
         description: `${skill.name}: 받는 피해 ${reduction}% 감소 · ${effect.durationMs / 1_000}초`,
         durationMs: effect.durationMs,
         remainingMs: null,
-        placeholderTextureKey: PLACEHOLDER_TEXTURE_KEY,
+        textureKey: effectTextureKey("guard"),
+      }];
+    }
+    if (effect.type === "shield") {
+      return [{
+        id: `${skill.id}:shield:${index}`,
+        name: "실드",
+        description: `${skill.name}: 실드 ${effect.amount} · ${effect.durationMs / 1_000}초`,
+        durationMs: effect.durationMs,
+        remainingMs: null,
+        textureKey: effectTextureKey("shield"),
       }];
     }
     return [{
@@ -124,7 +139,7 @@ export function createSkillCommandEffects(skill: SkillLike | undefined): Command
       description: `${skill.name}: ${effect.statusId} ${effect.stacks ?? 1}중첩 · ${effect.durationMs / 1_000}초`,
       durationMs: effect.durationMs,
       remainingMs: null,
-      placeholderTextureKey: PLACEHOLDER_TEXTURE_KEY,
+      textureKey: effectTextureKey(effect.statusId),
     }];
   });
 }
@@ -136,7 +151,9 @@ export function createTimedApCommandEffects(effects: readonly TimedApEffectLike[
     description: `AP 재생 ${effect.amountPerSecond >= 0 ? "+" : ""}${effect.amountPerSecond}/초`,
     durationMs: effect.durationMs,
     remainingMs: effect.remainingMs,
-    placeholderTextureKey: PLACEHOLDER_TEXTURE_KEY,
+    textureKey: effectTextureKey(
+      effect.amountPerSecond >= 0 ? "ap-regen-up" : "ap-regen-down",
+    ),
   }));
 }
 
@@ -250,6 +267,10 @@ export class CommandHud {
       const x = EFFECT_LEFT + index * (EFFECT_SIZE + EFFECT_GAP);
       const darknessHeight = EFFECT_SIZE * getEffectDarknessRatio(effect);
       visual.container.setPosition(x, EFFECT_TOP).setVisible(true).setActive(true);
+      const textureKey = this.scene.textures.exists(effect.textureKey)
+        ? effect.textureKey
+        : MISSING_ASSET_TEXTURE_KEY;
+      if (visual.icon.texture.key !== textureKey) visual.icon.setTexture(textureKey);
       visual.darkness.setPosition(0, EFFECT_SIZE - darknessHeight).setSize(EFFECT_SIZE, darknessHeight);
       visual.hitArea.setData("effectId", effect.id);
       visual.hitArea.setData("effect", effect);
@@ -276,6 +297,9 @@ export class CommandHud {
     frame.fillRoundedRect(0, 0, EFFECT_SIZE, EFFECT_SIZE, EFFECT_RADIUS);
     frame.lineStyle(2, 0x94a3b8, 0.95);
     frame.strokeRoundedRect(0, 0, EFFECT_SIZE, EFFECT_SIZE, EFFECT_RADIUS);
+    const icon = this.scene.add
+      .image(EFFECT_SIZE / 2, EFFECT_SIZE / 2, MISSING_ASSET_TEXTURE_KEY)
+      .setDisplaySize(EFFECT_SIZE - 4, EFFECT_SIZE - 4);
 
     const maskShape = this.scene.make.graphics({ x: 0, y: 0 });
     maskShape.setVisible(false);
@@ -295,11 +319,11 @@ export class CommandHud {
       this.hideTooltip();
     });
 
-    effectContainer.add([frame, darkness, hitArea]);
+    effectContainer.add([frame, icon, darkness, hitArea]);
     this.container.add(effectContainer);
     this.container.bringToTop(this.tooltipBackground);
     this.container.bringToTop(this.tooltipText);
-    const visual = { container: effectContainer, frame, darkness, darknessMask, hitArea };
+    const visual = { container: effectContainer, frame, icon, darkness, darknessMask, hitArea };
     this.effectVisuals.push(visual);
     return visual;
   }

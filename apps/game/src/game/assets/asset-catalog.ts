@@ -1,6 +1,10 @@
 import { COMBAT_BACKGROUND_ASSET, ENEMY_IMAGE_ASSETS } from "./enemy-visual-assets";
+import { EFFECT_IMAGE_ASSETS } from "./effect-visual-assets";
 import { EQUIPMENT_ICON_ASSETS } from "./equipment-icon-assets";
-import { PLAYER_WEAPON_IMAGE_ASSETS } from "./player-visual-assets";
+import {
+  PLAYER_ATTACK_IMAGE_ASSETS,
+  PLAYER_WEAPON_IMAGE_ASSETS,
+} from "./player-visual-assets";
 import { RELIC_CONFIGS } from "@typing-roguelike/shared";
 
 export const ASSET_PATHS = {
@@ -45,6 +49,8 @@ export const COMBAT_IMAGE_ASSETS: readonly {
   COMBAT_BACKGROUND_ASSET,
   ...ENEMY_IMAGE_ASSETS,
   ...PLAYER_WEAPON_IMAGE_ASSETS,
+  ...PLAYER_ATTACK_IMAGE_ASSETS,
+  ...EFFECT_IMAGE_ASSETS,
 ];
 
 export const SCENE_BACKGROUND_ASSETS: readonly {
