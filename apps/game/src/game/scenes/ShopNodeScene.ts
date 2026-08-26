@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import type { RunState, ShopOffer } from "@typing-roguelike/shared";
+import type { GeneratedMapNode, RunState, ShopOffer } from "@typing-roguelike/shared";
+import { RUN_RESUME_CHECKPOINT_VERSION } from "../run/run-resume-checkpoint";
 import { runSession } from "../run/run-session";
 import {
   completeShopNode,
@@ -11,12 +12,15 @@ import {
 export type ShopNodeSceneData = Readonly<{
   runState: RunState;
   nodeId: string;
+  node?: GeneratedMapNode;
   nextNodeIds: readonly string[];
   offers?: readonly ShopOffer[];
+  purchasedOfferIds?: readonly string[];
 }>;
 
 export class ShopNodeScene extends Phaser.Scene {
   private flow!: ShopNodeFlowState;
+  private node?: GeneratedMapNode;
   private statusText?: Phaser.GameObjects.Text;
 
   constructor() {
@@ -24,7 +28,15 @@ export class ShopNodeScene extends Phaser.Scene {
   }
 
   init(data: ShopNodeSceneData): void {
-    this.flow = createShopNodeFlow(data.runState, data.nodeId, data.nextNodeIds, data.offers);
+    this.node = data.node;
+    this.flow = createShopNodeFlow(
+      data.runState,
+      data.nodeId,
+      data.nextNodeIds,
+      data.offers,
+      data.purchasedOfferIds,
+    );
+    this.syncCheckpoint();
   }
 
   create(): void {
@@ -44,6 +56,7 @@ export class ShopNodeScene extends Phaser.Scene {
       button.on("pointerdown", () => {
         this.flow = purchaseShopOffer(this.flow, offer.id);
         this.syncSession();
+        this.syncCheckpoint();
         this.statusText?.setText(`보유 재화: ${this.flow.runState.runCurrency}`);
       });
     });
@@ -57,6 +70,7 @@ export class ShopNodeScene extends Phaser.Scene {
     }).setInteractive({ useHandCursor: true }).once("pointerdown", () => {
       this.flow = completeShopNode(this.flow);
       this.syncSession();
+      runSession.clearCheckpoint();
       this.scene.start("MapScene", { runState: this.flow.runState });
     });
   }
@@ -66,5 +80,18 @@ export class ShopNodeScene extends Phaser.Scene {
     if (active?.status === "active") {
       runSession.update(() => this.flow.runState);
     }
+  }
+
+  private syncCheckpoint(): void {
+    const node = this.node ?? runSession.getCheckpoint()?.node;
+    if (node === undefined) return;
+    runSession.setCheckpoint({
+      version: RUN_RESUME_CHECKPOINT_VERSION,
+      sceneKey: "ShopScene",
+      node,
+      nextNodeIds: this.flow.nextNodeIds,
+      shopOffers: this.flow.offers,
+      purchasedOfferIds: [...this.flow.purchasedOfferIds],
+    });
   }
 }
