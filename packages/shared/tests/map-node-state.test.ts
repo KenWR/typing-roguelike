@@ -25,7 +25,7 @@ const createMap = (): RunMapState => ({
 });
 
 describe("map node state", () => {
-	test("accepts only the four supported node statuses", () => {
+	test("accepts legacy in_progress status for persisted-state compatibility", () => {
 		expect(isMapNodeStatus("locked")).toBe(true);
 		expect(isMapNodeStatus("available")).toBe(true);
 		expect(isMapNodeStatus("in_progress")).toBe(true);
@@ -37,22 +37,20 @@ describe("map node state", () => {
 		expect(getMapNodeStatus(createMap(), "unknown")).toBe("locked");
 	});
 
-	test("moves only an available node to in_progress and locks sibling choices", () => {
+	test("selecting a node does not create an in-progress state", () => {
 		const next = beginMapNode(createMap(), "1-1");
 
 		expect(next.currentNodeId).toBe("1-1");
-		expect(next.nodeStatuses["1-1"]).toBe("in_progress");
-		expect(next.nodeStatuses["1-2"]).toBe("locked");
-		expect(next.nodeStatuses["1-3"]).toBe("locked");
+		expect(next.nodeStatuses["1-1"]).toBe("available");
+		expect(next.nodeStatuses["1-2"]).toBe("available");
+		expect(next.nodeStatuses["1-3"]).toBe("available");
 	});
 
-	test("rejects starting locked or already-started nodes", () => {
+	test("rejects starting locked nodes", () => {
 		expect(() => beginMapNode(createMap(), "2-1-1")).toThrow("not available");
-		const started = beginMapNode(createMap(), "1-1");
-		expect(() => beginMapNode(started, "1-1")).toThrow("not available");
 	});
 
-	test("clears an in-progress node and unlocks only connected next nodes", () => {
+	test("clears an available node and unlocks only connected next nodes", () => {
 		const started = beginMapNode(createMap(), "1-1");
 		const result = completeMapNode(started, "1-1", ["2-1-1", "2-1-2", "2-1-3"]);
 
@@ -76,7 +74,7 @@ describe("map node state", () => {
 		expect(second.map.nodeStatuses["2-2-1"]).toBe("locked");
 	});
 
-	test("rejects completion before a node is in progress", () => {
-		expect(() => completeMapNode(createMap(), "1-1", [])).toThrow("not in progress");
+	test("rejects completion for a locked node", () => {
+		expect(() => completeMapNode(createMap(), "2-1-1", [])).toThrow("not available");
 	});
 });
