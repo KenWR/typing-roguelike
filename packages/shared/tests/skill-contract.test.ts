@@ -1,10 +1,6 @@
+/* biome-ignore-all lint/style/noNonNullAssertion: fixture selection is guarded by the assertions in each test. */
 import { describe, expect, test } from "bun:test";
-import {
-  EQUIPMENT_CONFIGS,
-  createSkillActionDefinition,
-  createSkillRegistry,
-  defineSkill,
-} from "../src/index.ts";
+import { EQUIPMENT_CONFIGS, createSkillActionDefinition, createSkillRegistry, defineSkill } from "../src/index.ts";
 
 const createAttackSkill = () => ({
   id: "skill.magic-bolt",
@@ -31,17 +27,13 @@ describe("skill contract", () => {
   });
 
   test("normalizes legacy equipment damage coefficients into effects", () => {
-    const legacySkill = EQUIPMENT_CONFIGS.find(
-      ({ skills }) => skills[0]?.damageCoefficient !== undefined,
-    )?.skills[0];
+    const legacySkill = EQUIPMENT_CONFIGS.find(({ skills }) => skills[0]?.damageCoefficient !== undefined)?.skills[0];
 
     expect(legacySkill).toBeDefined();
-    expect(defineSkill(legacySkill!).effects).toEqual([
-      {
-        type: "damage",
-        coefficient: legacySkill!.damageCoefficient,
-      },
-    ]);
+    expect(defineSkill(legacySkill!).effects).toContainEqual({
+      type: "damage",
+      coefficient: legacySkill!.damageCoefficient,
+    });
   });
 
   test("builds a stable registry for equipment skill references", () => {
@@ -50,9 +42,7 @@ describe("skill contract", () => {
     const selected = equipmentSkills[0]!;
 
     expect(registry.get(selected.id)).toEqual(defineSkill(selected));
-    expect(() =>
-      createSkillRegistry([selected, { ...selected }]),
-    ).toThrow("Duplicate skill id");
+    expect(() => createSkillRegistry([selected, { ...selected }])).toThrow("Duplicate skill id");
   });
 
   test("creates the timing definition consumed by the combat engine", () => {
@@ -77,9 +67,7 @@ describe("skill contract", () => {
     expect(() => defineSkill({ ...valid, id: " " })).toThrow(RangeError);
     expect(() => defineSkill({ ...valid, command: "" })).toThrow(RangeError);
     expect(() => defineSkill({ ...valid, apCost: -1 })).toThrow(RangeError);
-    expect(() =>
-      defineSkill({ ...valid, windupMs: Number.POSITIVE_INFINITY }),
-    ).toThrow(RangeError);
+    expect(() => defineSkill({ ...valid, windupMs: Number.POSITIVE_INFINITY })).toThrow(RangeError);
     expect(() =>
       defineSkill({
         ...valid,

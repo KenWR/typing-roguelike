@@ -335,12 +335,18 @@ export class CombatFoundationScene extends Phaser.Scene {
         skill.kind === "defense"
           ? "player"
           : (this.targeting?.refresh() ?? initialization.enemies[0]?.instanceId ?? "player"),
+      preserveComboOnFailure: () => this.apEffects.onCommandFailed(),
     });
     this.skillStarter = skillStarter;
     this.commandCompletionCleanup = skillStarter.connect(this.commandInputBuffer, (result) => {
       if (result.started) {
+        const relicMultiplier = this.apEffects.resolveSkillDamageMultiplier(result.skill);
         this.apEffects.onSkillStarted(result.skill, result.combo.count);
-        this.playerCombatRuntime?.registerAction(result.actionId, result.skill, result.combo.multiplier);
+        this.playerCombatRuntime?.registerAction(
+          result.actionId,
+          result.skill,
+          result.combo.multiplier * relicMultiplier,
+        );
         this.playPlayerAttackVisual(primaryWeaponId, result.skill);
         if (result.skill.kind === "defense") {
           this.feedback?.trigger("guard");
@@ -359,7 +365,6 @@ export class CombatFoundationScene extends Phaser.Scene {
       if (snapshot.input.length === 0) return;
       const combo = this.skillStarter?.comboSnapshot;
       if (snapshot.status !== "complete" || combo?.lastBreakReason === "incorrect-input") {
-        this.apEffects.onCommandFailed();
         this.feedback?.trigger("command-failure");
         playComboBreakSound();
       }

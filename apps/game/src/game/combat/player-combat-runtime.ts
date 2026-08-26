@@ -384,6 +384,8 @@ export class PlayerCombatRuntime {
       damage: action.damage,
       target: this.player,
       shields: this.shields,
+      damageMultiplier: this.apEffects.resolveIncomingDamageMultiplier(this.playerHp, this.initialization.player.maxHp),
+      description: action.description,
     });
     if (!result.applied) return;
 
@@ -395,6 +397,10 @@ export class PlayerCombatRuntime {
       defended: result.defended,
       special: action.kind === "special",
     });
+    const reflectedDamage = this.apEffects.onShieldAbsorbed(result.shieldAbsorbedDamage, result.fullyAbsorbed);
+    if (reflectedDamage > 0 && !enemyState.snapshot.health.isDead) {
+      enemyState.health.applyDamage(reflectedDamage);
+    }
     this.runState = {
       ...this.runState,
       character: {

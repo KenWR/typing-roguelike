@@ -1,8 +1,6 @@
+/* biome-ignore-all lint/style/noNonNullAssertion: static combat fixtures are asserted by the test setup. */
 import { describe, expect, test } from "bun:test";
-import {
-  defineSkill,
-  type GeneratedMapNode,
-} from "@typing-roguelike/shared";
+import { defineSkill, type GeneratedMapNode } from "@typing-roguelike/shared";
 import { CombatState } from "../src/game/combat/combat-state";
 import { EnemyAttackTimeline } from "../src/game/combat/enemy-attack-timeline";
 import { initializeCombatEncounter } from "../src/game/combat/encounter-initializer";
@@ -137,7 +135,15 @@ describe("PlayerCombatRuntime", () => {
   test("does not apply the same impact twice", () => {
     const { combat, runtime, initialization } = createPlayableCombat();
     const skillConfig = initialization.player.skills.find((candidate) => candidate.kind === "attack")!;
-    const skill = defineSkill(skillConfig);
+    const skill = defineSkill({
+      ...skillConfig,
+      // Keep this regression focused on impact deduplication, independent of
+      // the separate bleed-over-time effect on the production sword.
+      effects:
+        skillConfig.damageCoefficient === undefined
+          ? []
+          : [{ type: "damage", coefficient: skillConfig.damageCoefficient }],
+    });
     const enemy = initialization.enemies[0]!;
     const actionId = "player:first-attack:dedupe";
     combat.startAction({

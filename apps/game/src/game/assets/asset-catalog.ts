@@ -1,15 +1,10 @@
 import { COMBAT_BACKGROUND_ASSET, ENEMY_IMAGE_ASSETS } from "./enemy-visual-assets";
 import { EFFECT_IMAGE_ASSETS } from "./effect-visual-assets";
 import { EQUIPMENT_ICON_ASSETS } from "./equipment-icon-assets";
-import {
-  MAP_NODE_ICON_ASSET,
-  MAP_NODE_ICON_TEXTURE_KEY,
-} from "./map-node-assets";
-import {
-  PLAYER_ATTACK_IMAGE_ASSETS,
-  PLAYER_WEAPON_IMAGE_ASSETS,
-} from "./player-visual-assets";
+import { MAP_NODE_ICON_ASSET, MAP_NODE_ICON_TEXTURE_KEY } from "./map-node-assets";
+import { PLAYER_ATTACK_IMAGE_ASSETS, PLAYER_WEAPON_IMAGE_ASSETS } from "./player-visual-assets";
 import { RELIC_CONFIGS } from "@typing-roguelike/shared";
+import { RING_ICON_ASSETS } from "./ring-icon-assets";
 
 export const ASSET_PATHS = {
   backgrounds: {
@@ -31,8 +26,7 @@ export const ASSET_PATHS = {
   fonts: "/assets/fonts",
 } as const;
 
-export const getRelicIconTextureKey = (relicId: string): string =>
-  `relic-icon:${relicId}`;
+export const getRelicIconTextureKey = (relicId: string): string => `relic-icon:${relicId}`;
 
 /**
  * Only assets used by the current runtime foundation belong here.
@@ -80,6 +74,7 @@ export const RUNTIME_IMAGE_ASSETS: readonly {
   path: string;
 }[] = [
   ...RELIC_ICON_ASSETS,
+  ...RING_ICON_ASSETS,
   ...EQUIPMENT_ICON_ASSETS,
   ...COMBAT_IMAGE_ASSETS,
   ...SCENE_BACKGROUND_ASSETS,
