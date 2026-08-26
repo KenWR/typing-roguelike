@@ -18,7 +18,11 @@ export type CreateShopOffersInput = Readonly<{
 
 export type ShopPurchaseResult = Readonly<{
 	applied: boolean;
-	reason: "purchased" | "already_purchased" | "insufficient_currency";
+	reason:
+		| "purchased"
+		| "already_purchased"
+		| "already_owned"
+		| "insufficient_currency";
 	offer: ShopOffer;
 	beforeCurrency: number;
 	afterCurrency: number;
@@ -113,6 +117,17 @@ export const applyShopPurchase = ({
 			purchasedOfferIds,
 		};
 	}
+	if (runState.inventory.itemInstances.includes(offer.equipmentId)) {
+		return {
+			applied: false,
+			reason: "already_owned",
+			offer,
+			beforeCurrency,
+			afterCurrency: beforeCurrency,
+			runState,
+			purchasedOfferIds,
+		};
+	}
 	if (beforeCurrency < offer.price) {
 		return {
 			applied: false,
@@ -128,6 +143,14 @@ export const applyShopPurchase = ({
 	const nextPurchasedOfferIds = new Set(purchasedOfferIds);
 	nextPurchasedOfferIds.add(normalizedOfferId);
 	const afterCurrency = beforeCurrency - offer.price;
+	const equipment = EQUIPMENT_CONFIGS.find(
+		(candidate) => candidate.id === offer.equipmentId,
+	);
+	const loadout = equipment === undefined
+		? runState.loadout
+		: equipment.slot === "weapon"
+			? { ...runState.loadout, weaponId: equipment.id }
+			: { ...runState.loadout, subweaponId: equipment.id };
 	return {
 		applied: true,
 		reason: "purchased",
@@ -137,6 +160,7 @@ export const applyShopPurchase = ({
 		runState: {
 			...runState,
 			runCurrency: afterCurrency,
+			loadout,
 			inventory: {
 				...runState.inventory,
 				itemInstances: [...runState.inventory.itemInstances, offer.equipmentId],

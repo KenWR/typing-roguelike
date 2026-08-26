@@ -85,9 +85,12 @@ const isRunResumeCheckpoint = (value: unknown): value is RunResumeCheckpoint => 
   ) {
     return false;
   }
+  const shopRerollCount = value.shopRerollCount;
   if (
-    value.shopRerollCount !== undefined &&
-    (!Number.isSafeInteger(value.shopRerollCount) || value.shopRerollCount < 0)
+    shopRerollCount !== undefined &&
+    (typeof shopRerollCount !== "number" ||
+      !Number.isSafeInteger(shopRerollCount) ||
+      shopRerollCount < 0)
   ) {
     return false;
   }
