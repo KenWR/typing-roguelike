@@ -21,7 +21,8 @@ bun run db:migrate:local
 bun run dev:worker
 ```
 
-The Worker listens on `http://localhost:8787`. The default local CORS origin is
+The Worker listens on `http://localhost:3000`, matching the game client's
+development default API origin. The default local CORS origin is
 `http://localhost:5173`; production and other environments should pass an
 explicit comma-separated `CORS_ORIGIN`. `API_ORIGIN` controls the `servers` URL
 returned by `/openapi.json` and defaults to the request origin.
@@ -41,15 +42,15 @@ For an HTTP smoke check against Wrangler local mode, keep `bun run dev:worker`
 running in one terminal and use another terminal:
 
 ```bash
-curl -i http://localhost:8787/health
+curl -i http://localhost:3000/health
 curl -i -c /tmp/typing-roguelike-api.cookies \
   -H 'Origin: http://localhost:5173' \
   -H 'Content-Type: application/json' \
   -d '{"seed":42}' \
-  http://localhost:8787/runs
+  http://localhost:3000/runs
 curl -i -b /tmp/typing-roguelike-api.cookies \
   -H 'Origin: http://localhost:5173' \
-  http://localhost:8787/runs/active
+  http://localhost:3000/runs/active
 ```
 
 `bun run build:worker` runs Wrangler's local bundle and dry-run checks. It does
