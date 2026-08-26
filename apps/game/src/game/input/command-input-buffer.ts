@@ -18,7 +18,15 @@ export type CommandCompletedEvent = Readonly<{
   input: string;
 }>;
 
+export type CommandStatusChangedEvent = Readonly<{
+  previousStatus: CommandInputStatus;
+  snapshot: CommandInputSnapshot;
+}>;
+
 export type CommandCompletedListener = (event: CommandCompletedEvent) => void;
+export type CommandStatusChangedListener = (
+  event: CommandStatusChangedEvent,
+) => void;
 
 export type UpdateInputOptions = Readonly<{
   isComposing?: boolean;
@@ -33,6 +41,7 @@ export class CommandInputBuffer {
   private status: CommandInputStatus = "idle";
   private completionEmitted = false;
   private readonly completedListeners = new Set<CommandCompletedListener>();
+  private readonly statusChangedListeners = new Set<CommandStatusChangedListener>();
 
   constructor(command: string) {
     this.command = this.validateCommand(command);
@@ -64,12 +73,12 @@ export class CommandInputBuffer {
     this.input = input;
 
     if (options.isComposing) {
-      this.status = "composing";
+      this.updateStatus("composing");
       return this.snapshot;
     }
 
     this.committedInput = input;
-    this.status = this.resolveStatus(input);
+    this.updateStatus(this.resolveStatus(input));
 
     if (this.status === "complete" && !this.completionEmitted) {
       this.completionEmitted = true;
@@ -82,8 +91,8 @@ export class CommandInputBuffer {
   reset(): CommandInputSnapshot {
     this.input = "";
     this.committedInput = "";
-    this.status = "idle";
     this.completionEmitted = false;
+    this.updateStatus("idle");
     return this.snapshot;
   }
 
@@ -91,6 +100,13 @@ export class CommandInputBuffer {
     this.completedListeners.add(listener);
     return () => {
       this.completedListeners.delete(listener);
+    };
+  }
+
+  onStatusChanged(listener: CommandStatusChangedListener): () => void {
+    this.statusChangedListeners.add(listener);
+    return () => {
+      this.statusChangedListeners.delete(listener);
     };
   }
 
@@ -136,6 +152,23 @@ export class CommandInputBuffer {
     }
 
     return matchedLength;
+  }
+
+  private updateStatus(nextStatus: CommandInputStatus): void {
+    if (nextStatus === this.status) {
+      return;
+    }
+
+    const previousStatus = this.status;
+    this.status = nextStatus;
+    const event: CommandStatusChangedEvent = {
+      previousStatus,
+      snapshot: this.snapshot,
+    };
+
+    for (const listener of this.statusChangedListeners) {
+      listener(event);
+    }
   }
 
   private emitCompleted(): void {
