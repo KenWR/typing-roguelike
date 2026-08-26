@@ -4,6 +4,7 @@ dist/
 .env.*
 !.env.example
 apps/api/data/
+.wrangler/
 *.sqlite
 *.sqlite3
 *.db
