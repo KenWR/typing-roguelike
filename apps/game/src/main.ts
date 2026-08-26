@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { BootScene } from "./game/scenes/BootScene";
+import { PreBootScene } from "./game/scenes/PreBootScene";
 import { CombatFoundationScene } from "./game/scenes/CombatFoundationScene";
 import { StartScene } from "./game/scenes/CoreFlowScenes";
 import { EquipmentScene } from "./game/scenes/EquipmentScene";
@@ -26,6 +27,7 @@ const game = new Phaser.Game({
     parent: "game-root",
   },
   scene: [
+    PreBootScene,
     BootScene,
     StartScene,
     SettingsScene,
