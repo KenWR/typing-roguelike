@@ -5,13 +5,13 @@ import {
   MapScene,
   RestScene,
   SettingsScene,
-  ShopScene,
   StartScene,
 } from "./game/scenes/CoreFlowScenes";
 import { CurrencyLobbyScene } from "./game/scenes/CurrencyLobbyScene";
 import { EquipmentScene } from "./game/scenes/EquipmentScene";
 import { RewardSelectionScene } from "./game/scenes/RewardSelectionScene";
 import { CompletableRunResultScene } from "./game/scenes/CompletableRunResultScene";
+import { ShopNodeScene } from "./game/scenes/ShopNodeScene";
 import "./styles/global.css";
 
 const game = new Phaser.Game({
@@ -37,7 +37,7 @@ const game = new Phaser.Game({
     CombatFoundationScene,
     RewardSelectionScene,
     EquipmentScene,
-    ShopScene,
+    ShopNodeScene,
     RestScene,
     CompletableRunResultScene,
   ],
