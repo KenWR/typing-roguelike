@@ -368,6 +368,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);
     this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
     this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
+    this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
     this.combatHud.update({
       hp: playerUpdate.playerHp,
       ap: playerUpdate.playerAp,
