@@ -1,11 +1,17 @@
 import {
   beginMapNode,
+  completeMapNode,
   generateNodeChoices,
   type GeneratedMapNode,
   type RunState,
 } from "@typing-roguelike/shared";
 import { enterBossCombat } from "../combat/boss-combat-flow";
 import { initializeCombatEncounter } from "../combat/encounter-initializer";
+import {
+  createRewardSelectionAdapter,
+  REWARD_SELECTION_FIXTURE_CANDIDATES,
+} from "../rewards/reward-selection-adapter";
+import { createRewardSelectionViewState } from "../rewards/reward-selection-view-state";
 import { SCENE_KEYS } from "../scenes/scene-contract";
 
 export type MapNodeRoute = Readonly<{
@@ -48,12 +54,28 @@ export const routeMapNodeSelection = (
   };
 
   if (node.type === "reward") {
+    const adapter = createRewardSelectionAdapter<RunState>({
+      initialViewState: createRewardSelectionViewState({
+        candidates: REWARD_SELECTION_FIXTURE_CANDIDATES,
+        round: node.round,
+        currency: selectedRun.runCurrency,
+        title: "맵 보상",
+        subtitle: "보상 후보를 비교하고 하나를 선택하세요.",
+      }),
+      initialRunState: selectedRun,
+      applySelection: (currentRun) => {
+        const completion = completeMapNode(currentRun.map, node.key, node.nextNodeKeys);
+        return { ...currentRun, map: completion.map };
+      },
+    });
+
     return {
       applied: true,
       runState: selectedRun,
       sceneKey: SCENE_KEYS.reward,
       payload: {
         ...commonPayload,
+        adapter,
         rewardSource: "map-reward",
         nextSceneKey: SCENE_KEYS.map,
       },
