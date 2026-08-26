@@ -5,6 +5,13 @@ export type EnemyHealthView = Readonly<{
   label: string;
 }>;
 
+export type EnemyHealthEntry = Readonly<{
+  instanceId: string;
+  name: string;
+  currentHp: number;
+  maxHp: number;
+}>;
+
 const clampHp = (value: number, maxHp: number): number =>
   Math.min(Math.max(0, value), Math.max(0, maxHp));
 
@@ -29,4 +36,27 @@ export const createEnemyHealthView = (
     maxHp: safeMaxHp,
     label: `${safeName}  HP ${safeCurrentHp} / ${safeMaxHp}`,
   };
+};
+
+export const createEnemyHealthListLabel = (
+  enemies: readonly Readonly<{
+    instanceId: string;
+    name: string;
+    hp: number;
+  }>[],
+  enemyHp: Readonly<Record<string, number>>,
+): string => {
+  if (enemies.length === 0) {
+    return createEnemyHealthView(undefined, undefined, undefined).label;
+  }
+
+  return enemies
+    .map((enemy) =>
+      createEnemyHealthView(
+        enemy.name,
+        enemyHp[enemy.instanceId] ?? enemy.hp,
+        enemy.hp,
+      ).label,
+    )
+    .join("\n");
 };
