@@ -211,6 +211,11 @@ export class MapScene extends EmptyCoreScene {
     const view = createMapHudView(activeRun);
     const fontFamily = 'Galmuri9, "Apple SD Gothic Neo", monospace';
     const syncStatus = runRemotePersistence.syncStatus;
+    const hudSideMargin = width < 960 ? 16 : 28;
+    const hudPanelWidth = Phaser.Math.Clamp(Math.floor((width - 360) / 2), 220, 300);
+    const leftHudX = hudSideMargin;
+    const rightHudX = width - hudSideMargin - hudPanelWidth;
+    const centerHudWidth = Math.max(260, rightHudX - (leftHudX + hudPanelWidth) - 24);
 
     this.add
       .text(width / 2, 42, `MAP · ${view.floor}F`, {
@@ -227,19 +232,19 @@ export class MapScene extends EmptyCoreScene {
       })
       .setOrigin(0.5);
 
-    this.add.rectangle(28, 92, 300, 190, 0x1f2937).setOrigin(0);
-    this.add.text(50, 110, "RUN HUD", { fontFamily, fontSize: "22px", color: "#f9fafb" });
-    this.add.text(50, 150, `HP  ${view.hpText}`, { fontFamily, fontSize: "20px", color: "#f9fafb" });
-    this.add.text(50, 184, `재화  ${view.currencyText}`, { fontFamily, fontSize: "20px", color: "#f9fafb" });
-    this.add.text(50, 218, `장비  ${view.equipmentText}`, {
+    this.add.rectangle(leftHudX, 92, hudPanelWidth, 190, 0x1f2937).setOrigin(0);
+    this.add.text(leftHudX + 22, 110, "RUN HUD", { fontFamily, fontSize: "22px", color: "#f9fafb" });
+    this.add.text(leftHudX + 22, 150, `HP  ${view.hpText}`, { fontFamily, fontSize: "20px", color: "#f9fafb" });
+    this.add.text(leftHudX + 22, 184, `재화  ${view.currencyText}`, { fontFamily, fontSize: "20px", color: "#f9fafb" });
+    this.add.text(leftHudX + 22, 218, `장비  ${view.equipmentText}`, {
       fontFamily,
       fontSize: "18px",
       color: "#d1d5db",
-      wordWrap: { width: 250 },
+      wordWrap: { width: hudPanelWidth - 50 },
     });
 
-    this.add.rectangle(width - 328, 92, 300, 190, 0x1f2937).setOrigin(0);
-    this.add.text(width - 306, 110, "NODE STATUS", {
+    this.add.rectangle(rightHudX, 92, hudPanelWidth, 190, 0x1f2937).setOrigin(0);
+    this.add.text(rightHudX + 22, 110, "NODE STATUS", {
       fontFamily,
       fontSize: "22px",
       color: "#f9fafb",
@@ -247,8 +252,8 @@ export class MapScene extends EmptyCoreScene {
     (Object.keys(NODE_STYLE) as MapNodeStatus[]).forEach((status, index) => {
       const style = NODE_STYLE[status];
       const y = 150 + index * 30;
-      this.add.rectangle(width - 296, y + 9, 18, 18, style.fill).setOrigin(0.5);
-      this.add.text(width - 272, y, style.label, {
+      this.add.rectangle(rightHudX + 32, y + 9, 18, 18, style.fill).setOrigin(0.5);
+      this.add.text(rightHudX + 56, y, style.label, {
         fontFamily,
         fontSize: "16px",
         color: "#d1d5db",
@@ -260,6 +265,8 @@ export class MapScene extends EmptyCoreScene {
         fontFamily,
         fontSize: "22px",
         color: "#f9fafb",
+        align: "center",
+        wordWrap: { width: centerHudWidth },
       })
       .setOrigin(0.5);
     this.add
@@ -268,7 +275,7 @@ export class MapScene extends EmptyCoreScene {
         fontSize: "18px",
         color: "#9ca3af",
         align: "center",
-        wordWrap: { width: 540 },
+        wordWrap: { width: centerHudWidth },
       })
       .setOrigin(0.5);
 
