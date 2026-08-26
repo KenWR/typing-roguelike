@@ -3,12 +3,13 @@ import {
   RUNTIME_IMAGE_ASSETS,
   TEXTURE_KEYS,
 } from "../assets/asset-catalog";
+import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
 
 export class BootScene extends Phaser.Scene {
   private failedAssetKeys = new Set<string>();
 
   constructor() {
-    super("BootScene");
+    super(SCENE_KEYS.boot);
   }
 
   preload(): void {
@@ -62,7 +63,8 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    this.scene.start("CombatFoundationScene");
+    const transition = resolveSceneTransition(SCENE_KEYS.start, undefined);
+    this.scene.start(transition.key, transition.payload);
   }
 
   private createFoundationTextures(): void {
