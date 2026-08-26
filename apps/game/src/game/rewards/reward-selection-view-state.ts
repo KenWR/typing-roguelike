@@ -15,6 +15,7 @@ export type RewardCandidate = Readonly<{
   description: string;
   effect: string;
   icon?: string;
+  imageKey?: string;
   value?: number;
 }>;
 
