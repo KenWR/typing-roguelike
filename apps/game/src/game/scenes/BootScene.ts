@@ -4,6 +4,7 @@ import {
   TEXTURE_KEYS,
 } from "../assets/asset-catalog";
 import { runRemotePersistence } from "../run/run-remote-persistence";
+import { resolveRunResumeRoute } from "../run/run-resume-routing";
 import { runSession } from "../run/run-session";
 import { applyMenuSettings, loadMenuSettings } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
@@ -74,11 +75,15 @@ export class BootScene extends Phaser.Scene {
 
   private async restoreRunAndContinue(localRun: ReturnType<typeof runSession.restore>): Promise<void> {
     const restoredRun = await runRemotePersistence.restore(localRun);
-    if (restoredRun !== null) runSession.replace(restoredRun);
+    if (restoredRun === null) {
+      const transition = resolveSceneTransition(SCENE_KEYS.start, undefined);
+      this.scene.start(transition.key, transition.payload);
+      return;
+    }
 
-    const transition = restoredRun === null
-      ? resolveSceneTransition(SCENE_KEYS.start, undefined)
-      : resolveSceneTransition(SCENE_KEYS.map, { runState: restoredRun });
+    runSession.replace(restoredRun);
+    const resume = resolveRunResumeRoute(restoredRun, runSession.getCheckpoint());
+    const transition = resolveSceneTransition(resume.sceneKey, resume.payload);
     this.scene.start(transition.key, transition.payload);
   }
 
