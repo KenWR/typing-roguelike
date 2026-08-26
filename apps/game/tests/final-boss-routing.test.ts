@@ -68,6 +68,7 @@ describe("final boss routing", () => {
       outcome: "victory",
     });
     expect(result.runState.status).toBe("active");
-    expect(result.sceneKey).toBe(SCENE_KEYS.map);
+    expect(result.sceneKey).toBe(SCENE_KEYS.reward);
+    expect(result.payload.nextSceneKey).toBe(SCENE_KEYS.map);
   });
 });
