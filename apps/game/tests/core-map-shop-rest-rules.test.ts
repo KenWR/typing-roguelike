@@ -32,18 +32,20 @@ const run = (overrides: Partial<RunState> = {}): RunState => ({
 const offer: ShopOffer = { id: "offer", equipmentId: "ember-blade", price: 25 };
 
 describe("core map/shop/rest rules", () => {
-  test("map selection locks competing nodes and completion unlocks next exactly once", () => {
+  test("map selection keeps competing nodes available until completion locks them and unlocks next exactly once", () => {
     const map = {
       ...run().map,
       nodeStatuses: { a: "available" as const, b: "available" as const, next: "locked" as const },
     };
     const begun = beginMapNode(map, "a");
-    expect(begun.nodeStatuses.a).toBe("in_progress");
-    expect(begun.nodeStatuses.b).toBe("locked");
+    expect(begun.nodeStatuses.a).toBe("available");
+    expect(begun.nodeStatuses.b).toBe("available");
+    expect(begun.nodeStatuses.next).toBe("locked");
 
     const first = completeMapNode(begun, "a", ["next"]);
     expect(first.applied).toBe(true);
     expect(first.map.nodeStatuses.a).toBe("cleared");
+    expect(first.map.nodeStatuses.b).toBe("locked");
     expect(first.map.nodeStatuses.next).toBe("available");
     const duplicate = completeMapNode(first.map, "a", ["next"]);
     expect(duplicate.applied).toBe(false);

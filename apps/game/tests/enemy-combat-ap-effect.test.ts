@@ -24,9 +24,9 @@ const initialization: CombatEncounterInitialization = {
           name: "행동력 압박",
           damage: 1,
           apDelta: -2,
-          windupMs: 0,
+          windupMs: 1,
           recoveryMs: 0,
-          description: "AP 2 감소",
+          description: "플레이어 AP를 2 감소시킵니다.",
           animation: { windup: "test:windup" },
         },
       ],
@@ -42,7 +42,7 @@ const initialization: CombatEncounterInitialization = {
 };
 
 describe("EnemyCombatRuntime AP effects", () => {
-  test("enemy AP drain changes the shared action point resource", () => {
+  test("enemy AP drain adjusts the shared action point resource on impact", () => {
     const actionPoints = new ActionPointResource({ initialAp: 5 });
     const combat = new CombatState();
     const timeline = new EnemyAttackTimeline();
@@ -56,7 +56,7 @@ describe("EnemyCombatRuntime AP effects", () => {
     });
 
     runtime.start();
-    const update = runtime.advance(0);
+    const update = runtime.advance(1);
 
     expect(update.playerAp).toBe(3);
     expect(actionPoints.snapshot.currentAp).toBe(3);
