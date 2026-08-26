@@ -120,17 +120,13 @@ export class SkillCommandStarter {
     }
 
     const actionId = this.createActionId(skill.id);
-    const actionDefinition = createSkillActionDefinition(skill, {
-      actionId,
-      actorId: this.actorId,
-      targetId: requireIdentifier("Target id", this.resolveTargetId(skill)),
-    });
-    const combat = this.combat.startAction({
-      ...actionDefinition,
-      // Player commands resolve immediately after their windup. Enemy
-      // actions retain their own recovery timing in EnemyAttackTimeline.
-      recoveryMs: 0,
-    });
+    const combat = this.combat.startAction(
+      createSkillActionDefinition(skill, {
+        actionId,
+        actorId: this.actorId,
+        targetId: requireIdentifier("Target id", this.resolveTargetId(skill)),
+      }),
+    );
     const combo = this.combo.recordCorrectInput();
     return { started: true, skill, actionId, ap: spend.snapshot, combat, combo };
   }
