@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { RunState } from "@typing-roguelike/shared";
 import { RUNTIME_IMAGE_ASSETS, RUNTIME_SPRITESHEET_ASSETS, TEXTURE_KEYS } from "../assets/asset-catalog";
 import { setRuntimeAudioSettings } from "../audio/runtime-audio";
 import { runRemotePersistence } from "../run/run-remote-persistence";
@@ -71,13 +72,15 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
+    const localRun = runSession.restore();
+    const restoredRunPromise = runRemotePersistence.restore(localRun);
     const remainingLoadingTime = BootScene.MIN_LOADING_DURATION_MS - (performance.now() - this.loadingStartedAt);
     if (remainingLoadingTime > 0) {
       await new Promise<void>((resolve) => window.setTimeout(resolve, remainingLoadingTime));
     }
 
-    const localRun = runSession.restore();
-    void this.restoreRunAndContinue(localRun);
+    const restoredRun = await restoredRunPromise;
+    this.continueFromRestoredRun(restoredRun);
   }
 
   private createLoadingView(): void {
@@ -218,8 +221,7 @@ export class BootScene extends Phaser.Scene {
     this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, this.handleFileLoadError, this);
   }
 
-  private async restoreRunAndContinue(localRun: ReturnType<typeof runSession.restore>): Promise<void> {
-    const restoredRun = await runRemotePersistence.restore(localRun);
+  private continueFromRestoredRun(restoredRun: Readonly<RunState> | null): void {
     if (restoredRun === null) {
       const transition = resolveSceneTransition(SCENE_KEYS.start, undefined);
       this.scene.start(transition.key, transition.payload);
