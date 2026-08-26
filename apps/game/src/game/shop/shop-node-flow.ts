@@ -41,13 +41,14 @@ export const createShopNodeFlow = (
   nextNodeIds: readonly string[],
   offers: readonly ShopOffer[] = createAvailableOffers(runState),
   purchasedOfferIds: readonly string[] = [],
+  rerollCount = 0,
 ): ShopNodeFlowState => ({
   runState,
   nodeId,
   nextNodeIds: [...nextNodeIds],
   offers: [...offers],
   purchasedOfferIds: new Set(purchasedOfferIds),
-  rerollCount: 0,
+  rerollCount,
   completed: false,
 });
 
