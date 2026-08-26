@@ -34,6 +34,22 @@ describe("shop node flow", () => {
     const next = purchaseShopOffer(createShopNodeFlow(run(), "shop", ["next"], offers), "offer");
     expect(next.runState.runCurrency).toBe(75);
     expect(next.runState.inventory.itemInstances).toContain("equipment_blood_sword");
+    expect(next.runState.loadout.weaponId).toBe("equipment_blood_sword");
+  });
+
+  test("rejects purchasing equipment that is already owned", () => {
+    const ownedRun = {
+      ...run(),
+      inventory: { itemInstances: ["equipment_blood_sword"], relicInstances: [] },
+      loadout: { ...run().loadout, weaponId: "equipment_blood_sword" },
+    };
+    const state = createShopNodeFlow(ownedRun, "shop", ["next"], offers);
+    const rejected = purchaseShopOffer(state, "offer");
+
+    expect(rejected.runState).toBe(ownedRun);
+    expect(rejected.runState.runCurrency).toBe(100);
+    expect(rejected.runState.inventory.itemInstances).toEqual(["equipment_blood_sword"]);
+    expect(rejected.purchasedOfferIds.has("offer")).toBe(false);
   });
 
   test("reroll spends increasing currency and replaces offers", () => {
@@ -45,6 +61,11 @@ describe("shop node flow", () => {
     expect(rerolled.rerollCount).toBe(1);
     expect(getShopRerollCost(rerolled)).toBe(20);
     expect(rerolled.offers.length).toBeGreaterThan(0);
+
+    const rerolledAgain = rerollShopOffers(rerolled, () => 0);
+    expect(rerolledAgain.runState.runCurrency).toBe(70);
+    expect(rerolledAgain.rerollCount).toBe(2);
+    expect(getShopRerollCost(rerolledAgain)).toBe(30);
   });
 
   test("reroll is rejected when currency is insufficient", () => {
