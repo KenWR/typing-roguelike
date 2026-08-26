@@ -7,11 +7,35 @@ developer_instructions = """
 보고받은 PR 번호를 기준으로 병합 가능 여부를 확인하고 처리합니다.
 
 - PR 상태는 GitHub live 상태로 확인합니다.
+- 병합 검토를 시작하기 전에 `headRefOid`와 동등한 live head SHA를
+  `scripts/verified-head-merge.sh capture --repo <owner/repo> --pr <number>`로
+  캡처하고 `verified_head_sha`로 고정합니다. 캡처는 모든 check, 승인, review
+  thread, mergeability 확인보다 먼저 수행합니다.
+- 모든 판단은 `verified_head_sha`를 기준으로 합니다. PR head가 바뀌면 이전
+  check나 승인을 새 커밋에 재사용하지 않고, 새 SHA를 캡처하여 검토를 처음부터
+  다시 시작합니다.
 - draft PR이면 `scripts/pr-ready.sh <PR번호>`로 Ready 상태로 전환합니다.
-- conflict, 실패한 필수 체크, 미해결 리뷰 스레드, 승인 부족, base/head 불일치가 있으면 merge하지 않습니다.
-- merge 전에는 최신 base와 PR 상태를 다시 확인합니다.
-- merge 조건이 충족되면 저장소 정책에 맞춰 merge합니다.
+- draft를 Ready로 전환한 경우 자동 리뷰가 새로 시작될 수 있으므로 head SHA를
+  다시 캡처하고 모든 게이트를 재검사합니다.
+- `verified_head_sha`에 대한 required check가 모두 성공하고, 필요한 approval이
+  현재 head에 유효하며, 미해결 review thread가 없고, conflict와 base/head
+  불일치가 없으며, PR이 Ready 상태일 때만 merge 후보로 취급합니다.
+- conflict, 실패하거나 완료되지 않은 필수 체크, 미해결 리뷰 스레드, 승인 부족,
+  draft 상태, base/head 불일치가 있으면 merge하지 않습니다.
+- merge 직전에도 live PR의 Ready 상태, required check, approval, review thread,
+  conflict와 base/head 상태를 다시 확인합니다. 이 재확인 뒤에는 head SHA를
+  재검증하는 helper 호출만 수행하며, 어느 상태라도 달라지면 merge하지 않습니다.
+- 위 게이트를 통과한 뒤 merge 직전에 `scripts/verified-head-merge.sh merge
+  --repo <owner/repo> --pr <number> --expected-head-sha "$verified_head_sha"`를
+  호출합니다. 이 명령은 head SHA를 즉시 다시 읽고 값이 다르면 정확히
+  `STALE_REVIEW`로 중단합니다. 값이 같을 때만 `gh pr merge`에
+  `--match-head-commit "$verified_head_sha"`를 전달합니다.
+- GitHub connector로 직접 merge할 때도 동일하게 `expected_head_sha`를
+  `verified_head_sha`로 설정합니다. head 재확인과 조건부 merge 사이에 다른
+  merge 경로를 사용하지 않습니다.
 - merge 후에는 최종 merged 상태를 다시 확인합니다.
+- `EVIDENCE`에는 캡처한 SHA, merge 직전 재확인한 SHA, 조건부 merge 결과와
+  실행한 gate 명령을 기록합니다.
 - 사용자 변경사항과 관련 없는 로컬 변경은 되돌리지 않습니다.
 - 실행하지 않은 확인을 통과로 보고하지 않습니다.
 
