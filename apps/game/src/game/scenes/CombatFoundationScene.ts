@@ -7,6 +7,7 @@ import {
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
 import { ActionPointResource } from "../combat/action-point-resource";
+import { CombatApEffectController } from "../combat/combat-ap-effects";
 import { CombatState } from "../combat/combat-state";
 import {
   CombatPauseController,
@@ -64,6 +65,7 @@ export class CombatFoundationScene extends Phaser.Scene {
   private enemyAttackGauge!: EnemyAttackGauge;
   private enemyAttackTimeline!: EnemyAttackTimeline;
   private actionPoints!: ActionPointResource;
+  private apEffects!: CombatApEffectController;
   private combat!: CombatState;
   private playerCombatRuntime?: PlayerCombatRuntime;
   private feedback?: CombatFeedbackController;
@@ -166,6 +168,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.uiLayer.add(this.enemyHealthText);
 
     this.actionPoints = new ActionPointResource();
+    this.apEffects = new CombatApEffectController({
+      actionPoints: this.actionPoints,
+      relicIds: this.runState?.build.equippedRelicIds ?? [],
+    });
     this.combat = new CombatState();
     this.combatHud = new CombatHud(this, {
       hp: initialization.player.currentHp,
@@ -219,6 +225,8 @@ export class CombatFoundationScene extends Phaser.Scene {
       this.playerCombatRuntime = new PlayerCombatRuntime({
         combat: this.combat,
         enemyTimeline: this.enemyAttackTimeline,
+        actionPoints: this.actionPoints,
+        apEffects: this.apEffects,
         runState: this.runState,
         initialization,
         nextNodeIds: this.nextNodeIds,
@@ -236,18 +244,20 @@ export class CombatFoundationScene extends Phaser.Scene {
         initialSkill.kind === "defense"
           ? "player"
           : (initialization.enemies[0]?.instanceId ?? "player"),
+      resolveApCost: (skill) => this.apEffects.resolveSkillCost(skill),
     });
     this.commandCompletionCleanup = skillStarter.connect(
       this.commandInputBuffer,
       (result) => {
-        this.combatHud.update({ ap: result.ap.currentAp });
         if (result.started) {
+          this.apEffects.onSkillStarted(result.skill, result.combo.count);
           this.playerCombatRuntime?.registerAction(result.actionId, result.skill);
           if (result.skill.kind === "defense") {
             this.feedback?.trigger("guard");
           }
           this.commandHud.showSkillStarted();
         }
+        this.combatHud.update({ ap: this.actionPoints.snapshot.currentAp });
       },
     );
     this.createCommandInputElement();
@@ -278,7 +288,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     }
 
     this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);
-    this.combatHud.update({ hp: playerUpdate.playerHp });
+    this.combatHud.update({ hp: playerUpdate.playerHp, ap: playerUpdate.playerAp });
     this.updateEnemyHealth(playerUpdate.enemyHp);
 
     if (

@@ -16,6 +16,8 @@ export interface SkillConfig {
   description: string;
   tags?: readonly string[];
   effect?: string;
+  /** 성공적으로 적중했을 때 플레이어 AP에 적용할 변화량. */
+  apDeltaOnHit?: number;
 }
 export interface EquipmentConfig { id: string; name: string; slot: "weapon" | "subweapon"; kind: EquipmentKind; rarity: Rarity; sellValue: number; baseAttack?: number; skills: readonly SkillConfig[]; }
 export interface RelicConfig { id: string; name: string; rarity: Rarity; description: string; maxStacks: number; skillTags: readonly SkillCategory[]; effects: readonly string[]; }
@@ -52,6 +54,8 @@ export interface EnemyActionConfig {
   windupMs: number;
   recoveryMs: number;
   defenseAmount?: number;
+  /** 적 행동이 적중했을 때 플레이어 AP에 적용할 변화량. */
+  apDelta?: number;
   description: string;
   animation: EnemyAnimationRefs;
 }
