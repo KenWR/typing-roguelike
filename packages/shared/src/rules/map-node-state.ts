@@ -21,6 +21,11 @@ export const getMapNodeStatus = (
 	nodeId: string,
 ): MapNodeStatus => map.nodeStatuses[nodeId] ?? "locked";
 
+/**
+ * Selecting a node no longer creates a persisted "in progress" state.
+ * The selected node remains available until the node flow completes.
+ * This makes an interrupted run return to the map instead of resuming mid-node.
+ */
 export const beginMapNode = (
 	map: Readonly<RunMapState>,
 	nodeId: string,
@@ -29,16 +34,9 @@ export const beginMapNode = (
 		throw new Error(`Map node ${nodeId} is not available.`);
 	}
 
-	const nodeStatuses: Record<string, MapNodeStatus> = {};
-	for (const [id, status] of Object.entries(map.nodeStatuses)) {
-		nodeStatuses[id] = status === "available" ? "locked" : status;
-	}
-	nodeStatuses[nodeId] = "in_progress";
-
 	return {
 		...map,
 		currentNodeId: nodeId,
-		nodeStatuses,
 	};
 };
 
@@ -51,8 +49,8 @@ export const completeMapNode = (
 	if (currentStatus === "cleared") {
 		return { map: map as RunMapState, applied: false };
 	}
-	if (currentStatus !== "in_progress") {
-		throw new Error(`Map node ${nodeId} is not in progress.`);
+	if (currentStatus !== "available" && currentStatus !== "in_progress") {
+		throw new Error(`Map node ${nodeId} is not available.`);
 	}
 
 	const currentNode = generateNodeChoices(
