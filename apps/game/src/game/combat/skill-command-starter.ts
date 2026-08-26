@@ -45,6 +45,8 @@ export type SkillCommandStarterConfig = Readonly<{
   targetId: string;
   combo?: ComboTracker;
   resolveApCost?: (skill: SkillDefinition) => number;
+  /** 커맨드를 완성할 때마다 대상을 다시 계산합니다. Tab 타게팅에 사용합니다. */
+  resolveTargetId?: (skill: SkillDefinition) => string;
 }>;
 
 const normalizeCommand = (command: string): string => command.normalize("NFC");
@@ -69,6 +71,7 @@ export class SkillCommandStarter {
   private readonly actorId: string;
   private readonly targetId: string;
   private readonly resolveApCost: (skill: SkillDefinition) => number;
+  private readonly resolveTargetId: (skill: SkillDefinition) => string;
   private nextActionSequence = 1;
 
   constructor(config: SkillCommandStarterConfig) {
@@ -78,6 +81,7 @@ export class SkillCommandStarter {
     this.actorId = requireIdentifier("Actor id", config.actorId);
     this.targetId = requireIdentifier("Target id", config.targetId);
     this.resolveApCost = config.resolveApCost ?? ((skill) => skill.apCost);
+    this.resolveTargetId = config.resolveTargetId ?? (() => this.targetId);
 
     for (const skill of config.skills) {
       const command = normalizeCommand(skill.command);
@@ -120,7 +124,7 @@ export class SkillCommandStarter {
       createSkillActionDefinition(skill, {
         actionId,
         actorId: this.actorId,
-        targetId: this.targetId,
+        targetId: requireIdentifier("Target id", this.resolveTargetId(skill)),
       }),
     );
     const combo = this.combo.recordCorrectInput();

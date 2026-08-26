@@ -17,7 +17,7 @@ const magicShield = defineSkill({
   apCost: 2,
   windupMs: 300,
   recoveryMs: 700,
-  effects: [{ type: "guard", damageMultiplier: 0.5, durationMs: 1_000 }],
+  effects: [{ type: "shield", amount: 20, durationMs: 1_000 }],
   description: "마법 보호막을 전개한다.",
 });
 
@@ -119,5 +119,43 @@ describe("SkillCommandStarter", () => {
       multiplier: 1,
       lastBreakReason: "incorrect-input",
     });
+  });
+
+  test("re-reads the target on every command so Tab targeting takes effect", () => {
+    const slash = defineSkill({
+      id: "skill.slash",
+      name: "베기",
+      command: "베기",
+      kind: "attack",
+      category: "basic",
+      apCost: 1,
+      windupMs: 100,
+      recoveryMs: 100,
+      damageCoefficient: 1,
+      description: "벤다.",
+    });
+    const input = new CommandInputBuffer([slash.command]);
+    const combat = new CombatState();
+    let targetId = "enemy:1";
+    const starter = new SkillCommandStarter({
+      skills: [slash],
+      actionPoints: new ActionPointResource({ maxAp: 6, initialAp: 6 }),
+      combat,
+      actorId: "player",
+      targetId: "enemy:fallback",
+      resolveTargetId: () => targetId,
+    });
+    const results: SkillStartResult[] = [];
+    starter.connect(input, (result) => results.push(result));
+
+    input.updateInput("베기");
+    input.reset();
+    targetId = "enemy:2";
+    input.updateInput("베기");
+
+    expect(
+      combat.snapshot.actions.map((action) => action.targetId),
+    ).toEqual(["enemy:1", "enemy:2"]);
+    expect(results.every((result) => result.started)).toBe(true);
   });
 });

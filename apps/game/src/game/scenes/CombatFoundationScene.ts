@@ -14,6 +14,7 @@ import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
 import { ActionPointResource } from "../combat/action-point-resource";
 import { CombatApEffectController } from "../combat/combat-ap-effects";
 import { CombatState } from "../combat/combat-state";
+import { CombatTargetingController } from "../combat/combat-targeting";
 import {
   CombatPauseController,
   type PauseDocument,
@@ -50,8 +51,8 @@ const MAGIC_SHIELD = defineSkill({
   apCost: 2,
   windupMs: 300,
   recoveryMs: 700,
-  effects: [{ type: "guard", damageMultiplier: 0.5, durationMs: 1_000 }],
-  description: "마법 보호막을 전개한다.",
+  effects: [{ type: "shield", amount: 20, durationMs: 1_000 }],
+  description: "커맨드를 완성하는 즉시 실드 20을 1초 동안 두른다.",
 });
 
 export type CombatFoundationSceneData = Readonly<{
@@ -71,7 +72,9 @@ export class CombatFoundationScene extends Phaser.Scene {
   private playerPlaceholder!: Phaser.GameObjects.Container;
   private enemyPlaceholders: Phaser.GameObjects.Container[] = [];
   private enemyActorImages = new Map<string, Phaser.GameObjects.Image>();
+  private enemyTargetMarkers = new Map<string, Phaser.GameObjects.Rectangle>();
   private displayedEnemyHp = new Map<string, number>();
+  private displayedEnemyShield: Readonly<Record<string, number>> = {};
   private enemyHitRemainingMs = new Map<string, number>();
   private enemyHealthText!: Phaser.GameObjects.Text;
   private encounterLabel!: Phaser.GameObjects.Text;
@@ -89,6 +92,7 @@ export class CombatFoundationScene extends Phaser.Scene {
   private commandHud!: CommandHud;
   private commandInputBuffer!: CommandInputBuffer;
   private commandInputRecovery!: CommandInputRecoveryController;
+  private targeting?: CombatTargetingController;
   private commandInputCleanup?: () => void;
   private commandCompletionCleanup?: () => void;
   private commandStatusCleanup?: () => void;
@@ -115,8 +119,11 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.transitionStarted = false;
     this.enemyPlaceholders = [];
     this.enemyActorImages.clear();
+    this.enemyTargetMarkers.clear();
     this.displayedEnemyHp.clear();
+    this.displayedEnemyShield = {};
     this.enemyHitRemainingMs.clear();
+    this.targeting = undefined;
   }
 
   create(): void {
@@ -163,6 +170,13 @@ export class CombatFoundationScene extends Phaser.Scene {
       if (actor instanceof Phaser.GameObjects.Image) {
         this.enemyActorImages.set(enemy.instanceId, actor);
       }
+      const marker = this.add
+        .rectangle(0, 0, 200, 250, 0x000000, 0)
+        .setStrokeStyle(3, 0xffd166, 0.95)
+        .setVisible(false);
+      placeholder.add(marker);
+      placeholder.sendToBack(marker);
+      this.enemyTargetMarkers.set(enemy.instanceId, marker);
       this.displayedEnemyHp.set(enemy.instanceId, enemy.hp);
       this.enemyHitRemainingMs.set(enemy.instanceId, 0);
       return placeholder;
@@ -190,7 +204,11 @@ export class CombatFoundationScene extends Phaser.Scene {
       .text(
         0,
         0,
-        createEnemyHealthListLabel(initialization.enemies, initialEnemyHp),
+        createEnemyHealthListLabel(initialization.enemies, initialEnemyHp, {
+          ...(this.targeting?.targetId === undefined
+            ? {}
+            : { targetId: this.targeting.targetId }),
+        }),
         {
           color: "#f4d7da",
           fontFamily: "Galmuri9, monospace",
@@ -209,11 +227,17 @@ export class CombatFoundationScene extends Phaser.Scene {
       relicIds: this.runState?.build.equippedRelicIds ?? [],
     });
     this.combat = new CombatState();
+    this.targeting = new CombatTargetingController({
+      enemyIds: initialization.enemies.map((enemy) => enemy.instanceId),
+      isAlive: (enemyId) => (this.displayedEnemyHp.get(enemyId) ?? 0) > 0,
+      onTargetChanged: () => this.refreshTargetPresentation(),
+    });
     this.combatHud = new CombatHud(this, {
       hp: initialization.player.currentHp,
       maxHp: initialization.player.maxHp,
       ap: this.actionPoints.snapshot.currentAp,
       maxAp: this.actionPoints.snapshot.maxAp,
+      shield: 0,
     });
     this.relicHud = new RelicHud(
       this,
@@ -261,6 +285,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       if (snapshot.status === "complete") {
         this.feedback?.trigger("command-success");
       } else if (snapshot.status === "incorrect") {
+        this.apEffects.onCommandFailed();
         this.feedback?.trigger("command-failure");
       }
     });
@@ -289,6 +314,12 @@ export class CombatFoundationScene extends Phaser.Scene {
           ? "player"
           : (initialization.enemies[0]?.instanceId ?? "player"),
       resolveApCost: (skill) => this.apEffects.resolveSkillCost(skill),
+      resolveTargetId: (skill) =>
+        skill.kind === "defense"
+          ? "player"
+          : (this.targeting?.refresh() ??
+            initialization.enemies[0]?.instanceId ??
+            "player"),
     });
     this.commandCompletionCleanup = skillStarter.connect(
       this.commandInputBuffer,
@@ -306,6 +337,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     );
     this.createCommandInputElement();
     this.createPauseHandling();
+    this.createTargetHandling();
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseResizeListener, this);
@@ -314,6 +346,8 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseCommandInputElement, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releasePauseHandling, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.releasePauseHandling, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseTargetHandling, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseTargetHandling, this);
     this.applyLayout(this.scale.gameSize.width, this.scale.gameSize.height);
   }
 
@@ -337,13 +371,20 @@ export class CombatFoundationScene extends Phaser.Scene {
     }
 
     this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);
-    this.combatHud.update({ hp: playerUpdate.playerHp, ap: playerUpdate.playerAp });
-    this.updateEnemyHealth(playerUpdate.enemyHp);
+    this.combatHud.update({
+      hp: playerUpdate.playerHp,
+      ap: playerUpdate.playerAp,
+      shield: playerUpdate.playerShield,
+    });
+    this.displayedEnemyShield = playerUpdate.enemyShield;
     this.updateEnemyVisuals(
       playerUpdate.enemyHp,
       safeDelta,
       playerUpdate.enemyTimeline.snapshot,
     );
+    this.targeting?.refresh();
+    this.refreshTargetPresentation();
+    this.updateEnemyHealth(playerUpdate.enemyHp);
 
     if (
       previousPlayerHp !== undefined &&
@@ -412,8 +453,36 @@ export class CombatFoundationScene extends Phaser.Scene {
       createEnemyHealthListLabel(
         this.combatInitialization?.enemies ?? [],
         enemyHp,
+        {
+          enemyShield: this.displayedEnemyShield,
+          ...(this.targeting?.targetId === undefined
+            ? {}
+            : { targetId: this.targeting.targetId }),
+        },
       ),
     );
+  }
+
+  private createTargetHandling(): void {
+    if (typeof document === "undefined") return;
+    this.targeting?.bind(document);
+    this.refreshTargetPresentation();
+  }
+
+  private releaseTargetHandling(): void {
+    this.targeting?.dispose();
+  }
+
+  /** 지정한 적에게만 조준 테두리를 보여 주고 나머지는 살짝 흐리게 둡니다. */
+  private refreshTargetPresentation(): void {
+    const targetId = this.targeting?.targetId;
+    for (const [enemyId, marker] of this.enemyTargetMarkers) {
+      const alive = (this.displayedEnemyHp.get(enemyId) ?? 0) > 0;
+      marker.setVisible(alive && enemyId === targetId);
+      this.enemyActorImages
+        .get(enemyId)
+        ?.setAlpha(!alive || enemyId === targetId ? 1 : 0.62);
+    }
   }
 
   private startCombatRoute(

@@ -32,17 +32,80 @@ describe("CombatApEffectController", () => {
     expect(effects.resolveSkillCost(skill({ name: "휘두르기", command: "휘두르기" }))).toBe(3);
   });
 
-  test("applies guard timing relics to duration without changing their documented AP cost", () => {
+  test("applies shield duration relics without changing their documented AP cost", () => {
     const actionPoints = new ActionPointResource();
     const heavyArmor = new CombatApEffectController({ actionPoints, relicIds: ["relic_heavy_armor"] });
     expect(heavyArmor.resolveSkillCost(skill())).toBe(3);
     const wristband = new CombatApEffectController({ actionPoints, relicIds: ["relic_time_wristband"] });
     expect(wristband.resolveSkillCost(skill({ category: "guard", kind: "defense" }))).toBe(2);
-    expect(wristband.resolveGuardDuration(800)).toBe(1_000);
+    expect(wristband.resolveShieldDuration(800)).toBe(1_000);
 
     const oldShield = new CombatApEffectController({ actionPoints, relicIds: ["relic_old_shield"] });
-    expect(oldShield.resolveGuardDuration(800)).toBe(1_100);
-    expect(() => oldShield.resolveGuardDuration(Number.NaN)).toThrow(RangeError);
+    expect(oldShield.resolveShieldDuration(800)).toBe(1_100);
+    expect(() => oldShield.resolveShieldDuration(Number.NaN)).toThrow(RangeError);
+
+    const rampart = new CombatApEffectController({ actionPoints, relicIds: ["relic_rampart_shield"] });
+    expect(rampart.resolveShieldDuration(800)).toBe(1_800);
+  });
+
+  test("shortens shield duration for relics that trade defence for value", () => {
+    const actionPoints = new ActionPointResource();
+    const pouch = new CombatApEffectController({ actionPoints, relicIds: ["relic_greedy_pouch"] });
+    expect(pouch.resolveShieldDuration(800)).toBe(500);
+    expect(pouch.resolveShieldDuration(200)).toBe(0);
+
+    const both = new CombatApEffectController({
+      actionPoints,
+      relicIds: ["relic_greedy_pouch", "relic_time_wristband"],
+    });
+    expect(both.resolveShieldDuration(800)).toBe(700);
+  });
+
+  test("raises and lowers shield amount with flat and ratio relics", () => {
+    const actionPoints = new ActionPointResource();
+    expect(
+      new CombatApEffectController({ actionPoints }).resolveShieldAmount(24),
+    ).toBe(24);
+    expect(
+      new CombatApEffectController({ actionPoints, relicIds: ["relic_steel_fragment"] })
+        .resolveShieldAmount(24),
+    ).toBe(32);
+    expect(
+      new CombatApEffectController({ actionPoints, relicIds: ["relic_heavy_armor"] })
+        .resolveShieldAmount(24),
+    ).toBe(31);
+    expect(
+      new CombatApEffectController({ actionPoints, relicIds: ["relic_berserker_gloves"] })
+        .resolveShieldAmount(24),
+    ).toBe(19);
+    expect(
+      new CombatApEffectController({
+        actionPoints,
+        relicIds: ["relic_steel_fragment", "relic_berserker_gloves"],
+      }).resolveShieldAmount(24),
+    ).toBe(25);
+    expect(() =>
+      new CombatApEffectController({ actionPoints }).resolveShieldAmount(-1),
+    ).toThrow(RangeError);
+  });
+
+  test("the typo correction charm boosts the next shield twice per combat", () => {
+    const actionPoints = new ActionPointResource();
+    const charm = new CombatApEffectController({
+      actionPoints,
+      relicIds: ["relic_typo_correction_charm"],
+    });
+
+    expect(charm.resolveShieldAmount(20)).toBe(20);
+    charm.onCommandFailed();
+    expect(charm.resolveShieldAmount(20)).toBe(26);
+    charm.onShieldGranted();
+    expect(charm.resolveShieldAmount(20)).toBe(20);
+
+    charm.onCommandFailed();
+    charm.onCommandFailed();
+    charm.onShieldGranted();
+    expect(charm.resolveShieldAmount(20)).toBe(20);
   });
 
   test("meditation incense discounts the next special exactly once", () => {

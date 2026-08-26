@@ -124,6 +124,14 @@ export class CombatState {
     };
   }
 
+  /**
+   * 진행 중인 행동을 즉시 없앱니다. 적의 실드가 선딜 중에 모두 깎여 행동이
+   * 취소될 때 사용하며, 취소된 행동은 어떤 이벤트도 발생시키지 않습니다.
+   */
+  cancelAction(id: string): boolean {
+    return this.actions.delete(validateIdentifier("Action id", id));
+  }
+
   advance(deltaMs: number): CombatUpdate {
     validateDuration("Combat delta", deltaMs);
 

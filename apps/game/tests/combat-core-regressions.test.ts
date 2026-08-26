@@ -81,23 +81,23 @@ const resolvePlayerSkill = (
   return beforeHp - (context.runtime.enemyHp[targetId] ?? 0);
 };
 
-const expectedGuardEffects = {
-  equipment_guard_round_shield: [[0.4, 900], [0.5, 1_200]],
-  equipment_thorn_shield: [[0.45, 800], [0, 350]],
-  equipment_mirror_steel_shield: [[0.5, 800], [0, 350]],
-  equipment_fortress_shield: [[0.3, 1_200], [0.2, 2_000]],
-  equipment_mobile_wall: [[0.35, 1_000], [0.35, 1_000]],
-  equipment_reversal_crest_shield: [[0.4, 800], [0, 350]],
-  equipment_bronze_repair_tome: [[0.78, 4_000], [0.78, 2_000]],
-  equipment_flame_guard_tome: [[0.82, 4_000], [0, 600]],
-  equipment_frost_veil_tome: [[0.8, 4_000], [0, 800]],
-  equipment_reflection_grammar: [[0.8, 4_000], [0, 500]],
-  equipment_infinite_pages: [[0.85, 4_000], [0.85, 4_000]],
-  equipment_final_chapter: [[0.75, 4_000], [0, 1_000]],
+const expectedShieldEffects = {
+  equipment_guard_round_shield: [[24, 900], [30, 1_200]],
+  equipment_thorn_shield: [[22, 800], [45, 350]],
+  equipment_mirror_steel_shield: [[20, 800], [50, 350]],
+  equipment_fortress_shield: [[28, 1_200], [40, 2_000]],
+  equipment_mobile_wall: [[26, 1_000], [32, 1_000]],
+  equipment_reversal_crest_shield: [[22, 800], [48, 350]],
+  equipment_bronze_repair_tome: [[22, 4_000], [11, 6_000]],
+  equipment_flame_guard_tome: [[18, 4_000], [40, 600]],
+  equipment_frost_veil_tome: [[20, 4_000], [45, 800]],
+  equipment_reflection_grammar: [[18, 4_000], [42, 500]],
+  equipment_infinite_pages: [[15, 4_000], [22, 4_000]],
+  equipment_final_chapter: [[25, 4_000], [55, 1_000]],
 } as const;
 
 describe("combat core regressions with production equipment configs", () => {
-  test("all 24 shield and tome skills expose their configured guard window", () => {
+  test("all 24 shield and tome skills expose their configured shield", () => {
     const defensiveEquipment = EQUIPMENT_CONFIGS.filter(
       ({ kind }) => kind === "shield" || kind === "tome",
     );
@@ -105,8 +105,8 @@ describe("combat core regressions with production equipment configs", () => {
 
     let defenseSkillCount = 0;
     for (const equipment of defensiveEquipment) {
-      const expected = expectedGuardEffects[
-        equipment.id as keyof typeof expectedGuardEffects
+      const expected = expectedShieldEffects[
+        equipment.id as keyof typeof expectedShieldEffects
       ];
       expect(expected).toBeDefined();
       expect(equipment.skills).toHaveLength(expected.length);
@@ -114,10 +114,10 @@ describe("combat core regressions with production equipment configs", () => {
       equipment.skills.forEach((skillConfig, index) => {
         expect(skillConfig.effects).toHaveLength(1);
         const skill = defineSkill(skillConfig);
-        const guards = skill.effects.filter((effect) => effect.type === "guard");
-        expect(guards).toHaveLength(1);
-        expect(guards[0]).toMatchObject({
-          damageMultiplier: expected[index]![0],
+        const shields = skill.effects.filter((effect) => effect.type === "shield");
+        expect(shields).toHaveLength(1);
+        expect(shields[0]).toMatchObject({
+          amount: expected[index]![0],
           durationMs: expected[index]![1],
         });
         defenseSkillCount += 1;
@@ -151,33 +151,65 @@ describe("combat core regressions with production equipment configs", () => {
     expect(withShieldDamage).toBe(weaponOnlyDamage);
   });
 
-  test("an actual enemy defense action protects the enemy without hitting the player", () => {
+  test("an enemy shield absorbs hits during its windup and is gone once the windup ends", () => {
     const rustySword = getEquipment("equipment_rusty_sword");
     const slash = defineSkill(rustySword.skills[0]!);
     const context = createRuntime([rustySword.id], () => 0.4);
+    const enemyId = context.initialization.enemies[0]!.instanceId;
     const defense = inkSlime.actions.find(({ kind }) => kind === "defense");
     if (defense === undefined) throw new Error("Ink slime has no defense action");
 
     context.runtime.start();
-    context.runtime.advance(defense.windupMs + defense.recoveryMs);
+    expect(context.runtime.enemyShield[enemyId]).toBe(defense.shieldAmount);
+
+    const shieldedDamage = resolvePlayerSkill(
+      context,
+      slash,
+      "during-enemy-windup",
+    );
+    expect(shieldedDamage).toBe(0);
+    expect(context.runtime.enemyShield[enemyId]).toBe(
+      (defense.shieldAmount ?? 0) - 9,
+    );
+
+    // 선딜이 끝나면 남은 실드도 함께 사라지고 후딜 동안 그대로 맞습니다.
+    context.runtime.advance(defense.windupMs - 200);
+    expect(context.runtime.enemyShield[enemyId]).toBe(0);
+
+    const punishDamage = resolvePlayerSkill(context, slash, "after-enemy-windup");
+
+    expect(punishDamage).toBe(9);
     expect(context.runtime.playerHp).toBe(100);
-
-    const defendedDamage = resolvePlayerSkill(
-      context,
-      slash,
-      "after-enemy-defense:first",
-    );
-    const damageAfterDefenseWasConsumed = resolvePlayerSkill(
-      context,
-      slash,
-      "after-enemy-defense:second",
-    );
-
-    expect(defendedDamage).toBe(8);
-    expect(damageAfterDefenseWasConsumed).toBe(9);
   });
 
-  test("applies an earlier enemy defense before a later player hit in the same frame", () => {
+  test("breaking the shield inside the windup cancels that enemy action", () => {
+    const rustySword = getEquipment("equipment_rusty_sword");
+    const slash = defineSkill(rustySword.skills[0]!);
+    const context = createRuntime([rustySword.id], () => 0);
+    const enemyId = context.initialization.enemies[0]!.instanceId;
+    const attack = inkSlime.actions.find(({ kind }) => kind === "attack");
+    if (attack === undefined) throw new Error("Ink slime has no attack action");
+
+    context.runtime.start();
+    expect(context.runtime.enemyShield[enemyId]).toBe(attack.shieldAmount);
+
+    resolvePlayerSkill(context, slash, "break:first");
+    resolvePlayerSkill(context, slash, "break:second");
+    const beforeHp = context.runtime.enemyHp[enemyId]!;
+    resolvePlayerSkill(context, slash, "break:third");
+
+    // 22 실드를 9+9+4로 깎아 내고 남은 5만 체력으로 넘어갑니다.
+    expect(beforeHp - context.runtime.enemyHp[enemyId]!).toBe(5);
+    // 취소된 즉시 다음 행동이 시작되므로 실드는 다시 가득 찹니다.
+    expect(context.runtime.enemyShield[enemyId]).toBe(attack.shieldAmount);
+
+    // 세 번의 타격으로 0.9초가 지났으므로 4.8초를 더 흘리면 원래 공격이
+    // 적중했어야 할 5.7초에 닿습니다. 취소된 공격은 끝내 들어오지 않습니다.
+    context.runtime.advance(4_800);
+    expect(context.runtime.playerHp).toBe(100);
+  });
+
+  test("gives a same-frame enemy action its shield before a later player hit lands", () => {
     const rustySword = getEquipment("equipment_rusty_sword");
     const slowSlash = defineSkill({
       ...rustySword.skills[0]!,
@@ -202,7 +234,9 @@ describe("combat core regressions with production equipment configs", () => {
     context.runtime.advance(4_000);
 
     expect(context.runtime.playerHp).toBe(100);
-    expect(beforeHp - context.runtime.enemyHp[enemyId]!).toBe(8);
+    // 3.5초에 시작된 다음 방어의 실드가 4초 타격을 전부 받아냅니다.
+    expect(beforeHp - context.runtime.enemyHp[enemyId]!).toBe(0);
+    expect(context.runtime.enemyShield[enemyId]).toBe(30 - 9);
   });
 
   test("a discount cannot make an actual positive-cost skill free", () => {

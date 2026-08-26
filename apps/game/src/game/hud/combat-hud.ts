@@ -5,9 +5,11 @@ export type CombatHudState = {
   maxHp: number;
   ap: number;
   maxAp: number;
+  /** 커맨드를 완성해 얻은 뒤 아직 남아 있는 실드량 */
+  shield: number;
 };
 
-export type CombatHudUpdate = Partial<Pick<CombatHudState, "hp" | "ap">>;
+export type CombatHudUpdate = Partial<Pick<CombatHudState, "hp" | "ap" | "shield">>;
 
 const clamp = (value: number, maximum: number) =>
   Math.min(Math.max(0, value), Math.max(0, maximum));
@@ -16,12 +18,19 @@ export function formatCombatHudResourceValue(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-export function createCombatHudState(state: CombatHudState): CombatHudState {
+export function formatCombatHudShieldValue(shield: number): string {
+  return shield > 0 ? ` +${formatCombatHudResourceValue(shield)}` : "";
+}
+
+export function createCombatHudState(
+  state: CombatHudState | Omit<CombatHudState, "shield">,
+): CombatHudState {
   return {
     hp: clamp(state.hp, state.maxHp),
     maxHp: Math.max(0, state.maxHp),
     ap: clamp(state.ap, state.maxAp),
     maxAp: Math.max(0, state.maxAp),
+    shield: Math.max(0, "shield" in state ? state.shield : 0),
   };
 }
 
@@ -33,6 +42,7 @@ export function updateCombatHudState(
     ...state,
     hp: update.hp === undefined ? state.hp : clamp(update.hp, state.maxHp),
     ap: update.ap === undefined ? state.ap : clamp(update.ap, state.maxAp),
+    shield: update.shield === undefined ? state.shield : Math.max(0, update.shield),
   };
 }
 
@@ -41,11 +51,15 @@ export class CombatHud {
   private readonly hpValue: Phaser.GameObjects.Text;
   private readonly apValue: Phaser.GameObjects.Text;
   private readonly hpFill: Phaser.GameObjects.Rectangle;
+  private readonly shieldFill: Phaser.GameObjects.Rectangle;
   private readonly apFill: Phaser.GameObjects.Rectangle;
   private state: CombatHudState;
   private barWidth = 120;
 
-  constructor(scene: Phaser.Scene, initialState: CombatHudState) {
+  constructor(
+    scene: Phaser.Scene,
+    initialState: CombatHudState | Omit<CombatHudState, "shield">,
+  ) {
     this.state = createCombatHudState(initialState);
     this.container = scene.add.container(0, 0);
 
@@ -61,10 +75,14 @@ export class CombatHud {
     const hpLabel = scene.add.text(18, 38, "HP", this.labelStyle());
     const apLabel = scene.add.text(18, 76, "AP", this.labelStyle());
     this.hpFill = scene.add.rectangle(60, 47, 1, 12, 0xe35d6a).setOrigin(0, 0.5);
+    this.shieldFill = scene.add
+      .rectangle(60, 47, 1, 12, 0x6ad3f2)
+      .setOrigin(0, 0.5)
+      .setVisible(false);
     this.apFill = scene.add.rectangle(60, 85, 1, 12, 0x4f9ee8).setOrigin(0, 0.5);
     this.hpValue = scene.add.text(0, 30, "", this.valueStyle()).setOrigin(1, 0);
     this.apValue = scene.add.text(0, 68, "", this.valueStyle()).setOrigin(1, 0);
-    this.container.add([panel, title, hpLabel, apLabel, this.hpFill, this.apFill, this.hpValue, this.apValue]);
+    this.container.add([panel, title, hpLabel, apLabel, this.hpFill, this.shieldFill, this.apFill, this.hpValue, this.apValue]);
     this.container.setSize(280, 112);
     this.refresh(this.barWidth);
   }
@@ -93,12 +111,23 @@ export class CombatHud {
   private refresh(barWidth: number): void {
     const valueRight = barWidth + 142;
     this.hpValue
-      .setText(`${formatCombatHudResourceValue(this.state.hp)} / ${formatCombatHudResourceValue(this.state.maxHp)}`)
+      .setText(
+        `${formatCombatHudResourceValue(this.state.hp)} / ${formatCombatHudResourceValue(this.state.maxHp)}` +
+          formatCombatHudShieldValue(this.state.shield),
+      )
       .setPosition(valueRight, 30);
     this.apValue
       .setText(`${formatCombatHudResourceValue(this.state.ap)} / ${formatCombatHudResourceValue(this.state.maxAp)}`)
       .setPosition(valueRight, 68);
-    this.hpFill.setSize(barWidth * (this.state.maxHp ? this.state.hp / this.state.maxHp : 0), 12);
+    const hpRatio = this.state.maxHp ? this.state.hp / this.state.maxHp : 0;
+    const shieldRatio = this.state.maxHp
+      ? Math.min(this.state.shield / this.state.maxHp, 1 - hpRatio)
+      : 0;
+    this.hpFill.setSize(barWidth * hpRatio, 12);
+    this.shieldFill
+      .setVisible(shieldRatio > 0)
+      .setPosition(60 + barWidth * hpRatio, 47)
+      .setSize(barWidth * Math.max(0, shieldRatio), 12);
     this.apFill.setSize(barWidth * (this.state.maxAp ? this.state.ap / this.state.maxAp : 0), 12);
   }
 
