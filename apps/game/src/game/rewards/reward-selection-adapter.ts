@@ -1,4 +1,5 @@
 import { playRewardPickupSound } from "../audio/runtime-audio";
+import { getRelicIconTextureKey } from "../assets/asset-catalog";
 import {
   continueRewardSelection,
   createRewardSelectionViewState,
@@ -60,7 +61,7 @@ export function createRewardSelectionAdapter<TRunState>(options: CreateRewardSel
 
 export const REWARD_SELECTION_FIXTURE_CANDIDATES: readonly RewardCandidate[] = [
   { id: "ember-blade", kind: "weapon", name: "잿불 칼날", rarity: "rare", description: "불씨를 품은 칼날이 다음 공격을 가볍게 만듭니다.", effect: "공격력 +14 · 화상 확률 +8%", icon: "✦" },
-  { id: "echo-charm", kind: "relic", name: "메아리 부적", rarity: "uncommon", description: "정확한 입력이 이어질수록 작은 메아리가 쌓입니다.", effect: "콤보 보너스 +12%", icon: "◈" },
+  { id: "relic_echo_charm", kind: "relic", name: "메아리의 부적", rarity: "rare", description: "기술 성공 시 일정 확률로 AP를 회복합니다.", effect: "AP +1 · 전투당 최대 2회", icon: "◈", imageKey: getRelicIconTextureKey("relic_echo_charm") },
   { id: "quiet-focus", kind: "skill", name: "고요한 집중", rarity: "epic", description: "호흡을 고르고 다음 커맨드에 시간을 더합니다.", effect: "AP 회복 +6 · 입력 시간 +1초", icon: "◎" },
 ];
 

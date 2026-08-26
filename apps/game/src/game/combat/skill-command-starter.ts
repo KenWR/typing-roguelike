@@ -10,14 +10,8 @@ import {
   ActionPointResource,
   type ActionPointSnapshot,
 } from "./action-point-resource";
-import {
-  CombatState,
-  type CombatUpdate,
-} from "./combat-state";
-import {
-  ComboTracker,
-  type ComboSnapshot,
-} from "./combo-tracker";
+import { CombatState, type CombatUpdate } from "./combat-state";
+import { ComboTracker, type ComboSnapshot } from "./combo-tracker";
 
 export type SkillStartFailureReason =
   | "unknown-command"
@@ -50,16 +44,21 @@ export type SkillCommandStarterConfig = Readonly<{
   actorId: string;
   targetId: string;
   combo?: ComboTracker;
+  resolveApCost?: (skill: SkillDefinition) => number;
 }>;
 
 const normalizeCommand = (command: string): string => command.normalize("NFC");
 
 const requireIdentifier = (name: string, value: string): string => {
-  if (value.trim().length === 0) {
-    throw new RangeError(`${name} must not be empty.`);
-  }
-
+  if (value.trim().length === 0) throw new RangeError(`${name} must not be empty.`);
   return value;
+};
+
+const validateApCost = (cost: number): number => {
+  if (!Number.isFinite(cost) || cost < 0) {
+    throw new RangeError("Resolved skill AP cost must be a finite non-negative number.");
+  }
+  return cost;
 };
 
 export class SkillCommandStarter {
@@ -69,6 +68,7 @@ export class SkillCommandStarter {
   private readonly combo: ComboTracker;
   private readonly actorId: string;
   private readonly targetId: string;
+  private readonly resolveApCost: (skill: SkillDefinition) => number;
   private nextActionSequence = 1;
 
   constructor(config: SkillCommandStarterConfig) {
@@ -77,33 +77,22 @@ export class SkillCommandStarter {
     this.combo = config.combo ?? new ComboTracker();
     this.actorId = requireIdentifier("Actor id", config.actorId);
     this.targetId = requireIdentifier("Target id", config.targetId);
+    this.resolveApCost = config.resolveApCost ?? ((skill) => skill.apCost);
 
     for (const skill of config.skills) {
       const command = normalizeCommand(skill.command);
-      if (this.skillsByCommand.has(command)) {
-        throw new Error(`Duplicate skill command: ${skill.command}`);
-      }
+      if (this.skillsByCommand.has(command)) throw new Error(`Duplicate skill command: ${skill.command}`);
       this.skillsByCommand.set(command, skill);
     }
   }
 
-  get comboSnapshot(): ComboSnapshot {
-    return this.combo.snapshot;
-  }
+  get comboSnapshot(): ComboSnapshot { return this.combo.snapshot; }
 
-  connect(
-    inputBuffer: CommandInputBuffer,
-    listener: SkillStartListener,
-  ): () => void {
-    const disconnectCompleted = inputBuffer.onCompleted((event) => {
-      listener(this.tryStart(event));
-    });
+  connect(inputBuffer: CommandInputBuffer, listener: SkillStartListener): () => void {
+    const disconnectCompleted = inputBuffer.onCompleted((event) => listener(this.tryStart(event)));
     const disconnectStatus = inputBuffer.onStatusChanged((event) => {
-      if (event.snapshot.status === "incorrect") {
-        this.combo.breakCombo("incorrect-input");
-      }
+      if (event.snapshot.status === "incorrect") this.combo.breakCombo("incorrect-input");
     });
-
     return () => {
       disconnectCompleted();
       disconnectStatus();
@@ -112,16 +101,10 @@ export class SkillCommandStarter {
 
   tryStart(event: CommandCompletedEvent): SkillStartResult {
     const skill = this.skillsByCommand.get(normalizeCommand(event.command));
+    if (!skill) return this.failure(event.command, "unknown-command");
+    if (!this.combat.snapshot.canAcceptInput) return this.failure(event.command, "combat-unavailable");
 
-    if (!skill) {
-      return this.failure(event.command, "unknown-command");
-    }
-
-    if (!this.combat.snapshot.canAcceptInput) {
-      return this.failure(event.command, "combat-unavailable");
-    }
-
-    const spend = this.actionPoints.trySpend(skill.apCost);
+    const spend = this.actionPoints.trySpend(validateApCost(this.resolveApCost(skill)));
     if (!spend.accepted) {
       return {
         started: false,
@@ -141,15 +124,7 @@ export class SkillCommandStarter {
       }),
     );
     const combo = this.combo.recordCorrectInput();
-
-    return {
-      started: true,
-      skill,
-      actionId,
-      ap: spend.snapshot,
-      combat,
-      combo,
-    };
+    return { started: true, skill, actionId, ap: spend.snapshot, combat, combo };
   }
 
   private failure(
@@ -167,14 +142,10 @@ export class SkillCommandStarter {
 
   private createActionId(skillId: string): string {
     let actionId: string;
-
     do {
       actionId = `${this.actorId}:${skillId}:${this.nextActionSequence}`;
       this.nextActionSequence += 1;
-    } while (
-      this.combat.snapshot.actions.some((action) => action.id === actionId)
-    );
-
+    } while (this.combat.snapshot.actions.some((action) => action.id === actionId));
     return actionId;
   }
 }

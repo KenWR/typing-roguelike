@@ -5,7 +5,7 @@ import {
   type EnemyAttackType,
 } from "./enemy-attack-timeline";
 
-export const ENEMY_COMMAND_WINDUP_MULTIPLIER = 2 as const;
+export const ENEMY_COMMAND_WINDUP_MULTIPLIER = 1 as const;
 
 export const applyEnemyCommandWindupMultiplier = (windupMs: number): number =>
   windupMs * ENEMY_COMMAND_WINDUP_MULTIPLIER;
