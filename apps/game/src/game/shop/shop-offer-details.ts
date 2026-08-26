@@ -33,7 +33,9 @@ export const getShopOfferHoverDetails = (
   offer: Pick<ShopOffer, "kind" | "itemId">,
 ): ShopOfferHoverDetails => {
   if (offer.kind === "relic") {
-    const relic = relicById.get(offer.itemId);
+    const relic = relicById.get(
+      offer.itemId as (typeof RELIC_CONFIGS)[number]["id"],
+    );
     return {
       name: relic?.name ?? "알 수 없는 유물",
       kindLabel: "유물",
