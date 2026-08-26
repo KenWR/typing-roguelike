@@ -4,6 +4,7 @@ import {
   type GeneratedMapNode,
   type RunState,
 } from "@typing-roguelike/shared";
+import { enterBossCombat } from "../combat/boss-combat-flow";
 import { initializeCombatEncounter } from "../combat/encounter-initializer";
 import { SCENE_KEYS } from "../scenes/scene-contract";
 
@@ -35,68 +36,44 @@ export const routeMapNodeSelection = (
 ): MapNodeRoute => {
   const node = findCurrentNode(runState, nodeId);
   if (node === undefined || runState.map.nodeStatuses[nodeId] !== "available") {
-    return {
-      applied: false,
-      runState: runState as RunState,
-      sceneKey: SCENE_KEYS.map,
-      payload: { runState },
-    };
+    return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };
   }
 
-  const selectedRun: RunState = {
-    ...runState,
-    map: beginMapNode(runState.map, node.key),
-  };
-  const commonPayload = {
-    runState: selectedRun,
-    nodeId: node.key,
-    nextNodeIds: node.nextNodeKeys,
-  };
-
-  if (node.type === "shop") {
+  if (node.type === "boss") {
+    const entry = enterBossCombat(runState as RunState, node);
+    if (!entry.ok) {
+      return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };
+    }
     return {
       applied: true,
-      runState: selectedRun,
-      sceneKey: SCENE_KEYS.shop,
-      payload: commonPayload,
+      runState: entry.runState,
+      sceneKey: entry.sceneKey,
+      payload: {
+        runState: entry.runState,
+        nodeId: node.key,
+        nextNodeIds: [],
+        bossNode: node,
+        combat: entry.combat,
+      },
     };
   }
 
-  if (node.type === "rest") {
-    return {
-      applied: true,
-      runState: selectedRun,
-      sceneKey: SCENE_KEYS.rest,
-      payload: commonPayload,
-    };
-  }
+  const selectedRun: RunState = { ...runState, map: beginMapNode(runState.map, node.key) };
+  const commonPayload = { runState: selectedRun, nodeId: node.key, nextNodeIds: node.nextNodeKeys };
 
-  if (node.type === "reward") {
-    return {
-      applied: true,
-      runState: selectedRun,
-      sceneKey: SCENE_KEYS.reward,
-      payload: commonPayload,
-    };
-  }
+  if (node.type === "shop") return { applied: true, runState: selectedRun, sceneKey: SCENE_KEYS.shop, payload: commonPayload };
+  if (node.type === "rest") return { applied: true, runState: selectedRun, sceneKey: SCENE_KEYS.rest, payload: commonPayload };
+  if (node.type === "reward") return { applied: true, runState: selectedRun, sceneKey: SCENE_KEYS.reward, payload: commonPayload };
 
   const encounter = initializeCombatEncounter(selectedRun, node);
   if (!encounter.ok) {
-    return {
-      applied: false,
-      runState: runState as RunState,
-      sceneKey: SCENE_KEYS.map,
-      payload: { runState },
-    };
+    return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };
   }
 
   return {
     applied: true,
     runState: selectedRun,
     sceneKey: SCENE_KEYS.combat,
-    payload: {
-      ...commonPayload,
-      combat: encounter.combat,
-    },
+    payload: { ...commonPayload, combat: encounter.combat },
   };
 };
