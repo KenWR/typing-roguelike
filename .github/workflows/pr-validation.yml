@@ -6,8 +6,8 @@ on:
 
 # Stable required check/job name: PR validation (job id: pr-validation).
 # Keep this workflow path-unfiltered so shared-package changes run every consumer check.
-# The root test command discovers the complete game/API/shared suite.
-# The whitespace check uses the merge-base-to-head three-dot range to exclude base-only changes.
+# The root validation command discovers the complete game/API/shared suite and browser smoke tests.
+# QUALITY_BASE_SHA keeps changed-file lint and whitespace checks scoped to the PR merge base.
 # The dry-run below verifies non-zero command propagation without failing this validation job.
 # Runtime evidence still requires external PR activity for superseded-run cancellation and a
 # shared-package-only change; reproduce those cases by pushing a second head during an active
@@ -39,13 +39,13 @@ jobs:
       - name: Install frozen dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install Chromium for browser smoke tests
+        run: bunx playwright install --with-deps chromium
+
       - name: Report validated commit
         run: |
           echo "PR head SHA: ${{ github.event.pull_request.head.sha }}"
           echo "Checked-out SHA: $(git rev-parse HEAD)"
-
-      - name: Validate whitespace and static diff
-        run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
 
       - name: Verify command failure propagation (safe dry-run)
         shell: bash
@@ -69,19 +69,15 @@ jobs:
             echo "Path filters would allow shared-package changes to bypass validation." >&2
             exit 1
           fi
-          grep -Fq 'run: bun run typecheck' "$workflow_file"
-          grep -Fq 'run: bun test' "$workflow_file"
-          grep -Fq 'run: bun run build' "$workflow_file"
+          grep -Fq 'run: bun run validate' "$workflow_file"
+          grep -Fq '"validate":' package.json
           test -d apps/game
           test -d apps/api
           test -d packages/shared
           echo "Unfiltered root validation covers game, API, and shared workspace paths."
 
-      - name: Typecheck complete workspace
-        run: bun run typecheck
-
-      - name: Test complete workspace
-        run: bun test
-
-      - name: Build application packages
-        run: bun run build
+      - name: Validate repository
+        env:
+          CI: "true"
+          QUALITY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bun run validate
