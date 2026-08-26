@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { RUN_STATE_SCHEMA_VERSION, type RunState, type ShopOffer } from "@typing-roguelike/shared";
-import { completeShopNode, createShopNodeFlow, purchaseShopOffer } from "../src/game/shop/shop-node-flow";
+import {
+  completeShopNode,
+  createShopNodeFlow,
+  getShopRerollCost,
+  purchaseShopOffer,
+  rerollShopOffers,
+} from "../src/game/shop/shop-node-flow";
 
 const run = (): RunState => ({
   schemaVersion: RUN_STATE_SCHEMA_VERSION,
@@ -21,13 +27,43 @@ const run = (): RunState => ({
   },
 });
 
-const offers: readonly ShopOffer[] = [{ id: "offer", equipmentId: "ember-blade", price: 25 }];
+const offers: readonly ShopOffer[] = [{ id: "offer", equipmentId: "equipment_blood_sword", price: 25 }];
 
 describe("shop node flow", () => {
   test("purchase updates currency and inventory", () => {
     const next = purchaseShopOffer(createShopNodeFlow(run(), "shop", ["next"], offers), "offer");
     expect(next.runState.runCurrency).toBe(75);
-    expect(next.runState.inventory.itemInstances).toContain("ember-blade");
+    expect(next.runState.inventory.itemInstances).toContain("equipment_blood_sword");
+  });
+
+  test("reroll spends increasing currency and replaces offers", () => {
+    const initial = createShopNodeFlow(run(), "shop", ["next"], offers);
+    expect(getShopRerollCost(initial)).toBe(10);
+
+    const rerolled = rerollShopOffers(initial, () => 0);
+    expect(rerolled.runState.runCurrency).toBe(90);
+    expect(rerolled.rerollCount).toBe(1);
+    expect(getShopRerollCost(rerolled)).toBe(20);
+    expect(rerolled.offers.length).toBeGreaterThan(0);
+  });
+
+  test("reroll is rejected when currency is insufficient", () => {
+    const poor = { ...run(), runCurrency: 5 };
+    const state = createShopNodeFlow(poor, "shop", ["next"], offers);
+    expect(rerollShopOffers(state, () => 0)).toBe(state);
+  });
+
+  test("rerolled offers exclude equipment already owned", () => {
+    const ownedId = "equipment_blood_sword";
+    const ownedRun = {
+      ...run(),
+      inventory: { itemInstances: [ownedId], relicInstances: [] },
+    };
+    const rerolled = rerollShopOffers(
+      createShopNodeFlow(ownedRun, "shop", ["next"], offers),
+      () => 0,
+    );
+    expect(rerolled.offers.some((offer) => offer.equipmentId === ownedId)).toBe(false);
   });
 
   test("exit clears node and unlocks next map node", () => {
