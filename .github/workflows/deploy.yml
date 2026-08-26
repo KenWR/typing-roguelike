@@ -35,7 +35,6 @@ jobs:
     env:
       VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
       VALIDATED_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_WORKER_NAME: ${{ vars.CLOUDFLARE_API_WORKER_NAME }}
       CLOUDFLARE_GAME_WORKER_NAME: ${{ vars.CLOUDFLARE_GAME_WORKER_NAME }}
@@ -95,7 +94,6 @@ jobs:
 
           missing=0
           for variable_name in \
-            CLOUDFLARE_API_TOKEN \
             CLOUDFLARE_ACCOUNT_ID \
             CLOUDFLARE_API_WORKER_NAME \
             CLOUDFLARE_GAME_WORKER_NAME \
@@ -186,8 +184,14 @@ jobs:
         id: d1_migration
         working-directory: apps/api
         shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -Eeuo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error title=Missing production configuration::CLOUDFLARE_API_TOKEN is required in the production environment."
+            exit 1
+          fi
           bunx wrangler@4.126.0 d1 migrations apply "$CLOUDFLARE_D1_DATABASE_NAME" \
             --remote \
             --config "$API_WRANGLER_CONFIG"
@@ -196,6 +200,8 @@ jobs:
         id: api_deploy
         working-directory: apps/api
         shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -Eeuo pipefail
           wrangler_args=(
@@ -212,15 +218,21 @@ jobs:
             --outdir "$RUNNER_TEMP/typing-roguelike-api-dry-run"
           bunx wrangler@4.126.0 deploy "${wrangler_args[@]}"
 
-      - name: Build, dry-run, and deploy game Static Assets Worker
+      - name: Build game
+        id: game_build
+        working-directory: apps/game
+        env:
+          VITE_API_BASE_URL: ${{ vars.PRODUCTION_API_URL }}
+        run: bun run build
+
+      - name: Dry-run and deploy game Static Assets Worker
         id: game_deploy
         working-directory: apps/game
         shell: bash
         env:
-          VITE_API_BASE_URL: ${{ vars.PRODUCTION_API_URL }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -Eeuo pipefail
-          bun run build
           bunx wrangler@4.126.0 deploy \
             --config wrangler.toml \
             --name "$CLOUDFLARE_GAME_WORKER_NAME" \
@@ -294,7 +306,8 @@ jobs:
             printf '2. Production configuration: `%s`\n' '${{ steps.config.outcome }}'
             printf '3. D1 remote migration: `%s`\n' '${{ steps.d1_migration.outcome }}'
             printf '4. API Worker dry-run and deploy: `%s`\n' '${{ steps.api_deploy.outcome }}'
-            printf '5. Game build, Static Assets dry-run and deploy: `%s`\n' '${{ steps.game_deploy.outcome }}'
-            printf '6. API `/health` smoke test: `%s`\n' '${{ steps.api_smoke.outcome }}'
-            printf '7. Game URL smoke test: `%s`\n' '${{ steps.game_smoke.outcome }}'
+            printf '5. Game build: `%s`\n' '${{ steps.game_build.outcome }}'
+            printf '6. Game Static Assets dry-run and deploy: `%s`\n' '${{ steps.game_deploy.outcome }}'
+            printf '7. API `/health` smoke test: `%s`\n' '${{ steps.api_smoke.outcome }}'
+            printf '8. Game URL smoke test: `%s`\n' '${{ steps.game_smoke.outcome }}'
           } >> "$GITHUB_STEP_SUMMARY"
