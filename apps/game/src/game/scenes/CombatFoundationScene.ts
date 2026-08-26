@@ -15,6 +15,7 @@ import {
   type PauseWindow,
 } from "../combat/combat-pause-controller";
 import type { CombatEncounterInitialization } from "../combat/encounter-initializer";
+import { createEnemyHealthView } from "../combat/enemy-health-view";
 import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
 import {
@@ -59,6 +60,7 @@ export class CombatFoundationScene extends Phaser.Scene {
   private overlay!: Phaser.GameObjects.Rectangle;
   private playerPlaceholder!: Phaser.GameObjects.Container;
   private enemyPlaceholder!: Phaser.GameObjects.Container;
+  private enemyHealthText!: Phaser.GameObjects.Text;
   private combatHud!: CombatHud;
   private enemyAttackGauge!: EnemyAttackGauge;
   private enemyAttackTimeline!: EnemyAttackTimeline;
@@ -145,6 +147,23 @@ export class CombatFoundationScene extends Phaser.Scene {
       )
       .setOrigin(0, 0);
     this.uiLayer.add(encounterLabel);
+
+    const targetEnemy = initialization.enemies[0];
+    const enemyHealthView = createEnemyHealthView(
+      targetEnemy?.name,
+      targetEnemy?.hp,
+      targetEnemy?.hp,
+    );
+    this.enemyHealthText = this.add
+      .text(0, 0, enemyHealthView.label, {
+        color: "#f4d7da",
+        fontFamily: "Galmuri9, monospace",
+        fontSize: "18px",
+        backgroundColor: "#301b22",
+        padding: { x: 12, y: 7 },
+      })
+      .setOrigin(0.5);
+    this.uiLayer.add(this.enemyHealthText);
 
     this.actionPoints = new ActionPointResource();
     this.combat = new CombatState();
@@ -257,14 +276,15 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.combatHud.update({ ap: ap.currentAp });
 
     const playerUpdate = this.playerCombatRuntime?.advance(safeDelta);
+    if (playerUpdate !== undefined) {
+      this.updateEnemyHealth(playerUpdate.enemyHp);
+      this.enemyCombatRuntime?.setEnemyHp(playerUpdate.enemyHp);
+    }
+
     if (playerUpdate?.route !== null && playerUpdate?.route !== undefined) {
       this.feedback?.trigger("victory");
       this.startCombatRoute(playerUpdate.route.sceneKey, playerUpdate.route.payload);
       return;
-    }
-
-    if (playerUpdate !== undefined) {
-      this.enemyCombatRuntime?.setEnemyHp(playerUpdate.enemyHp);
     }
 
     if (this.enemyCombatRuntime !== undefined) {
@@ -286,6 +306,16 @@ export class CombatFoundationScene extends Phaser.Scene {
 
     const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
     this.enemyAttackGauge.update(enemyUpdate.snapshot);
+  }
+
+  private updateEnemyHealth(currentHp: number): void {
+    const targetEnemy = this.combatInitialization?.enemies[0];
+    const view = createEnemyHealthView(
+      targetEnemy?.name,
+      currentHp,
+      targetEnemy?.hp,
+    );
+    this.enemyHealthText.setText(view.label);
   }
 
   private startCombatRoute(sceneKey: string, payload: Readonly<Record<string, unknown>>): void {
@@ -349,6 +379,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.enemyPlaceholder
       .setPosition(layout.enemy.x, layout.enemy.y)
       .setScale(layout.actorScale);
+    this.enemyHealthText.setPosition(
+      layout.enemy.x,
+      layout.enemy.y - 125 * layout.actorScale,
+    );
 
     this.combatHud.setPosition(layout.hudReservation.x, layout.hudReservation.y);
     this.combatHud.setSize(layout.hudReservation.width, layout.hudReservation.height);
