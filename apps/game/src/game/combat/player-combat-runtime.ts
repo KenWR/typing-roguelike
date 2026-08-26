@@ -116,11 +116,11 @@ export class PlayerCombatRuntime {
 
         const target = event.targetId === "player"
           ? this.player
-          : this.enemies.get(event.targetId);
+          : this.resolveLivingEnemyTarget(event.targetId);
         if (target === undefined) continue;
 
         this.impactResolver.resolve({
-          event,
+          event: target.id === event.targetId ? event : { ...event, targetId: target.id },
           skill,
           actor: this.player,
           target,
@@ -151,5 +151,16 @@ export class PlayerCombatRuntime {
       enemyHp: this.enemyHp,
       route: this.route,
     };
+  }
+
+  private resolveLivingEnemyTarget(targetId: string): SkillCombatantState | undefined {
+    const requestedTarget = this.enemies.get(targetId);
+    if (requestedTarget !== undefined && !requestedTarget.snapshot.health.isDead) {
+      return requestedTarget;
+    }
+
+    return Array.from(this.enemies.values()).find(
+      (enemy) => !enemy.snapshot.health.isDead,
+    );
   }
 }
