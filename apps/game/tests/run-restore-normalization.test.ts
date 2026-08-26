@@ -37,7 +37,10 @@ const createSoftlockedRun = (seed = 77): RunState => {
       currentRound: 1,
       choicePath: [clearedNode.choice],
       nodeStatuses: Object.fromEntries(
-        firstRound.map((node) => [node.key, node.key === clearedNode.key ? "cleared" : "locked"]),
+        firstRound.map((node) => [
+          node.key,
+          node.key === clearedNode.key ? "cleared" : "locked",
+        ] as const),
       ),
     },
   };
@@ -105,7 +108,7 @@ describe("run restore normalization", () => {
           generateNodeChoices(13, 1, []).map((node) => [
             node.key,
             node.key === selected.key ? "in_progress" : "locked",
-          ]),
+          ] as const),
         ),
       },
     };
