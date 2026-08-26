@@ -48,7 +48,7 @@ const createPlayableCombat = () => {
     nextNodeIds: firstCombatNode.nextNodeKeys,
   });
 
-  return { combat, runtime, initialization: entry.combat };
+  return { combat, runtime, initialization: entry.combat, runState, enemyTimeline };
 };
 
 describe("PlayerCombatRuntime", () => {
@@ -74,6 +74,59 @@ describe("PlayerCombatRuntime", () => {
     runtime.advance(skill.windupMs + skill.recoveryMs);
 
     expect(runtime.enemyHp[enemy.instanceId]).toBeLessThan(beforeHp);
+  });
+
+  test("retargets a dead requested enemy to the next living enemy", () => {
+    const { initialization, runState, enemyTimeline } = createPlayableCombat();
+    const firstEnemy = initialization.enemies[0]!;
+    const secondEnemy = {
+      ...firstEnemy,
+      instanceId: `${firstEnemy.instanceId}:second`,
+    };
+    const multiInitialization = {
+      ...initialization,
+      enemies: [firstEnemy, secondEnemy],
+    };
+    const combat = new CombatState();
+    const runtime = new PlayerCombatRuntime({
+      combat,
+      enemyTimeline,
+      runState,
+      initialization: multiInitialization,
+      nextNodeIds: firstCombatNode.nextNodeKeys,
+    });
+    const skillConfig = initialization.player.skills.find((candidate) => candidate.kind === "attack")!;
+    const skill = defineSkill(skillConfig);
+
+    let sequence = 1;
+    while ((runtime.enemyHp[firstEnemy.instanceId] ?? 0) > 0) {
+      const actionId = `player:kill-first:${sequence++}`;
+      combat.startAction({
+        id: actionId,
+        actorId: "player",
+        targetId: firstEnemy.instanceId,
+        windupMs: skill.windupMs,
+        recoveryMs: skill.recoveryMs,
+      });
+      runtime.registerAction(actionId, skill);
+      runtime.advance(skill.windupMs + skill.recoveryMs);
+    }
+
+    const secondHpBefore = runtime.enemyHp[secondEnemy.instanceId]!;
+    const retargetActionId = "player:retarget:1";
+    combat.startAction({
+      id: retargetActionId,
+      actorId: "player",
+      targetId: firstEnemy.instanceId,
+      windupMs: skill.windupMs,
+      recoveryMs: skill.recoveryMs,
+    });
+    runtime.registerAction(retargetActionId, skill);
+    runtime.advance(skill.windupMs + skill.recoveryMs);
+
+    expect(runtime.enemyHp[firstEnemy.instanceId]).toBe(0);
+    expect(runtime.enemyHp[secondEnemy.instanceId]).toBeLessThan(secondHpBefore);
+    expect(combat.snapshot.status).toBe("active");
   });
 
   test("does not apply the same impact twice", () => {

@@ -3,6 +3,10 @@ import {
   createRewardSelectionFixtureAdapter,
   type RewardSelectionAdapter,
 } from "../rewards/reward-selection-adapter";
+import {
+  getRewardSourcePresentation,
+  type RewardSource,
+} from "../rewards/reward-source-presentation";
 import type {
   RewardCandidate,
   RewardKind,
@@ -44,6 +48,7 @@ const KIND_LABELS: Record<RewardKind, string> = {
 export type RewardSelectionSceneData = Readonly<{
   adapter?: RewardSelectionAdapter<unknown>;
   nextSceneKey?: string;
+  rewardSource?: RewardSource;
 }>;
 
 type RewardCardView = Readonly<{
@@ -67,6 +72,7 @@ export class RewardSelectionScene extends Phaser.Scene {
   private adapter: RewardSelectionAdapter<unknown> =
     createRewardSelectionFixtureAdapter();
   private nextSceneKey: string | undefined;
+  private rewardSource: RewardSource = "combat-victory";
   private backdrop!: Phaser.GameObjects.Graphics;
   private headerPanel!: Phaser.GameObjects.Rectangle;
   private headerTitle!: Phaser.GameObjects.Text;
@@ -87,6 +93,7 @@ export class RewardSelectionScene extends Phaser.Scene {
   init(data: RewardSelectionSceneData = {}): void {
     this.adapter = data.adapter ?? createRewardSelectionFixtureAdapter();
     this.nextSceneKey = data.nextSceneKey;
+    this.rewardSource = data.rewardSource ?? "combat-victory";
   }
 
   create(): void {
@@ -219,8 +226,11 @@ export class RewardSelectionScene extends Phaser.Scene {
   }
 
   private refresh(state: RewardSelectionViewState): void {
-    this.headerTitle.setText(state.title.toUpperCase());
-    this.headerMeta.setText(`ROUND ${String(state.round).padStart(2, "0")}  /  VICTORY`);
+    const presentation = getRewardSourcePresentation(this.rewardSource, state.title);
+    this.headerTitle.setText(presentation.title.toUpperCase());
+    this.headerMeta.setText(
+      `ROUND ${String(state.round).padStart(2, "0")}  /  ${presentation.meta}`,
+    );
     this.currencyText.setText(`◈  ${state.currency}`);
     this.selectionText.setText(
       state.selectedRewardId === null

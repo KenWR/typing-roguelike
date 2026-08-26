@@ -11,6 +11,22 @@ import { finalizeBossCombat } from "./boss-combat-flow";
 import { CombatState, type CombatOutcome } from "./combat-state";
 import { EnemyAttackTimeline } from "./enemy-attack-timeline";
 
+const GOLD_MULTIPLIER_BY_TIER: Readonly<Record<EquipmentRewardTier, number>> = {
+  normal: 10,
+  elite: 20,
+  boss: 30,
+};
+
+export const calculateCombatVictoryGold = (
+  floor: number,
+  rewardTier: EquipmentRewardTier,
+): number => {
+  if (!Number.isSafeInteger(floor) || floor < 1) {
+    throw new RangeError("Combat reward floor must be a positive safe integer.");
+  }
+  return floor * GOLD_MULTIPLIER_BY_TIER[rewardTier];
+};
+
 export type CombatOutcomeRoute = Readonly<{
   applied: boolean;
   runState: RunState;
@@ -84,7 +100,15 @@ export const finalizeCombatOutcome = ({
     };
   }
 
-  const updatedRunState: RunState = { ...runState, map: completion.map };
+  const goldReward = calculateCombatVictoryGold(
+    runState.map.currentRound,
+    rewardTier,
+  );
+  const updatedRunState: RunState = {
+    ...runState,
+    map: completion.map,
+    runCurrency: runState.runCurrency + goldReward,
+  };
   const candidates = generateEquipmentRewardCandidates({
     tier: rewardTier,
     count: rewardCount,
@@ -97,7 +121,7 @@ export const finalizeCombatOutcome = ({
       applied: true,
       runState: updatedRunState,
       sceneKey: SCENE_KEYS.map,
-      payload: { runState: updatedRunState },
+      payload: { runState: updatedRunState, goldReward },
     };
   }
 
@@ -114,6 +138,8 @@ export const finalizeCombatOutcome = ({
       runState: updatedRunState,
       adapter: rewardFlow.adapter,
       nextSceneKey: rewardFlow.nextSceneKey,
+      rewardSource: "combat-victory",
+      goldReward,
     },
   };
 };

@@ -27,6 +27,30 @@ const createSelectableRun = (): { runState: RunState; nodeId: string } => {
   };
 };
 
+const createRewardRun = (): { runState: RunState; nodeId: string } => {
+  for (let seed = 1; seed <= 100; seed += 1) {
+    const base = createInitialRunState({ seed });
+    const nodes = generateNodeChoices(base.map.seed, 1, []);
+    const rewardNode = nodes.find((node) => node.type === "reward");
+    if (rewardNode === undefined) continue;
+
+    return {
+      nodeId: rewardNode.key,
+      runState: {
+        ...base,
+        map: {
+          ...base.map,
+          nodeStatuses: Object.fromEntries(
+            nodes.map((node) => [node.key, "available" as const]),
+          ),
+        },
+      },
+    };
+  }
+
+  throw new Error("Unable to find a reward node fixture.");
+};
+
 describe("map node routing", () => {
   test("locked nodes do not transition", () => {
     const { runState, nodeId } = createSelectableRun();
@@ -51,5 +75,14 @@ describe("map node routing", () => {
     expect(route.runState.map.currentNodeId).toBe(nodeId);
     expect(route.runState.map.nodeStatuses[nodeId]).toBe("in_progress");
     expect(route.sceneKey).not.toBe(SCENE_KEYS.map);
+  });
+
+  test("reward nodes explicitly identify map reward source", () => {
+    const { runState, nodeId } = createRewardRun();
+    const route = routeMapNodeSelection(runState, nodeId);
+
+    expect(route.applied).toBe(true);
+    expect(route.sceneKey).toBe(SCENE_KEYS.reward);
+    expect(route.payload.rewardSource).toBe("map-reward");
   });
 });

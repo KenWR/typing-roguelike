@@ -16,10 +16,14 @@ const hashState = (state: RunState): string =>
 const defaultState = (seed: number): RunState =>
   createInitialRunState({ seed });
 
-export const createRun = (playerId: string) => {
+const randomMapSeed = (): number => Math.floor(Math.random() * 2_147_483_647);
+
+export const createRun = (playerId: string, requestedSeed?: number) => {
   const runId = randomUUID();
   const timestamp = now();
-  const mapSeed = Math.floor(Math.random() * 2_147_483_647);
+  const mapSeed = Number.isSafeInteger(requestedSeed) && requestedSeed !== undefined && requestedSeed >= 0
+    ? requestedSeed
+    : randomMapSeed();
   const state = defaultState(mapSeed);
   const stateJson = JSON.stringify(state);
   const stateHash = hashState(state);
@@ -85,12 +89,22 @@ export const saveCheckpoint = (
 			round,
 			previousPath,
 		).find((node) => node.choice === choice);
+		const previousNode = round <= 1
+			? undefined
+			: generateNodeChoices(
+				storedState.map.seed,
+				round - 1,
+				previousPath.slice(0, -1),
+			).find((node) => node.key === storedRun.nodeId);
 		const legacyParentKey = previousPath.length === 0
 			? START_NODE_KEY
 			: `${round - 1}-${previousPath.at(-1)}`;
+		const isConnected = round === 1
+			? storedRun.nodeId === START_NODE_KEY
+			: previousNode?.nextNodeKeys.includes(selectedNode?.key ?? "") === true;
 		if (
 			selectedNode === undefined ||
-			(selectedNode.parentKey !== storedRun.nodeId && storedRun.nodeId !== legacyParentKey)
+			(!isConnected && selectedNode.parentKey !== storedRun.nodeId && storedRun.nodeId !== legacyParentKey)
 		) {
 			throw new Error("NODE_STATE_MISMATCH");
 		}

@@ -10,7 +10,7 @@ export type SettlementCompletionSnapshot = Readonly<{
 export type SettlementCompletionResult = Readonly<{
   applied: boolean;
   snapshot: SettlementCompletionSnapshot;
-  sceneKey: typeof SCENE_KEYS.lobby;
+  sceneKey: typeof SCENE_KEYS.start;
 }>;
 
 export class SettlementCompletionController {
@@ -27,11 +27,11 @@ export class SettlementCompletionController {
 
   confirm(): SettlementCompletionResult {
     if (this.confirmed) {
-      return { applied: false, snapshot: this.snapshot, sceneKey: SCENE_KEYS.lobby };
+      return { applied: false, snapshot: this.snapshot, sceneKey: SCENE_KEYS.start };
     }
 
     this.confirmed = true;
     this.session.clear();
-    return { applied: true, snapshot: this.snapshot, sceneKey: SCENE_KEYS.lobby };
+    return { applied: true, snapshot: this.snapshot, sceneKey: SCENE_KEYS.start };
   }
 }

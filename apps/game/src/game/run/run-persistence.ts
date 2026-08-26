@@ -1,4 +1,10 @@
-import { RUN_STATE_SCHEMA_VERSION, type RunState } from "@typing-roguelike/shared";
+import {
+  MAP_ROUND_COUNT,
+  RUN_STATE_SCHEMA_VERSION,
+  generateNodeChoices,
+  getMapNodeKey,
+  type RunState,
+} from "@typing-roguelike/shared";
 
 export const RUN_STORAGE_KEY = "typing-roguelike.active-run";
 export const RUN_STORAGE_VERSION = 1;
@@ -24,6 +30,73 @@ const isRunState = (value: unknown): value is RunState => {
   if (typeof value.map.mapId !== "string" || typeof value.map.seed !== "number" || typeof value.map.currentNodeId !== "string") return false;
   if (typeof value.map.currentRound !== "number" || !Array.isArray(value.map.choicePath) || !isRecord(value.map.nodeStatuses)) return false;
   return typeof value.acquiredItemValue === "number" && typeof value.runCurrency === "number";
+};
+
+/**
+ * Repairs legacy active checkpoints that cleared a node but persisted before the
+ * map round advanced. Local and remote restore paths both use this function.
+ */
+export const normalizeRestoredRunState = (state: Readonly<RunState>): RunState => {
+  if (state.status !== "active") return state as RunState;
+
+  const map = state.map;
+  const currentStatus = map.nodeStatuses[map.currentNodeId];
+  const statuses = Object.values(map.nodeStatuses);
+  if (
+    currentStatus !== "cleared" ||
+    map.currentRound >= MAP_ROUND_COUNT ||
+    statuses.includes("available") ||
+    statuses.includes("in_progress")
+  ) {
+    return state as RunState;
+  }
+
+  try {
+    let nextChoicePath: number[];
+    if (map.choicePath.length === map.currentRound) {
+      if (getMapNodeKey(map.currentRound, map.choicePath) !== map.currentNodeId) {
+        return state as RunState;
+      }
+      nextChoicePath = [...map.choicePath];
+    } else if (map.choicePath.length === map.currentRound - 1) {
+      const clearedNode = generateNodeChoices(
+        map.seed,
+        map.currentRound,
+        map.choicePath,
+      ).find((node) => node.key === map.currentNodeId);
+      if (clearedNode === undefined) return state as RunState;
+      nextChoicePath = [...map.choicePath, clearedNode.choice];
+    } else {
+      return state as RunState;
+    }
+
+    const nextRound = map.currentRound + 1;
+    const nextNodes = generateNodeChoices(map.seed, nextRound, nextChoicePath);
+    const nodeStatuses = { ...map.nodeStatuses };
+    let recoveredAvailableNode = false;
+
+    for (const node of nextNodes) {
+      const status = nodeStatuses[node.key];
+      if (status === undefined || status === "locked") {
+        nodeStatuses[node.key] = "available";
+        recoveredAvailableNode = true;
+      }
+    }
+
+    if (!recoveredAvailableNode) return state as RunState;
+
+    return {
+      ...state,
+      map: {
+        ...map,
+        currentRound: nextRound,
+        choicePath: nextChoicePath,
+        nodeStatuses,
+      },
+    };
+  } catch {
+    return state as RunState;
+  }
 };
 
 export const saveRunState = (run: Readonly<RunState>, storage?: RunStorage): void => {
@@ -55,7 +128,7 @@ export const loadSavedRun = (storage?: Pick<RunStorage, "getItem" | "removeItem"
       clearSavedRun(storage);
       return null;
     }
-    return parsed.run;
+    return normalizeRestoredRunState(parsed.run);
   } catch {
     clearSavedRun(storage);
     return null;

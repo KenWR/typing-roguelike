@@ -1,4 +1,5 @@
 import type { RunState } from "@typing-roguelike/shared";
+import { runRemotePersistence } from "../run/run-remote-persistence";
 import { runSession } from "../run/run-session";
 import { SettlementCompletionController } from "../settlement/settlement-completion";
 import {
@@ -7,6 +8,7 @@ import {
   savePersistentWallet,
 } from "../settlement/persistent-wallet";
 import type { SettlementPresentationInput } from "../settlement/settlement-view-state";
+import { SCENE_KEYS } from "./scene-contract";
 import { RunResultScene } from "./RunResultScene";
 
 export type CompletableRunResultSceneData = Partial<SettlementPresentationInput> &
@@ -35,7 +37,7 @@ export class CompletableRunResultScene extends RunResultScene {
     super.create();
     const { width, height } = this.scale.gameSize;
     const confirm = this.add
-      .text(width / 2, height - 34, "정산 확인 · 로비로 돌아가기", {
+      .text(width / 2, height - 34, "정산 확인 · 메인 화면으로 돌아가기", {
         fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
         fontSize: "18px",
         color: "#f9fafb",
@@ -48,6 +50,7 @@ export class CompletableRunResultScene extends RunResultScene {
 
     confirm.once("pointerdown", () => {
       if (this.settlementRun !== null) {
+        void runRemotePersistence.complete(this.settlementRun);
         const storage = typeof localStorage === "undefined" ? undefined : localStorage;
         const currentWallet = loadPersistentWallet(storage);
         const settlement = applySettlementCurrency(
@@ -60,8 +63,8 @@ export class CompletableRunResultScene extends RunResultScene {
       } else {
         runSession.clear();
       }
-      confirm.disableInteractive().setText("로비로 이동 중...");
-      this.scene.start("LobbyScene");
+      confirm.disableInteractive().setText("메인 화면으로 이동 중...");
+      this.scene.start(SCENE_KEYS.start);
     });
   }
 }

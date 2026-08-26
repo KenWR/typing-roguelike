@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import type { MapNodeStatus, RunState } from "@typing-roguelike/shared";
+import { playRuntimeBgm, setRuntimeAudioMuted } from "../audio/runtime-audio";
 import { createMapHudView } from "../run/map-hud-view";
+import { runRemotePersistence } from "../run/run-remote-persistence";
 import { runSession } from "../run/run-session";
 import { LobbyRunStarter } from "./lobby-run-start";
 import {
@@ -49,6 +51,7 @@ export class StartScene extends EmptyCoreScene {
   }
 
   create(): void {
+    playRuntimeBgm("menu");
     const { width, height } = this.scale.gameSize;
     this.add.rectangle(0, 0, width, height, 0x111827).setOrigin(0);
     this.add
@@ -80,6 +83,7 @@ export class SettingsScene extends EmptyCoreScene {
   }
 
   create(): void {
+    playRuntimeBgm("menu");
     const { width, height } = this.scale.gameSize;
     const storage = typeof localStorage === "undefined" ? undefined : localStorage;
     this.draftSettings = loadMenuSettings(storage);
@@ -102,6 +106,7 @@ export class SettingsScene extends EmptyCoreScene {
     createMenuButton(this, width / 2, height * 0.62, "적용", () => {
       saveMenuSettings(this.draftSettings, storage);
       this.sound.mute = !this.draftSettings.soundEnabled;
+      setRuntimeAudioMuted(!this.draftSettings.soundEnabled);
     });
 
     createMenuButton(this, width / 2, height * 0.76, "뒤로", () => {
@@ -123,6 +128,7 @@ export class LobbyScene extends EmptyCoreScene {
   }
 
   create(): void {
+    playRuntimeBgm("tower");
     const { width, height } = this.scale.gameSize;
     this.add.rectangle(0, 0, width, height, 0x111827).setOrigin(0);
     this.add
@@ -145,18 +151,22 @@ export class LobbyScene extends EmptyCoreScene {
       width / 2,
       height * 0.62,
       "새 런 시작",
-      () => {
-        const runState = this.runStarter.start();
-        if (runState === null) {
-          return;
-        }
-
+      async () => {
         startRunButton.disableInteractive();
         startRunButton.setText("런 시작 중...");
         startRunButton.setStyle({ backgroundColor: "#4b5563" });
 
-        const transition = resolveSceneTransition(SCENE_KEYS.map, { runState });
-        this.scene.start(transition.key, transition.payload);
+        try {
+          const runState = await this.runStarter.startPersisted();
+          if (runState === null) return;
+
+          const transition = resolveSceneTransition(SCENE_KEYS.map, { runState });
+          this.scene.start(transition.key, transition.payload);
+        } catch {
+          startRunButton.setText("새 런 시작 · 다시 시도");
+          startRunButton.setStyle({ backgroundColor: "#1f2937" });
+          startRunButton.setInteractive({ useHandCursor: true });
+        }
       },
     );
   }
@@ -170,6 +180,7 @@ const NODE_STYLE: Record<MapNodeStatus, { fill: number; label: string }> = {
 };
 
 export class MapScene extends EmptyCoreScene {
+  protected readonly renderLegacyMapChoices = true;
   private runState?: Readonly<RunState>;
 
   constructor() {
@@ -181,6 +192,7 @@ export class MapScene extends EmptyCoreScene {
   }
 
   create(): void {
+    playRuntimeBgm("tower");
     const { width, height } = this.scale.gameSize;
     const activeRun = this.runState ?? runSession.get();
     this.add.rectangle(0, 0, width, height, 0x111827).setOrigin(0);
@@ -198,6 +210,12 @@ export class MapScene extends EmptyCoreScene {
 
     const view = createMapHudView(activeRun);
     const fontFamily = 'Galmuri9, "Apple SD Gothic Neo", monospace';
+    const syncStatus = runRemotePersistence.syncStatus;
+    const hudSideMargin = width < 960 ? 16 : 28;
+    const hudPanelWidth = Phaser.Math.Clamp(Math.floor((width - 360) / 2), 220, 300);
+    const leftHudX = hudSideMargin;
+    const rightHudX = width - hudSideMargin - hudPanelWidth;
+    const centerHudWidth = Math.max(260, rightHudX - (leftHudX + hudPanelWidth) - 24);
 
     this.add
       .text(width / 2, 42, `MAP · ${view.floor}F`, {
@@ -206,20 +224,27 @@ export class MapScene extends EmptyCoreScene {
         color: "#f9fafb",
       })
       .setOrigin(0.5);
+    this.add
+      .text(width / 2, 78, syncStatus.message, {
+        fontFamily,
+        fontSize: "14px",
+        color: syncStatus.mode === "local_fallback" ? "#fbbf24" : "#9ca3af",
+      })
+      .setOrigin(0.5);
 
-    this.add.rectangle(28, 92, 300, 190, 0x1f2937).setOrigin(0);
-    this.add.text(50, 110, "RUN HUD", { fontFamily, fontSize: "22px", color: "#f9fafb" });
-    this.add.text(50, 150, `HP  ${view.hpText}`, { fontFamily, fontSize: "20px", color: "#f9fafb" });
-    this.add.text(50, 184, `재화  ${view.currencyText}`, { fontFamily, fontSize: "20px", color: "#f9fafb" });
-    this.add.text(50, 218, `장비  ${view.equipmentText}`, {
+    this.add.rectangle(leftHudX, 92, hudPanelWidth, 190, 0x1f2937).setOrigin(0);
+    this.add.text(leftHudX + 22, 110, "RUN HUD", { fontFamily, fontSize: "22px", color: "#f9fafb" });
+    this.add.text(leftHudX + 22, 150, `HP  ${view.hpText}`, { fontFamily, fontSize: "20px", color: "#f9fafb" });
+    this.add.text(leftHudX + 22, 184, `재화  ${view.currencyText}`, { fontFamily, fontSize: "20px", color: "#f9fafb" });
+    this.add.text(leftHudX + 22, 218, `장비  ${view.equipmentText}`, {
       fontFamily,
       fontSize: "18px",
       color: "#d1d5db",
-      wordWrap: { width: 250 },
+      wordWrap: { width: hudPanelWidth - 50 },
     });
 
-    this.add.rectangle(width - 328, 92, 300, 190, 0x1f2937).setOrigin(0);
-    this.add.text(width - 306, 110, "NODE STATUS", {
+    this.add.rectangle(rightHudX, 92, hudPanelWidth, 190, 0x1f2937).setOrigin(0);
+    this.add.text(rightHudX + 22, 110, "NODE STATUS", {
       fontFamily,
       fontSize: "22px",
       color: "#f9fafb",
@@ -227,8 +252,8 @@ export class MapScene extends EmptyCoreScene {
     (Object.keys(NODE_STYLE) as MapNodeStatus[]).forEach((status, index) => {
       const style = NODE_STYLE[status];
       const y = 150 + index * 30;
-      this.add.rectangle(width - 296, y + 9, 18, 18, style.fill).setOrigin(0.5);
-      this.add.text(width - 272, y, style.label, {
+      this.add.rectangle(rightHudX + 32, y + 9, 18, 18, style.fill).setOrigin(0.5);
+      this.add.text(rightHudX + 56, y, style.label, {
         fontFamily,
         fontSize: "16px",
         color: "#d1d5db",
@@ -240,6 +265,8 @@ export class MapScene extends EmptyCoreScene {
         fontFamily,
         fontSize: "22px",
         color: "#f9fafb",
+        align: "center",
+        wordWrap: { width: centerHudWidth },
       })
       .setOrigin(0.5);
     this.add
@@ -248,9 +275,11 @@ export class MapScene extends EmptyCoreScene {
         fontSize: "18px",
         color: "#9ca3af",
         align: "center",
-        wordWrap: { width: 540 },
+        wordWrap: { width: centerHudWidth },
       })
       .setOrigin(0.5);
+
+    if (!this.renderLegacyMapChoices) return;
 
     this.add.line(width / 2, 0, 0, 320, 0, 390, 0x6b7280).setOrigin(0.5, 0);
     const nodeXs = [width / 2 - 240, width / 2, width / 2 + 240];

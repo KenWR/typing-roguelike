@@ -11,6 +11,12 @@ import {
   saveRunState,
   type RunStorage,
 } from "./run-persistence";
+import {
+  clearRunResumeCheckpoint,
+  loadRunResumeCheckpoint,
+  saveRunResumeCheckpoint,
+  type RunResumeCheckpoint,
+} from "./run-resume-checkpoint";
 
 export type RunStateUpdater = (current: Readonly<RunState>) => RunState;
 
@@ -37,10 +43,6 @@ const hasEquippedAttackSkill = (runState: Readonly<RunState>): boolean =>
       ) ?? false,
     );
 
-/**
- * Keeps an active run playable by guaranteeing at least one equipped attack skill.
- * This also repairs older saves created before starter equipment was introduced.
- */
 export const ensurePlayableRunLoadout = (runState: Readonly<RunState>): RunState => {
   if (runState.status !== "active" || hasEquippedAttackSkill(runState)) {
     return runState as RunState;
@@ -66,6 +68,7 @@ export const ensurePlayableRunLoadout = (runState: Readonly<RunState>): RunState
 
 export class RunSession {
   private activeRun: RunState | null = null;
+  private resumeCheckpoint: RunResumeCheckpoint | null = null;
 
   constructor(private readonly storage: RunStorage | undefined = getBrowserRunStorage()) {}
 
@@ -74,6 +77,8 @@ export class RunSession {
       throw new Error("An active run already exists.");
     }
 
+    this.resumeCheckpoint = null;
+    clearRunResumeCheckpoint(this.storage);
     const next = ensurePlayableRunLoadout(createInitialRunState(input));
     this.activeRun = next;
     saveRunState(next, this.storage);
@@ -84,15 +89,29 @@ export class RunSession {
     const restored = loadSavedRun(this.storage);
     if (restored === null) {
       this.activeRun = null;
+      this.resumeCheckpoint = null;
+      clearRunResumeCheckpoint(this.storage);
       return null;
     }
 
     const playable = ensurePlayableRunLoadout(restored);
     this.activeRun = playable;
+    this.resumeCheckpoint = loadRunResumeCheckpoint(this.storage);
     if (playable.status === "active") {
       saveRunState(playable, this.storage);
     }
     return playable;
+  }
+
+  replace(runState: Readonly<RunState>): Readonly<RunState> {
+    const next = ensurePlayableRunLoadout(runState);
+    this.activeRun = next;
+    if (next.status === "active") saveRunState(next, this.storage);
+    else {
+      clearSavedRun(this.storage);
+      this.clearCheckpoint();
+    }
+    return next;
   }
 
   get(): Readonly<RunState> | null {
@@ -106,6 +125,20 @@ export class RunSession {
     return this.activeRun;
   }
 
+  getCheckpoint(): RunResumeCheckpoint | null {
+    return this.resumeCheckpoint;
+  }
+
+  setCheckpoint(checkpoint: RunResumeCheckpoint): void {
+    this.resumeCheckpoint = checkpoint;
+    saveRunResumeCheckpoint(checkpoint, this.storage);
+  }
+
+  clearCheckpoint(): void {
+    this.resumeCheckpoint = null;
+    clearRunResumeCheckpoint(this.storage);
+  }
+
   update(updater: RunStateUpdater): Readonly<RunState> {
     const current = this.require();
     if (current.status !== "active") {
@@ -115,7 +148,10 @@ export class RunSession {
     const next = ensurePlayableRunLoadout(updater(current));
     this.activeRun = next;
     if (next.status === "active") saveRunState(next, this.storage);
-    else clearSavedRun(this.storage);
+    else {
+      clearSavedRun(this.storage);
+      this.clearCheckpoint();
+    }
     return next;
   }
 
@@ -127,12 +163,14 @@ export class RunSession {
 
     this.activeRun = { ...current, status };
     clearSavedRun(this.storage);
+    this.clearCheckpoint();
     return this.activeRun;
   }
 
   clear(): void {
     this.activeRun = null;
     clearSavedRun(this.storage);
+    this.clearCheckpoint();
   }
 }
 

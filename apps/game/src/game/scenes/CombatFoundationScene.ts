@@ -14,13 +14,19 @@ import {
   type PauseWindow,
 } from "../combat/combat-pause-controller";
 import type { CombatEncounterInitialization } from "../combat/encounter-initializer";
+import { createEnemyHealthListLabel } from "../combat/enemy-health-view";
 import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
+import {
+  CombatFeedbackController,
+  playProceduralCombatSound,
+} from "../feedback/combat-feedback";
 import { CombatHud } from "../hud/combat-hud";
 import { CommandHud } from "../hud/command-hud";
 import { EnemyAttackGauge } from "../hud/enemy-attack-gauge";
 import { CommandInputBuffer } from "../input/command-input-buffer";
 import { createCombatLayout } from "../layout/combat-layout";
+import { MENU_SETTINGS_REGISTRY_KEYS } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
 
 const BACKGROUND_WIDTH = 1600;
@@ -53,18 +59,21 @@ export class CombatFoundationScene extends Phaser.Scene {
   private overlay!: Phaser.GameObjects.Rectangle;
   private playerPlaceholder!: Phaser.GameObjects.Container;
   private enemyPlaceholder!: Phaser.GameObjects.Container;
+  private enemyHealthText!: Phaser.GameObjects.Text;
   private combatHud!: CombatHud;
   private enemyAttackGauge!: EnemyAttackGauge;
   private enemyAttackTimeline!: EnemyAttackTimeline;
   private actionPoints!: ActionPointResource;
   private combat!: CombatState;
   private playerCombatRuntime?: PlayerCombatRuntime;
+  private feedback?: CombatFeedbackController;
   private pauseController?: CombatPauseController;
   private pauseOverlay?: Phaser.GameObjects.Text;
   private commandHud!: CommandHud;
   private commandInputBuffer!: CommandInputBuffer;
   private commandInputCleanup?: () => void;
   private commandCompletionCleanup?: () => void;
+  private commandStatusCleanup?: () => void;
   private combatInitialization?: CombatEncounterInitialization;
   private runState?: Readonly<RunState>;
   private nextNodeIds: readonly string[] = [];
@@ -82,6 +91,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.nextNodeIds = data.nextNodeIds ?? [];
     this.bossNode = data.bossNode;
     this.playerCombatRuntime = undefined;
+    this.feedback = undefined;
     this.transitionStarted = false;
   }
 
@@ -95,6 +105,16 @@ export class CombatFoundationScene extends Phaser.Scene {
       this.scene.start(transition.key, transition.payload);
       return;
     }
+
+    this.feedback = new CombatFeedbackController({
+      playSound: (key) => playProceduralCombatSound(key, {
+        muted: this.sound.mute,
+        volume: this.sound.volume,
+      }),
+      shakeCamera: () => this.cameras.main.shake(110, 0.006),
+      isScreenShakeEnabled: () =>
+        this.registry.get(MENU_SETTINGS_REGISTRY_KEYS.screenShakeEnabled) !== false,
+    });
 
     this.backgroundLayer = this.add.container(0, 0).setDepth(0);
     this.worldLayer = this.add.container(0, 0).setDepth(100);
@@ -125,6 +145,26 @@ export class CombatFoundationScene extends Phaser.Scene {
       .setOrigin(0, 0);
     this.uiLayer.add(encounterLabel);
 
+    const initialEnemyHp = Object.fromEntries(
+      initialization.enemies.map((enemy) => [enemy.instanceId, enemy.hp]),
+    );
+    this.enemyHealthText = this.add
+      .text(
+        0,
+        0,
+        createEnemyHealthListLabel(initialization.enemies, initialEnemyHp),
+        {
+          color: "#f4d7da",
+          fontFamily: "Galmuri9, monospace",
+          fontSize: "18px",
+          backgroundColor: "#301b22",
+          padding: { x: 12, y: 7 },
+          align: "left",
+        },
+      )
+      .setOrigin(0.5);
+    this.uiLayer.add(this.enemyHealthText);
+
     this.actionPoints = new ActionPointResource();
     this.combat = new CombatState();
     this.combatHud = new CombatHud(this, {
@@ -136,21 +176,21 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.uiLayer.add(this.combatHud.container);
 
     this.enemyAttackTimeline = new EnemyAttackTimeline();
-    for (const enemy of initialization.enemies.slice(0, 2)) {
-      const action = enemy.actions[0];
-      if (action === undefined) {
-        continue;
+    if (this.runState === undefined) {
+      for (const enemy of initialization.enemies.slice(0, 2)) {
+        const action = enemy.actions[0];
+        if (action === undefined) continue;
+        this.enemyAttackTimeline.startAttack({
+          timelineId: `${enemy.instanceId}:${action.id}`,
+          enemyId: enemy.instanceId,
+          targetId: "player",
+          attackId: action.id,
+          attackName: action.name,
+          attackType: action.kind === "defense" ? "defense" : "attack",
+          windupMs: action.windupMs,
+          recoveryMs: action.recoveryMs,
+        });
       }
-      this.enemyAttackTimeline.startAttack({
-        timelineId: `${enemy.instanceId}:${action.id}`,
-        enemyId: enemy.instanceId,
-        targetId: "player",
-        attackId: action.id,
-        attackName: action.name,
-        attackType: action.kind === "defense" ? "defense" : "attack",
-        windupMs: action.windupMs,
-        recoveryMs: action.recoveryMs,
-      });
     }
     this.enemyAttackGauge = new EnemyAttackGauge(
       this,
@@ -162,9 +202,18 @@ export class CombatFoundationScene extends Phaser.Scene {
       ? initialization.player.skills.map((skill) => defineSkill(skill))
       : [MAGIC_SHIELD];
     const initialSkill = availableSkills[0]!;
-    this.commandInputBuffer = new CommandInputBuffer(initialSkill.command);
+    this.commandInputBuffer = new CommandInputBuffer(
+      availableSkills.map((skill) => skill.command),
+    );
     this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
     this.uiLayer.add(this.commandHud.container);
+    this.commandStatusCleanup = this.commandInputBuffer.onStatusChanged(({ snapshot }) => {
+      if (snapshot.status === "complete") {
+        this.feedback?.trigger("command-success");
+      } else if (snapshot.status === "incorrect") {
+        this.feedback?.trigger("command-failure");
+      }
+    });
 
     if (this.runState !== undefined) {
       this.playerCombatRuntime = new PlayerCombatRuntime({
@@ -175,6 +224,7 @@ export class CombatFoundationScene extends Phaser.Scene {
         nextNodeIds: this.nextNodeIds,
         ...(this.bossNode === undefined ? {} : { bossNode: this.bossNode }),
       });
+      this.playerCombatRuntime.start();
     }
 
     const skillStarter = new SkillCommandStarter({
@@ -193,6 +243,9 @@ export class CombatFoundationScene extends Phaser.Scene {
         this.combatHud.update({ ap: result.ap.currentAp });
         if (result.started) {
           this.playerCombatRuntime?.registerAction(result.actionId, result.skill);
+          if (result.skill.kind === "defense") {
+            this.feedback?.trigger("guard");
+          }
           this.commandHud.showSkillStarted();
         }
       },
@@ -211,33 +264,51 @@ export class CombatFoundationScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    if (this.combatInitialization === undefined || this.transitionStarted) {
-      return;
-    }
+    if (this.combatInitialization === undefined || this.transitionStarted) return;
+
     const safeDelta = Math.max(0, delta);
     const ap = this.actionPoints.advance(safeDelta);
     this.combatHud.update({ ap: ap.currentAp });
-
-    const runtimeUpdate = this.playerCombatRuntime?.advance(safeDelta);
-    if (runtimeUpdate === undefined) {
+    const previousPlayerHp = this.playerCombatRuntime?.playerHp;
+    const playerUpdate = this.playerCombatRuntime?.advance(safeDelta);
+    if (playerUpdate === undefined) {
       const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
       this.enemyAttackGauge.update(enemyUpdate.snapshot);
       return;
     }
 
-    this.enemyAttackGauge.update(runtimeUpdate.enemyTimeline.snapshot);
-    this.combatHud.update({ hp: runtimeUpdate.playerHp });
-    this.updateEnemyLabel(runtimeUpdate.enemyHp);
+    this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);
+    this.combatHud.update({ hp: playerUpdate.playerHp });
+    this.updateEnemyHealth(playerUpdate.enemyHp);
 
-    if (runtimeUpdate.route !== null) {
-      this.transitionStarted = true;
-      this.releaseCommandInputElement();
-      const transition = resolveSceneTransition(
-        runtimeUpdate.route.sceneKey,
-        runtimeUpdate.route.payload,
-      );
-      this.scene.start(transition.key, transition.payload);
+    if (
+      previousPlayerHp !== undefined &&
+      playerUpdate.playerHp < previousPlayerHp
+    ) {
+      this.feedback?.trigger("player-hit");
     }
+
+    if (playerUpdate.route !== null) {
+      const outcome = this.combat.snapshot.status;
+      this.feedback?.trigger(outcome === "victory" ? "victory" : "defeat");
+      this.startCombatRoute(playerUpdate.route.sceneKey, playerUpdate.route.payload);
+    }
+  }
+
+  private updateEnemyHealth(enemyHp: Readonly<Record<string, number>>): void {
+    this.enemyHealthText.setText(
+      createEnemyHealthListLabel(
+        this.combatInitialization?.enemies ?? [],
+        enemyHp,
+      ),
+    );
+  }
+
+  private startCombatRoute(sceneKey: string, payload: Readonly<Record<string, unknown>>): void {
+    this.transitionStarted = true;
+    this.releaseCommandInputElement();
+    const transition = resolveSceneTransition(sceneKey, payload);
+    this.scene.start(transition.key, transition.payload);
   }
 
   private createPauseHandling(): void {
@@ -295,6 +366,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.enemyPlaceholder
       .setPosition(layout.enemy.x, layout.enemy.y)
       .setScale(layout.actorScale);
+    this.enemyHealthText.setPosition(
+      layout.enemy.x,
+      layout.enemy.y - 135 * layout.actorScale,
+    );
 
     this.combatHud.setPosition(layout.hudReservation.x, layout.hudReservation.y);
     this.combatHud.setSize(layout.hudReservation.width, layout.hudReservation.height);
@@ -318,9 +393,7 @@ export class CombatFoundationScene extends Phaser.Scene {
   }
 
   private createCommandInputElement(): void {
-    if (typeof document === "undefined") {
-      return;
-    }
+    if (typeof document === "undefined") return;
 
     const input = document.createElement("input");
     input.type = "text";
@@ -348,16 +421,12 @@ export class CombatFoundationScene extends Phaser.Scene {
       this.isComposing = true;
       updateFromElement();
     };
-    const handleCompositionUpdate = (): void => {
-      updateFromElement();
-    };
+    const handleCompositionUpdate = (): void => updateFromElement();
     const handleCompositionEnd = (): void => {
       this.isComposing = false;
       updateFromElement();
     };
-    const handleInput = (): void => {
-      updateFromElement();
-    };
+    const handleInput = (): void => updateFromElement();
 
     input.addEventListener("compositionstart", handleCompositionStart);
     input.addEventListener("compositionupdate", handleCompositionUpdate);
@@ -379,6 +448,8 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandInputCleanup?.();
     this.commandCompletionCleanup?.();
     this.commandCompletionCleanup = undefined;
+    this.commandStatusCleanup?.();
+    this.commandStatusCleanup = undefined;
     this.isComposing = false;
   }
 
@@ -388,18 +459,6 @@ export class CombatFoundationScene extends Phaser.Scene {
       : initialization.enemies
           .map((enemy) => `${enemy.name} HP ${enemy.hp}/${enemy.hp}`)
           .join(" / ");
-  }
-
-  private updateEnemyLabel(enemyHp: Readonly<Record<string, number>>): void {
-    const initialization = this.combatInitialization;
-    const label = this.enemyPlaceholder.list[1] as Phaser.GameObjects.Text | undefined;
-    if (initialization === undefined || label === undefined) return;
-
-    label.setText(
-      initialization.enemies
-        .map((enemy) => `${enemy.name} HP ${enemyHp[enemy.instanceId] ?? 0}/${enemy.hp}`)
-        .join(" / "),
-    );
   }
 
   private createActorPlaceholder(

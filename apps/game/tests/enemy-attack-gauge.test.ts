@@ -71,7 +71,7 @@ describe("enemy attack gauge state", () => {
     expect(state.attacks).toHaveLength(2);
   });
 
-  test("marks the gauge complete after wind-up and preserves attack type presentation", () => {
+  test("keeps recovery visible but removes resolved attacks immediately", () => {
     const timeline = new EnemyAttackTimeline();
     timeline.startAttack({
       ...createAttack(),
@@ -83,9 +83,8 @@ describe("enemy attack gauge state", () => {
     const recoveryState = createEnemyAttackGaugeState(
       timeline.advance(100).snapshot,
     );
-    const resolvedState = createEnemyAttackGaugeState(
-      timeline.advance(200).snapshot,
-    );
+    const resolvedTimelineSnapshot = timeline.advance(200).snapshot;
+    const resolvedState = createEnemyAttackGaugeState(resolvedTimelineSnapshot);
 
     expect(recoveryState.attacks[0]).toMatchObject({
       phase: "recovery",
@@ -93,11 +92,8 @@ describe("enemy attack gauge state", () => {
       progress: 1,
       phaseLabel: "후딜",
     });
-    expect(resolvedState.attacks[0]).toMatchObject({
-      phase: "resolved",
-      progress: 1,
-      phaseLabel: "완료",
-    });
+    expect(resolvedTimelineSnapshot.attacks[0]?.phase).toBe("resolved");
+    expect(resolvedState.attacks).toEqual([]);
     expect(getEnemyAttackTypePresentation("buff")).toMatchObject({
       icon: "✦",
       label: "강화",

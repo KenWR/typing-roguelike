@@ -1,5 +1,7 @@
 import {
   EQUIPMENT_CONFIGS,
+  completeMapNode,
+  generateEquipmentRewardCandidates,
   type EquipmentConfig,
   type RunState,
   type SkillConfig,
@@ -35,6 +37,37 @@ const toRewardCandidate = (equipment: EquipmentConfig): RewardCandidate => ({
   effect: `공격 ${equipment.baseAttack ?? 0} · 사용 스킬 ${equipment.skills.length}개`,
   icon: equipment.slot === "weapon" ? "⚔" : "◇",
 });
+
+const hashString = (value: string): number => {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
+const createSeededRandom = (seed: number): (() => number) => {
+  let state = seed >>> 0;
+  return () => {
+    state += 0x6d2b79f5;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const getRewardEquipment = (
+  runState: Readonly<RunState>,
+  nodeId: string | undefined,
+): readonly EquipmentConfig[] =>
+  generateEquipmentRewardCandidates({
+    tier: "normal",
+    count: 3,
+    random: createSeededRandom(runState.map.seed ^ hashString(nodeId ?? runState.map.currentNodeId)),
+    excludedEquipmentIds: runState.inventory.itemInstances,
+  });
 
 export const getRunAvailableSkills = (runState: Readonly<RunState>): readonly SkillConfig[] => {
   const equippedIds = [runState.loadout.weaponId, runState.loadout.subweaponId].filter(
@@ -76,16 +109,28 @@ export type RunRewardSelectionFlow = Readonly<{
 
 export type CreateRunRewardSelectionFlowOptions = Readonly<{
   runState: RunState;
+  nodeId?: string;
+  nextNodeIds?: readonly string[];
   equipmentIds?: readonly string[];
+  mapCompletion?: Readonly<{
+    nodeId: string;
+    nextNodeIds: readonly string[];
+  }>;
+  onContinue?: (runState: RunState) => void;
 }>;
 
 export const createRunRewardSelectionFlow = ({
   runState,
-  equipmentIds = EQUIPMENT_CONFIGS.filter((equipment) => equipment.rarity !== "hidden")
-    .slice(0, 3)
-    .map((equipment) => equipment.id),
+  nodeId,
+  nextNodeIds = [],
+  equipmentIds,
+  mapCompletion,
+  onContinue,
 }: CreateRunRewardSelectionFlowOptions): RunRewardSelectionFlow => {
-  const equipmentRewards = equipmentIds.map(findEquipment);
+  const completionTarget = mapCompletion ?? (nodeId === undefined ? undefined : { nodeId, nextNodeIds });
+  const equipmentRewards = equipmentIds === undefined
+    ? getRewardEquipment(runState, completionTarget?.nodeId ?? nodeId)
+    : equipmentIds.map(findEquipment);
   if (equipmentRewards.length === 0) {
     throw new RangeError("At least one equipment reward is required.");
   }
@@ -97,8 +142,18 @@ export const createRunRewardSelectionFlow = ({
       currency: runState.runCurrency,
     }),
     initialRunState: runState,
-    applySelection: (currentRunState, reward) =>
-      applyEquipmentReward(currentRunState, reward.id),
+    applySelection: (currentRunState, reward) => {
+      const rewardedRun = applyEquipmentReward(currentRunState, reward.id);
+      if (completionTarget === undefined) return rewardedRun;
+
+      const completion = completeMapNode(
+        rewardedRun.map,
+        completionTarget.nodeId,
+        completionTarget.nextNodeIds,
+      );
+      return completion.applied ? { ...rewardedRun, map: completion.map } : rewardedRun;
+    },
+    onContinue: (completedRunState) => onContinue?.(completedRunState),
   });
 
   return {

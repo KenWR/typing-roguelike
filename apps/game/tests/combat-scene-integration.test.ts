@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { defineSkill, type GeneratedMapNode } from "@typing-roguelike/shared";
+import { ActionPointResource } from "../src/game/combat/action-point-resource";
 import { CombatState } from "../src/game/combat/combat-state";
 import { EnemyAttackTimeline } from "../src/game/combat/enemy-attack-timeline";
 import { initializeCombatEncounter } from "../src/game/combat/encounter-initializer";
 import { PlayerCombatRuntime } from "../src/game/combat/player-combat-runtime";
+import { SkillCommandStarter } from "../src/game/combat/skill-command-starter";
+import { CommandInputBuffer } from "../src/game/input/command-input-buffer";
 import { RunSession } from "../src/game/run/run-session";
 
 const node: GeneratedMapNode = {
@@ -58,6 +61,57 @@ const startEnemyAttack = (ctx: ReturnType<typeof setup>, id: string) => {
 };
 
 describe("combat scene runtime integration", () => {
+  test("command input reaches player impact and updates enemy HP", () => {
+    const ctx = setup();
+    const skillConfig = ctx.initialization.player.skills.find(
+      (candidate) => candidate.kind === "attack",
+    );
+    expect(skillConfig).toBeDefined();
+    if (skillConfig === undefined) return;
+
+    const skill = defineSkill(skillConfig);
+    const input = new CommandInputBuffer(skill.command);
+    const actionPoints = new ActionPointResource({
+      initialAp: skill.apCost,
+      maxAp: skill.apCost,
+      regenerationPerSecond: 0,
+    });
+    const starter = new SkillCommandStarter({
+      skills: [skill],
+      actionPoints,
+      combat: ctx.combat,
+      actorId: "player",
+      targetId: ctx.initialization.enemies[0]!.instanceId,
+    });
+    const results: ReturnType<SkillCommandStarter["tryStart"]>[] = [];
+    const disconnect = starter.connect(input, (result) => {
+      results.push(result);
+      if (result.started) ctx.runtime.registerAction(result.actionId, result.skill);
+    });
+
+    const enemy = ctx.initialization.enemies[0]!;
+    const beforeHp = ctx.runtime.enemyHp[enemy.instanceId]!;
+    input.updateInput(skill.command);
+    const startResult = results[0];
+    expect(startResult?.started).toBe(true);
+    if (!startResult?.started) {
+      disconnect();
+      return;
+    }
+
+    const update = ctx.runtime.advance(skill.windupMs + skill.recoveryMs);
+
+    expect(update.combat.events).toContainEqual({
+      type: "impact-resolved",
+      actionId: startResult.actionId,
+      actorId: "player",
+      targetId: enemy.instanceId,
+      atMs: skill.windupMs + skill.recoveryMs,
+    });
+    expect(ctx.runtime.enemyHp[enemy.instanceId]).toBeLessThan(beforeHp);
+    disconnect();
+  });
+
   test("enemy impact updates player HP and eventually routes defeat once", () => {
     const ctx = setup();
     const action = startEnemyAttack(ctx, "enemy:first");
@@ -90,23 +144,23 @@ describe("combat scene runtime integration", () => {
       kind: "defense",
       category: "guard",
       apCost: 1,
-      windupMs: 0,
-      recoveryMs: 0,
-      effects: [{ type: "guard", damageMultiplier: 0.25, durationMs: 5_000 }],
+      windupMs: 100,
+      recoveryMs: 100,
+      effects: [{ type: "guard", damageMultiplier: 0.25, durationMs: 20_000 }],
       description: "test guard",
     });
     guarded.combat.startAction({
       id: "player:guard",
       actorId: "player",
       targetId: "player",
-      windupMs: 0,
-      recoveryMs: 0,
+      windupMs: guard.windupMs,
+      recoveryMs: guard.recoveryMs,
     });
     guarded.runtime.registerAction("player:guard", guard);
-    guarded.runtime.advance(0);
+    guarded.runtime.advance(guard.windupMs + guard.recoveryMs);
     const guardedAction = startEnemyAttack(guarded, "enemy:guarded");
     const guardedHp = guarded.runtime.playerHp;
-    guarded.runtime.advance(guardedAction.windupMs + guardedAction.recoveryMs);
+    const guardedUpdate = guarded.runtime.advance(guardedAction.windupMs + guardedAction.recoveryMs);
     const guardedDamage = guardedHp - guarded.runtime.playerHp;
 
     const plain = setup();

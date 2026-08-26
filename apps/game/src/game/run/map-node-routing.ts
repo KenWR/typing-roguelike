@@ -15,7 +15,6 @@ export type MapNodeRoute = Readonly<{
     | typeof SCENE_KEYS.combat
     | typeof SCENE_KEYS.shop
     | typeof SCENE_KEYS.rest
-    | typeof SCENE_KEYS.reward
     | typeof SCENE_KEYS.map;
   payload: Readonly<Record<string, unknown>>;
 }>;
@@ -39,6 +38,10 @@ export const routeMapNodeSelection = (
     return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };
   }
 
+  if (node.type === "reward") {
+    return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };
+  }
+
   if (node.type === "boss") {
     const entry = enterBossCombat(runState as RunState, node);
     if (!entry.ok) {
@@ -51,6 +54,7 @@ export const routeMapNodeSelection = (
       payload: {
         runState: entry.runState,
         nodeId: node.key,
+        node,
         nextNodeIds: [],
         bossNode: node,
         combat: entry.combat,
@@ -59,11 +63,15 @@ export const routeMapNodeSelection = (
   }
 
   const selectedRun: RunState = { ...runState, map: beginMapNode(runState.map, node.key) };
-  const commonPayload = { runState: selectedRun, nodeId: node.key, nextNodeIds: node.nextNodeKeys };
+  const commonPayload = {
+    runState: selectedRun,
+    nodeId: node.key,
+    node,
+    nextNodeIds: node.nextNodeKeys,
+  };
 
   if (node.type === "shop") return { applied: true, runState: selectedRun, sceneKey: SCENE_KEYS.shop, payload: commonPayload };
   if (node.type === "rest") return { applied: true, runState: selectedRun, sceneKey: SCENE_KEYS.rest, payload: commonPayload };
-  if (node.type === "reward") return { applied: true, runState: selectedRun, sceneKey: SCENE_KEYS.reward, payload: commonPayload };
 
   const encounter = initializeCombatEncounter(selectedRun, node);
   if (!encounter.ok) {

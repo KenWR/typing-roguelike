@@ -64,6 +64,7 @@ export class RestNodeScene extends Phaser.Scene {
     if (active?.status === "active") {
       runSession.update(() => this.flow.runState);
     }
+    runSession.clearCheckpoint();
     this.scene.start("MapScene", { runState: this.flow.runState });
   }
 }

@@ -3,6 +3,9 @@ import {
   RUNTIME_IMAGE_ASSETS,
   TEXTURE_KEYS,
 } from "../assets/asset-catalog";
+import { setRuntimeAudioMuted } from "../audio/runtime-audio";
+import { runRemotePersistence } from "../run/run-remote-persistence";
+import { resolveRunResumeRoute } from "../run/run-resume-routing";
 import { runSession } from "../run/run-session";
 import { applyMenuSettings, loadMenuSettings } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
@@ -58,7 +61,9 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     const storage = typeof localStorage === "undefined" ? undefined : localStorage;
-    applyMenuSettings(this, loadMenuSettings(storage));
+    const settings = loadMenuSettings(storage);
+    applyMenuSettings(this, settings);
+    setRuntimeAudioMuted(!settings.soundEnabled);
     this.createFoundationTextures();
 
     for (const key of this.failedAssetKeys) {
@@ -67,10 +72,21 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    const restoredRun = runSession.restore();
-    const transition = restoredRun === null
-      ? resolveSceneTransition(SCENE_KEYS.start, undefined)
-      : resolveSceneTransition(SCENE_KEYS.map, { runState: restoredRun });
+    const localRun = runSession.restore();
+    void this.restoreRunAndContinue(localRun);
+  }
+
+  private async restoreRunAndContinue(localRun: ReturnType<typeof runSession.restore>): Promise<void> {
+    const restoredRun = await runRemotePersistence.restore(localRun);
+    if (restoredRun === null) {
+      const transition = resolveSceneTransition(SCENE_KEYS.start, undefined);
+      this.scene.start(transition.key, transition.payload);
+      return;
+    }
+
+    runSession.replace(restoredRun);
+    const resume = resolveRunResumeRoute(restoredRun, runSession.getCheckpoint());
+    const transition = resolveSceneTransition(resume.sceneKey, resume.payload);
     this.scene.start(transition.key, transition.payload);
   }
 
