@@ -138,6 +138,7 @@ export const finalizeCombatOutcome = ({
       runState: updatedRunState,
       adapter: rewardFlow.adapter,
       nextSceneKey: rewardFlow.nextSceneKey,
+      rewardSource: "combat-victory",
       goldReward,
     },
   };
