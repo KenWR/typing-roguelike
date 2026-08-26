@@ -45,7 +45,7 @@ const resolveAttackPower = (
 export class PlayerCombatRuntime {
   private readonly combat: CombatState;
   private readonly enemyTimeline: EnemyAttackTimeline;
-  private readonly runState: Readonly<RunState>;
+  private runState: RunState;
   private readonly initialization: CombatEncounterInitialization;
   private readonly nextNodeIds: readonly string[];
   private readonly bossNode?: GeneratedMapNode;
@@ -58,7 +58,7 @@ export class PlayerCombatRuntime {
   constructor(config: PlayerCombatRuntimeConfig) {
     this.combat = config.combat;
     this.enemyTimeline = config.enemyTimeline;
-    this.runState = config.runState;
+    this.runState = config.runState as RunState;
     this.initialization = config.initialization;
     this.nextNodeIds = config.nextNodeIds ?? [];
     this.bossNode = config.bossNode;
@@ -86,6 +86,14 @@ export class PlayerCombatRuntime {
 
   registerAction(actionId: string, skill: SkillDefinition): void {
     this.skillsByActionId.set(actionId, skill);
+  }
+
+  setRunState(runState: Readonly<RunState>): void {
+    this.runState = runState as RunState;
+  }
+
+  get currentRunState(): RunState {
+    return this.runState;
   }
 
   get enemyHp(): Readonly<Record<string, number>> {
@@ -126,7 +134,7 @@ export class PlayerCombatRuntime {
         this.route = finalizeCombatOutcome({
           combat: this.combat,
           enemyTimeline: this.enemyTimeline,
-          runState: this.runState as RunState,
+          runState: this.runState,
           outcome: "victory",
           nextNodeIds: this.nextNodeIds,
           bossNode: this.bossNode,
