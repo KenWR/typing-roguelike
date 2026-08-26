@@ -1,6 +1,7 @@
 export * from "./contracts/backend/leaderboard-contracts.ts";
 export * from "./rules/map-generation.ts";
 export * from "./rules/map-node-state.ts";
+export * from "./rules/final-boss-progression.ts";
 export * from "./rules/rest-recovery.ts";
 export * from "./rules/shop-rules.ts";
 export * from "./contracts/backend/run-contracts.ts";

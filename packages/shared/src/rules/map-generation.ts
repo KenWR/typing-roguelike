@@ -112,10 +112,7 @@ const getNodeTypes = (seed: number, round: number, choicePath: readonly number[]
 		return ["rest", "rest", "rest"];
 	}
 	if (round === MAP_ROUND_COUNT) {
-		const alternatives = shuffle(NODE_TYPES, hash(`${seed}:${path}`))
-			.filter((type) => type !== "shop")
-			.slice(0, 2);
-		return ["boss", alternatives[0]!, alternatives[1]!];
+		return ["boss"];
 	}
 
 	const candidates = round === 1
@@ -144,7 +141,9 @@ export const generateNodeChoices = (
 			: nodeKey(round - 1, choicePath);
 		const nextNodeKeys = round === MAP_ROUND_COUNT
 			? []
-			: NODE_CHOICES.map((nextChoice) => nodeKey(round + 1, [...fullPath, nextChoice]));
+			: round === MAP_ROUND_COUNT - 1
+				? [nodeKey(round + 1, [...fullPath, 1])]
+				: NODE_CHOICES.map((nextChoice) => nodeKey(round + 1, [...fullPath, nextChoice]));
 		const node: GeneratedMapNode = {
 			choice,
 			icon: type,
