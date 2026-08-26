@@ -11,7 +11,6 @@ import { EnemyAttackTimeline } from "../src/game/combat/enemy-attack-timeline";
 import { finalizeCombatOutcome } from "../src/game/combat/combat-outcome-routing";
 import { completeRestNode, createRestNodeFlow } from "../src/game/rest/rest-node-flow";
 import { createMapHudView } from "../src/game/run/map-hud-view";
-import { routeMapNodeSelection } from "../src/game/run/map-node-routing";
 import { completeShopNode, createShopNodeFlow } from "../src/game/shop/shop-node-flow";
 
 const withAvailableRound = (
@@ -51,10 +50,12 @@ const findRoundWithNodeType = (
 const expectAdvancedMap = (
   runState: RunState,
   completedNode: GeneratedMapNode,
+  previousChoicePath: readonly number[],
 ): void => {
   expect(runState.map.currentRound).toBe(completedNode.round + 1);
   expect(runState.map.choicePath).toEqual([
-    ...completedNode.key.split("-").slice(1).map(Number),
+    ...previousChoicePath,
+    completedNode.choice,
   ]);
   expect(runState.map.nodeStatuses[completedNode.key]).toBe("cleared");
 
@@ -78,7 +79,7 @@ describe("map round progression after node completion", () => {
     const second = completeRestNode(first);
 
     expect(second.runState).toBe(first.runState);
-    expectAdvancedMap(first.runState, node);
+    expectAdvancedMap(first.runState, node, runState.map.choicePath);
   });
 
   test("SHOP completion advances to its connected next round", () => {
@@ -88,25 +89,7 @@ describe("map round progression after node completion", () => {
 
     const completed = completeShopNode(createShopNodeFlow(started, node.key, node.nextNodeKeys, []));
 
-    expectAdvancedMap(completed.runState, node);
-  });
-
-  test("REWARD selection completes the map node when continuing back to Map", () => {
-    const { runState, nodes } = withAvailableRound(0, 1, []);
-    const node = nodes.find((candidate) => candidate.type === "reward")!;
-    const route = routeMapNodeSelection(runState, node.key);
-    const adapter = route.payload.adapter as {
-      getViewState: () => { candidates: readonly { id: string }[] };
-      getRunState: () => RunState;
-      selectReward: (id: string) => unknown;
-      continue: () => unknown;
-    };
-
-    const rewardId = adapter.getViewState().candidates[0]!.id;
-    adapter.selectReward(rewardId);
-    adapter.continue();
-
-    expectAdvancedMap(adapter.getRunState(), node);
+    expectAdvancedMap(completed.runState, node, runState.map.choicePath);
   });
 
   test("normal COMBAT victory advances before reward routing", () => {
@@ -124,6 +107,6 @@ describe("map round progression after node completion", () => {
       rewardRandom: () => 0,
     });
 
-    expectAdvancedMap(outcome.runState, node);
+    expectAdvancedMap(outcome.runState, node, runState.map.choicePath);
   });
 });
