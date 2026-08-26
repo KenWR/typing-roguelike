@@ -1,0 +1,284 @@
+name: Production deployment
+
+on:
+  workflow_run:
+    workflows:
+      - PR validation
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-cloudflare-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-production:
+    name: Deploy production to Cloudflare
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_sha != ''
+      }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_GAME_URL }}
+    env:
+      VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+      VALIDATED_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_WORKER_NAME: ${{ vars.CLOUDFLARE_API_WORKER_NAME }}
+      CLOUDFLARE_GAME_WORKER_NAME: ${{ vars.CLOUDFLARE_GAME_WORKER_NAME }}
+      CLOUDFLARE_D1_DATABASE_NAME: ${{ vars.CLOUDFLARE_D1_DATABASE_NAME }}
+      CLOUDFLARE_D1_DATABASE_ID: ${{ vars.CLOUDFLARE_D1_DATABASE_ID }}
+      PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL }}
+      PRODUCTION_GAME_URL: ${{ vars.PRODUCTION_GAME_URL }}
+
+    steps:
+      - name: Check out validated main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Confirm validated commit is current main
+        id: gate
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags origin main
+          checked_out_sha="$(git rev-parse HEAD)"
+          current_main_sha="$(git rev-parse refs/remotes/origin/main)"
+
+          if [[ "$checked_out_sha" != "$VALIDATED_SHA" ]]; then
+            echo "::error title=Validated commit mismatch::The checked-out commit does not match the successful validation SHA."
+            exit 1
+          fi
+
+          if [[ "$current_main_sha" != "$VALIDATED_SHA" ]]; then
+            echo "::error title=Main advanced::A newer main commit exists; wait for its successful validation before deploying."
+            exit 1
+          fi
+
+          echo "checked_out_sha=$checked_out_sha" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Production deployment"
+            echo
+            echo "- Validated main SHA: `$VALIDATED_SHA`"
+            echo "- Checked-out SHA: `$checked_out_sha`"
+            echo "- Main SHA at deployment start: `$current_main_sha`"
+            echo "- Validation workflow run: `$VALIDATED_WORKFLOW_RUN_ID`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Bun from package.json
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install frozen dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate production configuration
+        id: config
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          missing=0
+          for variable_name in \
+            CLOUDFLARE_API_TOKEN \
+            CLOUDFLARE_ACCOUNT_ID \
+            CLOUDFLARE_API_WORKER_NAME \
+            CLOUDFLARE_GAME_WORKER_NAME \
+            CLOUDFLARE_D1_DATABASE_NAME \
+            CLOUDFLARE_D1_DATABASE_ID \
+            PRODUCTION_API_URL \
+            PRODUCTION_GAME_URL; do
+            if [[ -z "${!variable_name:-}" ]]; then
+              echo "::error title=Missing production configuration::$variable_name is required in the production environment."
+              missing=1
+            fi
+          done
+          if (( missing != 0 )); then
+            exit 1
+          fi
+
+          if [[ ! "$CLOUDFLARE_ACCOUNT_ID" =~ ^[0-9a-fA-F]{32}$ ]]; then
+            echo "::error title=Invalid account ID::CLOUDFLARE_ACCOUNT_ID must be a 32-character hexadecimal value."
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_D1_DATABASE_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+            echo "::error title=Invalid D1 ID::CLOUDFLARE_D1_DATABASE_ID must be a UUID."
+            exit 1
+          fi
+          if [[ "$CLOUDFLARE_D1_DATABASE_ID" == "00000000-0000-0000-0000-000000000000" ]]; then
+            echo "::error title=Local D1 placeholder::CLOUDFLARE_D1_DATABASE_ID must identify a provisioned production database."
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_D1_DATABASE_NAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]{1,62}$ ]]; then
+            echo "::error title=Invalid D1 name::CLOUDFLARE_D1_DATABASE_NAME contains unsupported characters."
+            exit 1
+          fi
+          if [[ ! "$CLOUDFLARE_API_WORKER_NAME" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]] || \
+            [[ ! "$CLOUDFLARE_GAME_WORKER_NAME" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]]; then
+            echo "::error title=Invalid Worker name::Worker names must use lowercase letters, numbers, and hyphens."
+            exit 1
+          fi
+          for url_variable in PRODUCTION_API_URL PRODUCTION_GAME_URL; do
+            url_value="${!url_variable}"
+            if [[ "$url_value" != https://* || "$url_value" == */ || "$url_value" == *" "* ]]; then
+              echo "::error title=Invalid production URL::$url_variable must be an HTTPS origin without a trailing slash."
+              exit 1
+            fi
+          done
+
+          api_config_name="$(sed -n 's/^name = "\(.*\)"$/\1/p' apps/api/wrangler.toml | head -n 1)"
+          game_config_name="$(sed -n 's/^name = "\(.*\)"$/\1/p' apps/game/wrangler.toml | head -n 1)"
+          if [[ "$CLOUDFLARE_API_WORKER_NAME" != "$api_config_name" ]]; then
+            echo "::error title=API Worker name mismatch::CLOUDFLARE_API_WORKER_NAME must match apps/api/wrangler.toml."
+            exit 1
+          fi
+          if [[ "$CLOUDFLARE_GAME_WORKER_NAME" != "$game_config_name" ]]; then
+            echo "::error title=Game Worker name mismatch::CLOUDFLARE_GAME_WORKER_NAME must match apps/game/wrangler.toml."
+            exit 1
+          fi
+
+          api_config="$RUNNER_TEMP/typing-roguelike-api-wrangler.toml"
+          cp apps/api/wrangler.toml "$api_config"
+          sed -i.bak \
+            -e "s|^main = .*|main = \"$GITHUB_WORKSPACE/apps/api/src/worker.ts\"|" \
+            -e "s|^migrations_dir = .*|migrations_dir = \"$GITHUB_WORKSPACE/apps/api/migrations\"|" \
+            -e "s|^database_name = .*|database_name = \"$CLOUDFLARE_D1_DATABASE_NAME\"|" \
+            -e "s|^database_id = .*|database_id = \"$CLOUDFLARE_D1_DATABASE_ID\"|" \
+            "$api_config"
+          rm -f "$api_config.bak"
+          echo "API_WRANGLER_CONFIG=$api_config" >> "$GITHUB_ENV"
+
+      - name: Apply remote D1 migrations
+        id: d1_migration
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bunx wrangler@4.126.0 d1 migrations apply "$CLOUDFLARE_D1_DATABASE_NAME" \
+            --remote \
+            --config "$API_WRANGLER_CONFIG"
+
+      - name: Dry-run and deploy API Worker
+        id: api_deploy
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          wrangler_args=(
+            --config "$API_WRANGLER_CONFIG"
+            --name "$CLOUDFLARE_API_WORKER_NAME"
+            --strict
+            --message "main-$VALIDATED_SHA"
+            --var "CORS_ORIGIN:$PRODUCTION_GAME_URL"
+            --var "API_ORIGIN:$PRODUCTION_API_URL"
+            --var "COOKIE_SECURE:true"
+          )
+          bunx wrangler@4.126.0 deploy "${wrangler_args[@]}" \
+            --dry-run \
+            --outdir "$RUNNER_TEMP/typing-roguelike-api-dry-run"
+          bunx wrangler@4.126.0 deploy "${wrangler_args[@]}"
+
+      - name: Build, dry-run, and deploy game Static Assets Worker
+        id: game_deploy
+        working-directory: apps/game
+        shell: bash
+        env:
+          VITE_API_BASE_URL: ${{ vars.PRODUCTION_API_URL }}
+        run: |
+          set -Eeuo pipefail
+          bun run build
+          bunx wrangler@4.126.0 deploy \
+            --config wrangler.toml \
+            --name "$CLOUDFLARE_GAME_WORKER_NAME" \
+            --strict \
+            --message "main-$VALIDATED_SHA" \
+            --dry-run \
+            --outdir "$RUNNER_TEMP/typing-roguelike-game-dry-run"
+          bunx wrangler@4.126.0 deploy \
+            --config wrangler.toml \
+            --name "$CLOUDFLARE_GAME_WORKER_NAME" \
+            --strict \
+            --message "main-$VALIDATED_SHA"
+
+      - name: Smoke test API health
+        id: api_smoke
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          response="$(curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 3 \
+            --retry-delay 2 \
+            --retry-connrefused \
+            --max-time 20 \
+            -H "Origin: $PRODUCTION_GAME_URL" \
+            "$PRODUCTION_API_URL/health")"
+          if ! grep -Fq '"status":"ok"' <<< "$response"; then
+            echo "::error title=API health smoke test failed::The API health response did not report status ok."
+            exit 1
+          fi
+
+      - name: Smoke test game URL
+        id: game_smoke
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          page="$(curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 3 \
+            --retry-delay 2 \
+            --retry-connrefused \
+            --max-time 20 \
+            -H 'Accept: text/html' \
+            -H 'Sec-Fetch-Mode: navigate' \
+            "$PRODUCTION_GAME_URL/")"
+          if ! grep -Eiq '<!doctype html|<html' <<< "$page"; then
+            echo "::error title=Game URL smoke test failed::The game URL did not return an HTML shell."
+            exit 1
+          fi
+
+      - name: Write deployment summary
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          {
+            echo
+            echo "## Production deployment summary"
+            echo
+            echo "- Validated main SHA: `$VALIDATED_SHA`"
+            echo "- Validation workflow run: `$VALIDATED_WORKFLOW_RUN_ID`"
+            echo "- API Worker: `$CLOUDFLARE_API_WORKER_NAME`"
+            echo "- Game Worker: `$CLOUDFLARE_GAME_WORKER_NAME`"
+            echo "- D1 database: `$CLOUDFLARE_D1_DATABASE_NAME` (binding `DB`, remote migrations)"
+            echo "- API URL: $PRODUCTION_API_URL"
+            echo "- Game URL: $PRODUCTION_GAME_URL"
+            echo
+            echo "### Ordered stage results"
+            echo
+            echo "1. Main commit gate: `${{ steps.gate.outcome }}`"
+            echo "2. Production configuration: `${{ steps.config.outcome }}`"
+            echo "3. D1 remote migration: `${{ steps.d1_migration.outcome }}`"
+            echo "4. API Worker dry-run and deploy: `${{ steps.api_deploy.outcome }}`"
+            echo "5. Game build, Static Assets dry-run and deploy: `${{ steps.game_deploy.outcome }}`"
+            echo "6. API `/health` smoke test: `${{ steps.api_smoke.outcome }}`"
+            echo "7. Game URL smoke test: `${{ steps.game_smoke.outcome }}`"
+          } >> "$GITHUB_STEP_SUMMARY"
