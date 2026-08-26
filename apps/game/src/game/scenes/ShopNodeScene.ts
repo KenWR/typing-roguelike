@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { GeneratedMapNode, RunState, ShopOffer } from "@typing-roguelike/shared";
 import { RUN_RESUME_CHECKPOINT_VERSION } from "../run/run-resume-checkpoint";
 import { runSession } from "../run/run-session";
+import { formatShopOfferLabel } from "../shop/shop-offer-label";
 import {
   completeShopNode,
   createShopNodeFlow,
@@ -45,7 +46,7 @@ export class ShopNodeScene extends Phaser.Scene {
     this.statusText = this.add.text(36, 76, `보유 재화: ${this.flow.runState.runCurrency}`, { fontFamily: "Galmuri9, monospace", fontSize: "18px", color: "#f5cf72" });
 
     this.flow.offers.forEach((offer, index) => {
-      const button = this.add.text(36, 126 + index * 52, `${offer.equipmentId} · ${offer.price}`, {
+      const button = this.add.text(36, 126 + index * 52, formatShopOfferLabel(offer), {
         fontFamily: "Galmuri9, monospace",
         fontSize: "18px",
         color: "#f9fafb",
