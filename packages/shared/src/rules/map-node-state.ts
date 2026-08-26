@@ -1,4 +1,5 @@
 import type { MapNodeStatus, RunMapState } from "../contracts/backend/run-state.ts";
+import { MAP_ROUND_COUNT, generateNodeChoices } from "./map-generation.ts";
 
 export const MAP_NODE_STATUSES = [
 	"locked",
@@ -54,6 +55,12 @@ export const completeMapNode = (
 		throw new Error(`Map node ${nodeId} is not in progress.`);
 	}
 
+	const currentNode = generateNodeChoices(
+		map.seed,
+		map.currentRound,
+		map.choicePath,
+	).find((node) => node.key === nodeId);
+
 	const nodeStatuses: Record<string, MapNodeStatus> = {
 		...map.nodeStatuses,
 		[nodeId]: "cleared",
@@ -66,9 +73,12 @@ export const completeMapNode = (
 		}
 	}
 
+	const advancesRound = currentNode !== undefined && map.currentRound < MAP_ROUND_COUNT;
 	return {
 		map: {
 			...map,
+			currentRound: advancesRound ? map.currentRound + 1 : map.currentRound,
+			choicePath: advancesRound ? [...map.choicePath, currentNode.choice] : [...map.choicePath],
 			nodeStatuses,
 		},
 		applied: true,
