@@ -9,13 +9,16 @@ import { MapScene } from "./CoreFlowScenes";
 import { SCENE_KEYS } from "./scene-contract";
 
 const MAP_VIEW_TOP = 292;
-const MAP_VIEW_BOTTOM_MARGIN = 24;
+const MAP_VIEW_BOTTOM_MARGIN = 30;
 const MAP_ROW_GAP = 150;
 const MAP_BOSS_Y = 70;
 const MAP_NODE_WIDTH = 130;
 const MAP_NODE_HEIGHT = 86;
-const MAP_SIDE_GUTTER = 340;
-const MAP_LANE_PADDING = 16;
+const MAP_VIEW_SIDE_PADDING = 16;
+const MAP_LANE_SIDE_PADDING = 24;
+const MAP_MIN_LANE_GAP = 40;
+const MAP_MAX_LANE_GAP = 220;
+const MAP_CURRENT_NODE_BOTTOM_GAP = 14;
 
 const NODE_FILL: Record<string, number> = {
   locked: 0x374151,
@@ -32,6 +35,7 @@ const NODE_LABEL: Record<string, string> = {
 };
 
 export class InteractiveMapScene extends MapScene {
+  protected override readonly renderLegacyMapChoices = false;
   private routeRunState?: Readonly<RunState>;
   private selectionLocked = false;
 
@@ -50,23 +54,31 @@ export class InteractiveMapScene extends MapScene {
     const { width, height } = this.scale.gameSize;
     const view = createMapHudView(activeRun);
     const centerX = width / 2;
-    const mapLeft = Math.max(MAP_SIDE_GUTTER, centerX - 310);
-    const mapRight = Math.min(width - MAP_SIDE_GUTTER, centerX + 310);
-    const mapWidth = Math.max(360, mapRight - mapLeft);
-    const laneLeft = mapLeft + MAP_NODE_WIDTH / 2 + MAP_LANE_PADDING;
-    const laneRight = mapRight - MAP_NODE_WIDTH / 2 - MAP_LANE_PADDING;
-    const laneXs = [laneLeft, (laneLeft + laneRight) / 2, laneRight];
-    const mapBottom = height - MAP_VIEW_BOTTOM_MARGIN;
+    const mapLeft = MAP_VIEW_SIDE_PADDING;
+    const mapRight = width - MAP_VIEW_SIDE_PADDING;
+    const mapWidth = Math.max(1, mapRight - mapLeft);
+    const laneAreaWidth = Math.max(0, mapWidth - MAP_LANE_SIDE_PADDING * 2);
+    const desiredLaneGap = (laneAreaWidth - MAP_NODE_WIDTH * 3) / 2;
+    const laneGap = Phaser.Math.Clamp(desiredLaneGap, MAP_MIN_LANE_GAP, MAP_MAX_LANE_GAP);
+    const laneContentWidth = MAP_NODE_WIDTH * 3 + laneGap * 2;
+    const laneContentLeft = centerX - laneContentWidth / 2;
+    const laneXs = [
+      laneContentLeft + MAP_NODE_WIDTH / 2,
+      centerX,
+      laneContentLeft + laneContentWidth - MAP_NODE_WIDTH / 2,
+    ];
+    const mapBottom = Math.max(MAP_VIEW_TOP + MAP_NODE_HEIGHT, height - MAP_VIEW_BOTTOM_MARGIN);
+    const mapViewportHeight = Math.max(MAP_NODE_HEIGHT, mapBottom - MAP_VIEW_TOP);
     const floorY = (round: number): number => MAP_BOSS_Y + (10 - round) * MAP_ROW_GAP;
 
     this.add
-      .rectangle(centerX, (MAP_VIEW_TOP + height) / 2, mapWidth, height - MAP_VIEW_TOP, 0x111827, 1)
+      .rectangle(centerX, MAP_VIEW_TOP + mapViewportHeight / 2, mapWidth, mapViewportHeight, 0x111827, 1)
       .setOrigin(0.5)
       .setDepth(80);
 
-    const maskShape = this.make.graphics({ x: 0, y: 0, add: false });
+    const maskShape = this.make.graphics({ x: 0, y: 0 }, false);
     maskShape.fillStyle(0xffffff);
-    maskShape.fillRect(mapLeft, MAP_VIEW_TOP, mapWidth, mapBottom - MAP_VIEW_TOP);
+    maskShape.fillRect(mapLeft, MAP_VIEW_TOP, mapWidth, mapViewportHeight);
     const mapMask = maskShape.createGeometryMask();
 
     const mapContainer = this.add.container(0, 0).setDepth(90).setMask(mapMask);
@@ -80,7 +92,16 @@ export class InteractiveMapScene extends MapScene {
         if (next === undefined || next.round <= node.round) continue;
         const nextX = laneXs[next.choice - 1] ?? centerX;
         const nextY = floorY(next.round);
-        const line = this.add.line(0, 0, x, y - MAP_NODE_HEIGHT / 2, nextX, nextY + MAP_NODE_HEIGHT / 2, 0x4b5563)
+        const line = this.add
+          .line(
+            0,
+            0,
+            x,
+            y - MAP_NODE_HEIGHT / 2,
+            nextX,
+            nextY + MAP_NODE_HEIGHT / 2,
+            0x4b5563,
+          )
           .setOrigin(0)
           .setLineWidth(3);
         mapContainer.add(line);
@@ -150,10 +171,11 @@ export class InteractiveMapScene extends MapScene {
 
     const floorOneY = floorY(1);
     const bossY = floorY(10);
-    const minY = mapBottom - floorOneY;
-    const maxY = MAP_VIEW_TOP + 52 - bossY;
+    const currentNodeViewportY = mapBottom - MAP_NODE_HEIGHT / 2 - MAP_CURRENT_NODE_BOTTOM_GAP;
+    const minY = currentNodeViewportY - floorOneY;
+    const maxY = MAP_VIEW_TOP + MAP_NODE_HEIGHT / 2 + MAP_CURRENT_NODE_BOTTOM_GAP - bossY;
     const currentY = floorY(Math.min(10, Math.max(1, activeRun.map.currentRound)));
-    mapContainer.y = Phaser.Math.Clamp(mapBottom - currentY, minY, maxY);
+    mapContainer.y = Phaser.Math.Clamp(currentNodeViewportY - currentY, minY, maxY);
 
     this.input.on(
       "wheel",
@@ -168,7 +190,7 @@ export class InteractiveMapScene extends MapScene {
     );
 
     this.add
-      .text(centerX, height - 16, "마우스 휠로 전체 경로 스크롤", {
+      .text(centerX, height - 8, "마우스 휠로 전체 경로 스크롤", {
         fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
         fontSize: "13px",
         color: "#9ca3af",
