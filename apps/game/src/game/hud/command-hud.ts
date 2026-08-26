@@ -324,10 +324,11 @@ export class CommandHud {
       .rectangle(0, 0, this.panelWidth, this.panelHeight, 0x0b1220, 0.94)
       .setOrigin(0)
       .setStrokeStyle(2, 0x64748b, 0.95);
-    this.title = scene.add.text(18, 10, "COMMAND // AVAILABLE", {
-      color: "#94a3b8",
-      fontFamily: "Galmuri9, monospace",
-      fontSize: "13px",
+    this.title = scene.add.text(18, 10, "TYPE // COMMAND // COST // DAMAGE", {
+      color: "#64748b",
+      fontFamily: "monospace",
+      fontSize: "11px",
+      fontStyle: "bold",
     });
     this.commandText = scene.add.text(18, 30, "", {
       color: "#f8fafc",
@@ -424,7 +425,10 @@ export class CommandHud {
   private resolveEffects(): CommandHudEffect[] {
     const effectScene = this.scene as EffectAwareScene;
     const currentSkill = this.skills.find((skill) => skill.command === this.state.command);
-    const skillEffects = createSkillCommandEffects(currentSkill);
+    // Status icons in the command panel describe a possible result, not an
+    // active status. Active bleed/weaken/etc. effects are rendered by the
+    // actor HUD, so they must not appear beside damage previews while idle.
+    const skillEffects = createSkillCommandEffects(currentSkill).filter((effect) => !effect.id.includes(":status:"));
     const timedApEffects = createTimedApCommandEffects(effectScene.actionPoints?.snapshot.timedEffects);
     return [...skillEffects, ...timedApEffects];
   }
@@ -471,7 +475,7 @@ export class CommandHud {
     frame.strokeRoundedRect(0, 0, EFFECT_SIZE, EFFECT_SIZE, EFFECT_RADIUS);
     const icon = this.scene.add
       .image(EFFECT_SIZE / 2, EFFECT_SIZE / 2, MISSING_ASSET_TEXTURE_KEY)
-      .setDisplaySize(EFFECT_SIZE - 4, EFFECT_SIZE - 4);
+      .setDisplaySize(EFFECT_SIZE - 8, EFFECT_SIZE - 8);
 
     const maskShape = this.scene.make.graphics({ x: 0, y: 0 });
     maskShape.setVisible(false);
@@ -557,8 +561,11 @@ export class CommandHud {
     this.title.setX(contentLeft);
     const inputY = Math.max(58, this.panelHeight - 42);
     const listHeight = Math.max(24, inputY - 34);
-    const previewText = formatAvailableSkillPreviews(this.skills, this.resolveApCost, this.resolveDamage);
-    const previewLineCount = Math.max(1, previewText.split("\n").length);
+    const previewLines = formatAvailableSkillPreviews(this.skills, this.resolveApCost, this.resolveDamage).split("\n");
+    const previewHeader = previewLines.shift() ?? "TYPE // COMMAND // COST // DAMAGE";
+    const previewText = previewLines.join("\n");
+    this.title.setText(previewHeader);
+    const previewLineCount = Math.max(1, previewLines.length);
     const previewFontSize = Math.max(10, Math.min(commandFontSize, Math.floor(listHeight / previewLineCount)));
     this.commandText
       .setPosition(contentLeft, 30)
