@@ -42,6 +42,35 @@ describe("CommandInputBuffer", () => {
     expect(completed).toEqual(["휘두르기", "휘두르기"]);
   });
 
+  test("starts a fresh cycle when the hidden input appends another command", () => {
+    const buffer = new CommandInputBuffer("베기");
+    const completed: string[] = [];
+    buffer.onCompleted(({ input }) => completed.push(input));
+
+    expect(buffer.updateInput("베기").status).toBe("complete");
+    expect(buffer.updateInput("베기베")).toMatchObject({
+      input: "베",
+      committedInput: "베",
+      status: "matching",
+    });
+    expect(buffer.updateInput("베기베기").status).toBe("complete");
+
+    expect(completed).toEqual(["베기", "베기"]);
+  });
+
+  test("allows clearing the DOM value and typing the same command again", () => {
+    const buffer = new CommandInputBuffer("찌르기");
+    let completionCount = 0;
+    buffer.onCompleted(() => {
+      completionCount += 1;
+    });
+
+    buffer.updateInput("찌르기");
+    expect(buffer.updateInput("").status).toBe("idle");
+    expect(buffer.updateInput("찌르기").status).toBe("complete");
+    expect(completionCount).toBe(2);
+  });
+
   test("does not commit or complete during IME composition", () => {
     const buffer = new CommandInputBuffer("가속");
     let completionCount = 0;
