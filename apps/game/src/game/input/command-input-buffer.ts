@@ -41,6 +41,7 @@ export class CommandInputBuffer {
   private status: CommandInputStatus = "idle";
   private completionEmitted = false;
   private completedRawInput: string | null = null;
+  private boundEnterResetElement: HTMLInputElement | null = null;
   private readonly completedListeners = new Set<CommandCompletedListener>();
   private readonly statusChangedListeners = new Set<CommandStatusChangedListener>();
 
@@ -71,6 +72,7 @@ export class CommandInputBuffer {
     rawInput: string,
     options: UpdateInputOptions = {},
   ): CommandInputSnapshot {
+    this.bindEnterResetIfAvailable();
     const input = this.prepareInputForNextCycle(rawInput);
     this.input = input;
 
@@ -86,10 +88,6 @@ export class CommandInputBuffer {
       this.completionEmitted = true;
       this.completedRawInput = rawInput;
       this.emitCompleted();
-
-      const completedSnapshot = this.snapshot;
-      this.clearCompletedInput();
-      return completedSnapshot;
     }
 
     return this.snapshot;
@@ -118,10 +116,24 @@ export class CommandInputBuffer {
     };
   }
 
-  private clearCompletedInput(): void {
-    this.input = "";
-    this.committedInput = "";
-    this.updateStatus("idle");
+  private bindEnterResetIfAvailable(): void {
+    if (typeof document === "undefined") return;
+
+    const element = document.getElementById("command-input");
+    if (!(element instanceof HTMLInputElement)) return;
+    if (this.boundEnterResetElement === element) return;
+
+    this.boundEnterResetElement = element;
+    element.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.isComposing || this.status === "composing") {
+        return;
+      }
+
+      event.preventDefault();
+      element.value = "";
+      this.reset();
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+    });
   }
 
   private prepareInputForNextCycle(rawInput: string): string {
