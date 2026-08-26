@@ -11,6 +11,7 @@ import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import { resolveEnemyTextureKey, resolveEnemyVisualState } from "../assets/enemy-visual-assets";
 import { resolvePlayerAttackTextureKey, resolvePlayerTextureKey } from "../assets/player-visual-assets";
 import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
+import { resolveEnemyAttackType } from "../combat/enemy-attack-type";
 import { ActionPointResource } from "../combat/action-point-resource";
 import { playComboBreakSound } from "../audio/runtime-audio";
 import { CombatApEffectController } from "../combat/combat-ap-effects";
@@ -271,7 +272,7 @@ export class CombatFoundationScene extends Phaser.Scene {
           targetId: "player",
           attackId: action.id,
           attackName: action.name,
-          attackType: action.kind === "defense" ? "defense" : "attack",
+          attackType: resolveEnemyAttackType(action),
           windupMs: action.windupMs,
           recoveryMs: action.recoveryMs,
         });

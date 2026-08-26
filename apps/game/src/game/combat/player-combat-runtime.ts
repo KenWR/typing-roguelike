@@ -11,6 +11,7 @@ import type { CombatEnemyInitialization, CombatEncounterInitialization } from ".
 import type { CombatState, CombatUpdate } from "./combat-state";
 import { ShieldPool, type ShieldInstance } from "./shield-pool";
 import type { EnemyAttackTimeline, EnemyAttackEvent, EnemyAttackTimelineUpdate } from "./enemy-attack-timeline";
+import { resolveEnemyAttackType } from "./enemy-attack-type";
 import { EnemyImpactResolver } from "./enemy-impact-resolver";
 import { SkillCombatantState, SkillImpactResolver, type TimedStatusEffect } from "./skill-impact-resolver";
 import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome-routing";
@@ -454,7 +455,7 @@ export class PlayerCombatRuntime {
       targetId: this.player.id,
       attackId: action.id,
       attackName: action.name,
-      attackType: action.kind === "defense" ? "defense" : "attack",
+      attackType: resolveEnemyAttackType(action),
       windupMs: action.windupMs,
       recoveryMs: action.recoveryMs,
     });
