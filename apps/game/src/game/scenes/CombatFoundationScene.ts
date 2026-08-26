@@ -23,7 +23,7 @@ import { RelicHud } from "../hud/relic-hud";
 import { CommandInputBuffer } from "../input/command-input-buffer";
 import { installCommandInputClipboardGuard } from "../input/command-input-clipboard-guard";
 import { CommandInputRecoveryController, updateCommandInputElement } from "../input/command-input-recovery";
-import { createCombatLayout } from "../layout/combat-layout";
+import { createCombatLayout, ENEMY_HEALTH_BAR_OFFSET_Y } from "../layout/combat-layout";
 import { persistCombatRunTransition } from "../run/persist-terminal-run";
 import { MENU_SETTINGS_REGISTRY_KEYS } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
@@ -94,6 +94,7 @@ export class CombatFoundationScene extends Phaser.Scene {
   private commandInputCleanup?: () => void;
   private commandCompletionCleanup?: () => void;
   private commandStatusCleanup?: () => void;
+  private commandSubmitCleanup?: () => void;
   private combatInitialization?: CombatEncounterInitialization;
   private runState?: Readonly<RunState>;
   private mapNode?: GeneratedMapNode;
@@ -174,7 +175,9 @@ export class CombatFoundationScene extends Phaser.Scene {
       const healthBar = new EnemyHealthBar(this, enemy.hp, enemy.hp, {
         maxShield: resolveEnemyMaxShield(enemy),
       });
-      healthBar.container.setPosition(0, -158);
+      // Keep the telegraph panel directly above the HP bar in the combat
+      // layout, with enough separation to read both at a glance.
+      healthBar.container.setPosition(0, ENEMY_HEALTH_BAR_OFFSET_Y);
       placeholder.add(healthBar.container);
       this.enemyHealthBars.set(enemy.instanceId, healthBar);
       const marker = this.add
@@ -280,6 +283,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       this.displayedEnemyShield = this.playerCombatRuntime.enemyShield;
       this.enemyAttackGauge.update(this.enemyAttackTimeline.snapshot);
       this.updateEnemyHealth(this.playerCombatRuntime.enemyHp);
+      this.refreshTargetPresentation();
     }
 
     const skillStarter = new SkillCommandStarter({
@@ -311,12 +315,17 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandStatusCleanup = this.commandInputBuffer.onStatusChanged(({ snapshot }) => {
       if (snapshot.status === "complete") {
         this.feedback?.trigger("command-success");
-      } else if (snapshot.status === "incorrect") {
+      }
+    });
+    this.commandSubmitCleanup = this.commandInputBuffer.onSubmitted(({ snapshot }) => {
+      if (snapshot.input.length === 0) return;
+      const combo = this.skillStarter?.comboSnapshot;
+      if (snapshot.status !== "complete" || combo?.lastBreakReason === "incorrect-input") {
         this.apEffects.onCommandFailed();
         this.feedback?.trigger("command-failure");
         playComboBreakSound();
-        this.updateComboDisplay(this.skillStarter?.comboSnapshot);
       }
+      this.updateComboDisplay(combo);
     });
     this.createCommandInputElement();
     this.createPauseHandling();
@@ -595,6 +604,8 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandCompletionCleanup = undefined;
     this.commandStatusCleanup?.();
     this.commandStatusCleanup = undefined;
+    this.commandSubmitCleanup?.();
+    this.commandSubmitCleanup = undefined;
     this.isComposing = false;
   }
 

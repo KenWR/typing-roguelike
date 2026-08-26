@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { defineSkill } from "@typing-roguelike/shared";
 import { ActionPointResource } from "../src/game/combat/action-point-resource";
 import { CombatState } from "../src/game/combat/combat-state";
-import {
-  SkillCommandStarter,
-  type SkillStartResult,
-} from "../src/game/combat/skill-command-starter";
+import { SkillCommandStarter, type SkillStartResult } from "../src/game/combat/skill-command-starter";
 import { CommandInputBuffer } from "../src/game/input/command-input-buffer";
 
 const magicShield = defineSkill({
@@ -114,9 +111,28 @@ describe("SkillCommandStarter", () => {
 
     input.reset();
     input.updateInput("매직X");
+    expect(starter.comboSnapshot.count).toBe(2);
+    input.submit();
     expect(starter.comboSnapshot).toEqual({
       count: 0,
       multiplier: 1,
+      lastBreakReason: "incorrect-input",
+    });
+  });
+
+  test("does not break a combo until an incomplete command is submitted", () => {
+    const { input, starter, results } = createFixture(6);
+
+    input.updateInput(input.snapshot.command);
+    expect(results[0]).toMatchObject({ started: true, combo: { count: 1 } });
+
+    input.reset();
+    input.updateInput(input.snapshot.command.slice(0, -1));
+    expect(starter.comboSnapshot.count).toBe(1);
+    input.submit();
+
+    expect(starter.comboSnapshot).toMatchObject({
+      count: 0,
       lastBreakReason: "incorrect-input",
     });
   });
@@ -153,9 +169,7 @@ describe("SkillCommandStarter", () => {
     targetId = "enemy:2";
     input.updateInput("베기");
 
-    expect(
-      combat.snapshot.actions.map((action) => action.targetId),
-    ).toEqual(["enemy:1", "enemy:2"]);
+    expect(combat.snapshot.actions.map((action) => action.targetId)).toEqual(["enemy:1", "enemy:2"]);
     expect(results.every((result) => result.started)).toBe(true);
   });
 });

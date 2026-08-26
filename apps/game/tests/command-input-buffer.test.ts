@@ -55,6 +55,16 @@ describe("CommandInputBuffer", () => {
     });
   });
 
+  test("submits the current cycle before clearing it", () => {
+    const buffer = new CommandInputBuffer("test");
+    const submitted: string[] = [];
+    buffer.onSubmitted(({ snapshot }) => submitted.push(`${snapshot.input}:${snapshot.status}`));
+
+    buffer.updateInput("testX");
+    expect(buffer.submit()).toMatchObject({ input: "", status: "idle" });
+    expect(submitted).toEqual(["testX:incorrect"]);
+  });
+
   test("emits completion once until the buffer is reset", () => {
     const buffer = new CommandInputBuffer("휘두르기");
     const completed: string[] = [];

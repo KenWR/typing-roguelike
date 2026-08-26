@@ -43,7 +43,11 @@ export const createEnemyHealthBarState = (
   const requestedShield = Math.max(0, Math.round(safeNumber(options.shield, 0)));
   const maxShield = Math.max(0, Math.round(safeNumber(options.maxShield, requestedShield)));
   const shield = Math.min(requestedShield, maxShield);
-  const healthRatio = safeMaxHp > 0 ? safeCurrentHp / safeMaxHp : 0;
+  // HP and shield share one track. When their sum is greater than the
+  // configured HP capacity, scale both values against the combined total so
+  // the shield fill never extends beyond the track.
+  const barTotal = Math.max(safeMaxHp, safeCurrentHp + shield);
+  const healthRatio = barTotal > 0 ? safeCurrentHp / barTotal : 0;
 
   return {
     currentHp: safeCurrentHp,
@@ -51,7 +55,7 @@ export const createEnemyHealthBarState = (
     healthRatio,
     shield,
     maxShield,
-    shieldRatio: safeMaxHp > 0 ? Math.min(shield / safeMaxHp, 1) : 0,
+    shieldRatio: barTotal > 0 ? shield / barTotal : 0,
     targeted: options.targeted === true,
     defeated: safeCurrentHp <= 0,
   };
