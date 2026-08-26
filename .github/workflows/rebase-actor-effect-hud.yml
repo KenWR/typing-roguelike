@@ -1,0 +1,59 @@
+name: Sync actor effect HUD with main
+
+on:
+  push:
+    branches:
+      - feat/344-actor-effect-hud
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/344-actor-effect-hud
+          fetch-depth: 0
+      - name: Merge latest main
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git fetch origin main
+          git merge --no-edit -X ours origin/main
+      - name: Preserve latest combat scene behavior
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('apps/game/src/game/scenes/CombatFoundationScene.ts')
+          text = path.read_text()
+          old = 'this.playerCombatRuntime?.registerAction(result.actionId, result.skill);'
+          new = '''this.playerCombatRuntime?.registerAction(\n          result.actionId,\n          result.skill,\n          result.combo.multiplier,\n        );'''
+          if old in text:
+              text = text.replace(old, new, 1)
+          for needle in [
+              'this.enemyAttackGauge.update(enemyUpdate.snapshot);',
+              'this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);',
+          ]:
+              addition = needle + '\n      this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);'
+              if addition not in text:
+                  text = text.replace(needle, addition, 1)
+          needle = 'const targetId = this.targeting?.targetId;'
+          addition = needle + '\n    this.enemyAttackGauge?.setTargetedEnemy(targetId);'
+          if addition not in text:
+              text = text.replace(needle, addition, 1)
+          path.write_text(text)
+          PY
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - run: bunx biome format --write apps/game/src/game/scenes/CombatFoundationScene.ts
+      - name: Commit and push sync
+        run: |
+          git add apps/game/src/game/scenes/CombatFoundationScene.ts
+          if ! git diff --cached --quiet; then
+            git commit -m "merge(main): preserve latest combat HUD behavior"
+          fi
+          git push origin HEAD:feat/344-actor-effect-hud

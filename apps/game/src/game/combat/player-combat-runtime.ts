@@ -4,33 +4,16 @@ import {
   type RunState,
   type SkillDefinition,
 } from "@typing-roguelike/shared";
-import {
-  playPlayerHitSound,
-  playRuntimeBgm,
-  playWeaponImpactSound,
-} from "../audio/runtime-audio";
+import { playPlayerHitSound, playRuntimeBgm, playWeaponImpactSound } from "../audio/runtime-audio";
 import { ActionPointResource } from "./action-point-resource";
 import { CombatApEffectController } from "./combat-ap-effects";
-import type {
-  CombatEnemyInitialization,
-  CombatEncounterInitialization,
-} from "./encounter-initializer";
-import { CombatState, type CombatUpdate } from "./combat-state";
-import { ShieldPool } from "./shield-pool";
-import {
-  EnemyAttackTimeline,
-  type EnemyAttackEvent,
-  type EnemyAttackTimelineUpdate,
-} from "./enemy-attack-timeline";
+import type { CombatEnemyInitialization, CombatEncounterInitialization } from "./encounter-initializer";
+import type { CombatState, CombatUpdate } from "./combat-state";
+import { ShieldPool, type ShieldInstance } from "./shield-pool";
+import type { EnemyAttackEvent, EnemyAttackTimeline, EnemyAttackTimelineUpdate } from "./enemy-attack-timeline";
 import { EnemyImpactResolver } from "./enemy-impact-resolver";
-import {
-  SkillCombatantState,
-  SkillImpactResolver,
-} from "./skill-impact-resolver";
-import {
-  finalizeCombatOutcome,
-  type CombatOutcomeRoute,
-} from "./combat-outcome-routing";
+import { SkillCombatantState, SkillImpactResolver, type TimedStatusEffect } from "./skill-impact-resolver";
+import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome-routing";
 
 export type PlayerCombatRuntimeConfig = Readonly<{
   combat: CombatState;
@@ -52,6 +35,10 @@ export type PlayerCombatRuntimeUpdate = Readonly<{
   enemyHp: Readonly<Record<string, number>>;
   playerShield: number;
   enemyShield: Readonly<Record<string, number>>;
+  playerStatuses: readonly TimedStatusEffect[];
+  enemyStatuses: Readonly<Record<string, readonly TimedStatusEffect[]>>;
+  playerShields: readonly ShieldInstance[];
+  enemyShields: Readonly<Record<string, readonly ShieldInstance[]>>;
   route: CombatOutcomeRoute | null;
 }>;
 
@@ -71,9 +58,7 @@ type OrderedRuntimeImpact =
       sequence: number;
     }>;
 
-const resolveAttackPower = (
-  initialization: CombatEncounterInitialization,
-): number => {
+const resolveAttackPower = (initialization: CombatEncounterInitialization): number => {
   const total = initialization.player.equipmentIds.reduce((sum, equipmentId) => {
     const equipment = EQUIPMENT_CONFIGS.find(({ id }) => id === equipmentId);
     return sum + (equipment?.baseAttack ?? 0);
@@ -107,10 +92,7 @@ export class PlayerCombatRuntime {
   private readonly enemyShieldIdByTimelineId = new Map<string, string>();
   private readonly player: SkillCombatantState;
   private readonly enemies = new Map<string, SkillCombatantState>();
-  private readonly skillsByActionId = new Map<
-    string,
-    Readonly<{ skill: SkillDefinition; damageMultiplier: number }>
-  >();
+  private readonly skillsByActionId = new Map<string, Readonly<{ skill: SkillDefinition; damageMultiplier: number }>>();
   private route: CombatOutcomeRoute | null = null;
   private nextEnemyTimelineSequence = 1;
 
@@ -161,15 +143,7 @@ export class PlayerCombatRuntime {
     }
   }
 
-  /**
-   * 커맨드가 완성된 순간 호출됩니다. 스킬의 실드는 선딜을 기다리지 않고
-   * 이 시점에 즉시 부여됩니다.
-   */
-  registerAction(
-    actionId: string,
-    skill: SkillDefinition,
-    damageMultiplier = 1,
-  ): void {
+  registerAction(actionId: string, skill: SkillDefinition, damageMultiplier = 1): void {
     if (this.route !== null) return;
     this.skillsByActionId.set(actionId, { skill, damageMultiplier });
     this.grantSkillShields(actionId, skill);
@@ -190,26 +164,37 @@ export class PlayerCombatRuntime {
 
   get enemyHp(): Readonly<Record<string, number>> {
     return Object.fromEntries(
-      Array.from(this.enemies, ([enemyId, enemy]) => [
-        enemyId,
-        enemy.snapshot.health.currentHp,
-      ]),
+      Array.from(this.enemies, ([enemyId, enemy]) => [enemyId, enemy.snapshot.health.currentHp]),
     );
   }
 
-  /** 커맨드 완성으로 얻어 아직 남아 있는 플레이어 실드량입니다. */
+  get playerStatuses(): readonly TimedStatusEffect[] {
+    return this.player.timedStatuses;
+  }
+
+  get enemyStatuses(): Readonly<Record<string, readonly TimedStatusEffect[]>> {
+    return Object.fromEntries(Array.from(this.enemies, ([enemyId, enemy]) => [enemyId, enemy.timedStatuses]));
+  }
+
   get playerShield(): number {
     return this.shields.totalAmount(this.player.id, this.elapsedMs);
   }
 
-  /** 선딜 중이라 실드가 차 있는 적들의 남은 실드량입니다. */
+  get playerShields(): readonly ShieldInstance[] {
+    return this.shields.activeShields(this.player.id, this.elapsedMs);
+  }
+
   get enemyShield(): Readonly<Record<string, number>> {
     const atMs = this.elapsedMs;
     return Object.fromEntries(
-      Array.from(this.enemies.keys(), (enemyId) => [
-        enemyId,
-        this.shields.totalAmount(enemyId, atMs),
-      ]),
+      Array.from(this.enemies.keys(), (enemyId) => [enemyId, this.shields.totalAmount(enemyId, atMs)]),
+    );
+  }
+
+  get enemyShields(): Readonly<Record<string, readonly ShieldInstance[]>> {
+    const atMs = this.elapsedMs;
+    return Object.fromEntries(
+      Array.from(this.enemies.keys(), (enemyId) => [enemyId, this.shields.activeShields(enemyId, atMs)]),
     );
   }
 
@@ -218,15 +203,15 @@ export class PlayerCombatRuntime {
   }
 
   advance(deltaMs: number): PlayerCombatRuntimeUpdate {
+    this.player.advanceStatuses(deltaMs);
+    for (const enemy of this.enemies.values()) enemy.advanceStatuses(deltaMs);
+
     const combatUpdate = this.combat.advance(deltaMs);
     const enemyTimelineUpdate = this.enemyTimeline.advance(deltaMs);
 
     if (this.route === null) {
       this.releaseFinishedWindupShields(enemyTimelineUpdate.snapshot);
-      this.resolveImpactsChronologically(
-        combatUpdate,
-        enemyTimelineUpdate.events,
-      );
+      this.resolveImpactsChronologically(combatUpdate, enemyTimelineUpdate.events);
     }
 
     return {
@@ -240,22 +225,18 @@ export class PlayerCombatRuntime {
       enemyHp: this.enemyHp,
       playerShield: this.playerShield,
       enemyShield: this.enemyShield,
+      playerStatuses: this.playerStatuses,
+      enemyStatuses: this.enemyStatuses,
+      playerShields: this.playerShields,
+      enemyShields: this.enemyShields,
       route: this.route,
     };
   }
 
-  private resolveImpactsChronologically(
-    combatUpdate: CombatUpdate,
-    enemyEvents: readonly EnemyAttackEvent[],
-  ): void {
+  private resolveImpactsChronologically(combatUpdate: CombatUpdate, enemyEvents: readonly EnemyAttackEvent[]): void {
     const playerImpacts: OrderedRuntimeImpact[] = combatUpdate.events
       .filter((event) => event.type === "impact-resolved")
-      .map((event, sequence) => ({
-        source: "player",
-        event,
-        priority: 1,
-        sequence,
-      }));
+      .map((event, sequence) => ({ source: "player", event, priority: 1, sequence }));
     const enemyImpacts: OrderedRuntimeImpact[] = enemyEvents
       .filter((event) => event.type === "impact-resolved")
       .map((event, sequence) => ({
@@ -266,17 +247,12 @@ export class PlayerCombatRuntime {
       }));
     const orderedImpacts = [...playerImpacts, ...enemyImpacts].sort(
       (left, right) =>
-        left.event.atMs - right.event.atMs ||
-        left.priority - right.priority ||
-        left.sequence - right.sequence,
+        left.event.atMs - right.event.atMs || left.priority - right.priority || left.sequence - right.sequence,
     );
 
     for (const impact of orderedImpacts) {
-      if (impact.source === "player") {
-        this.resolvePlayerImpact(impact.event);
-      } else {
-        this.resolveEnemyImpact(impact.event);
-      }
+      if (impact.source === "player") this.resolvePlayerImpact(impact.event);
+      else this.resolveEnemyImpact(impact.event);
       this.resolveOutcome();
       if (this.route !== null) break;
     }
@@ -285,20 +261,13 @@ export class PlayerCombatRuntime {
     this.shields.pruneExpired(this.elapsedMs);
   }
 
-  /** 선딜이 끝나는 순간 적의 실드는 남은 양과 상관없이 사라집니다. */
-  private releaseFinishedWindupShields(
-    timeline: Readonly<EnemyAttackTimeline["snapshot"]>,
-  ): void {
+  private releaseFinishedWindupShields(timeline: Readonly<EnemyAttackTimeline["snapshot"]>): void {
     const activeWindupTimelineIds = new Set(
-      timeline.attacks
-        .filter((attack) => attack.phase === "windup")
-        .map((attack) => attack.timelineId),
+      timeline.attacks.filter((attack) => attack.phase === "windup").map((attack) => attack.timelineId),
     );
 
     for (const timelineId of this.enemyShieldIdByTimelineId.keys()) {
-      if (!activeWindupTimelineIds.has(timelineId)) {
-        this.releaseEnemyShield(timelineId);
-      }
+      if (!activeWindupTimelineIds.has(timelineId)) this.releaseEnemyShield(timelineId);
     }
   }
 
@@ -315,14 +284,10 @@ export class PlayerCombatRuntime {
     if (entry === undefined) return;
     const { skill, damageMultiplier } = entry;
 
-    const target = event.targetId === "player"
-      ? this.player
-      : this.resolveLivingEnemyTarget(event.targetId);
+    const target = event.targetId === "player" ? this.player : this.resolveLivingEnemyTarget(event.targetId);
     if (target === undefined) return;
 
-    const impactEvent = target.id === event.targetId
-      ? event
-      : { ...event, targetId: target.id };
+    const impactEvent = target.id === event.targetId ? event : { ...event, targetId: target.id };
     const result = this.impactResolver.resolve({
       event: impactEvent,
       skill,
@@ -335,10 +300,7 @@ export class PlayerCombatRuntime {
 
     this.apEffects.onSkillImpact(skill);
 
-    if (
-      target.id !== this.player.id &&
-      (result.damageApplied > 0 || result.shieldAbsorbedDamage > 0)
-    ) {
+    if (target.id !== this.player.id && (result.damageApplied > 0 || result.shieldAbsorbedDamage > 0)) {
       playWeaponImpactSound(this.initialization.player.equipmentIds);
     }
 
@@ -346,36 +308,24 @@ export class PlayerCombatRuntime {
       this.cancelEnemyAttacks(target.id);
     }
 
-    for (const shieldId of result.brokenShieldIds) {
-      this.cancelAttackOnBrokenShield(shieldId);
-    }
+    for (const shieldId of result.brokenShieldIds) this.cancelAttackOnBrokenShield(shieldId);
   }
 
-  /** 사망한 적의 진행 중인 행동과 해당 행동의 실드를 즉시 정리합니다. */
   private cancelEnemyAttacks(enemyId: string): void {
-    const attacks = this.enemyTimeline.snapshot.attacks.filter(
-      (attack) => attack.enemyId === enemyId,
-    );
-
+    const attacks = this.enemyTimeline.snapshot.attacks.filter((attack) => attack.enemyId === enemyId);
     for (const attack of attacks) {
       this.releaseEnemyShield(attack.timelineId);
       this.enemyTimeline.cancelAttack(attack.timelineId);
     }
   }
 
-  /**
-   * 선딜 중인 적의 실드를 모두 깎으면 그 행동은 취소되고 적은 곧바로 다음
-   * 행동을 고릅니다.
-   */
   private cancelAttackOnBrokenShield(shieldId: string): void {
     const timelineId = this.enemyTimelineByShieldId.get(shieldId);
     if (timelineId === undefined) return;
     this.enemyTimelineByShieldId.delete(shieldId);
     this.enemyShieldIdByTimelineId.delete(timelineId);
 
-    const attack = this.enemyTimeline.snapshot.attacks.find(
-      (candidate) => candidate.timelineId === timelineId,
-    );
+    const attack = this.enemyTimeline.snapshot.attacks.find((candidate) => candidate.timelineId === timelineId);
     if (attack === undefined || attack.phase !== "windup") return;
 
     this.enemyTimeline.cancelAttack(timelineId);
@@ -389,9 +339,7 @@ export class PlayerCombatRuntime {
     if (enemyState === undefined || enemyState.snapshot.health.isDead) return;
 
     const enemy = this.findEnemy(event.enemyId);
-    const action = enemy?.actions.find(
-      (candidate) => candidate.id === event.attackId,
-    );
+    const action = enemy?.actions.find((candidate) => candidate.id === event.attackId);
     if (enemy === undefined || action === undefined) return;
 
     if (action.kind === "defense") {
@@ -407,31 +355,23 @@ export class PlayerCombatRuntime {
     });
     if (!result.applied) return;
 
-    if (action.apDelta !== undefined) {
-      this.actionPoints.adjust(action.apDelta);
-    }
+    if (action.apDelta !== undefined) this.actionPoints.adjust(action.apDelta);
 
-    playPlayerHitSound({
-      defended: result.defended,
-      special: action.kind === "special",
-    });
+    playPlayerHitSound({ defended: result.defended, special: action.kind === "special" });
     this.runState = {
       ...this.runState,
-      character: {
-        ...this.runState.character,
-        currentHp: this.playerHp,
-      },
+      character: { ...this.runState.character, currentHp: this.playerHp },
     };
 
-    if (!this.player.snapshot.health.isDead) {
-      this.startNextEnemyAttack(enemy.instanceId);
-    }
+    if (!this.player.snapshot.health.isDead) this.startNextEnemyAttack(enemy.instanceId);
   }
 
   private isEnemyDefenseImpact(event: ResolvedEnemyImpactEvent): boolean {
-    return this.findEnemy(event.enemyId)?.actions.some(
-      (action) => action.id === event.attackId && action.kind === "defense",
-    ) ?? false;
+    return (
+      this.findEnemy(event.enemyId)?.actions.some(
+        (action) => action.id === event.attackId && action.kind === "defense",
+      ) ?? false
+    );
   }
 
   private startNextEnemyAttack(enemyId: string): void {
@@ -439,9 +379,8 @@ export class PlayerCombatRuntime {
       this.route !== null ||
       this.combat.snapshot.status !== "active" ||
       this.enemyTimeline.snapshot.status !== "active"
-    ) {
+    )
       return;
-    }
 
     const enemyState = this.enemies.get(enemyId);
     if (enemyState?.snapshot.health.isDead !== false) return;
@@ -455,10 +394,7 @@ export class PlayerCombatRuntime {
     if (hasActiveAttack) return;
 
     const randomValue = validateRandomValue(this.random());
-    const actionIndex = Math.min(
-      Math.floor(randomValue * enemy.actions.length),
-      enemy.actions.length - 1,
-    );
+    const actionIndex = Math.min(Math.floor(randomValue * enemy.actions.length), enemy.actions.length - 1);
     const action = enemy.actions[actionIndex];
     if (action === undefined) return;
 
@@ -476,7 +412,6 @@ export class PlayerCombatRuntime {
     this.grantEnemyWindupShield(timelineId, enemy.instanceId, action);
   }
 
-  /** 적은 선딜이 시작되는 순간 실드가 가득 찬 상태로 행동을 시작합니다. */
   private grantEnemyWindupShield(
     timelineId: string,
     enemyId: string,
@@ -498,7 +433,6 @@ export class PlayerCombatRuntime {
     this.enemyShieldIdByTimelineId.set(timelineId, shieldId);
   }
 
-  /** 커맨드를 완성한 순간 스킬의 실드를 즉시 부여합니다. */
   private grantSkillShields(actionId: string, skill: SkillDefinition): void {
     const atMs = this.elapsedMs;
     skill.effects.forEach((effect, index) => {
@@ -518,22 +452,15 @@ export class PlayerCombatRuntime {
   }
 
   private findEnemy(instanceId: string): CombatEnemyInitialization | undefined {
-    return this.initialization.enemies.find(
-      (enemy) => enemy.instanceId === instanceId,
-    );
+    return this.initialization.enemies.find((enemy) => enemy.instanceId === instanceId);
   }
 
-  private resolveLivingEnemyTarget(
-    targetId: string,
-  ): SkillCombatantState | undefined {
+  private resolveLivingEnemyTarget(targetId: string): SkillCombatantState | undefined {
     const requestedTarget = this.enemies.get(targetId);
     if (requestedTarget !== undefined && !requestedTarget.snapshot.health.isDead) {
       return requestedTarget;
     }
-
-    return Array.from(this.enemies.values()).find(
-      (enemy) => !enemy.snapshot.health.isDead,
-    );
+    return Array.from(this.enemies.values()).find((enemy) => !enemy.snapshot.health.isDead);
   }
 
   private resolveOutcome(): void {
@@ -544,12 +471,7 @@ export class PlayerCombatRuntime {
       return;
     }
 
-    if (
-      this.enemies.size > 0 &&
-      Array.from(this.enemies.values()).every(
-        (enemy) => enemy.snapshot.health.isDead,
-      )
-    ) {
+    if (this.enemies.size > 0 && Array.from(this.enemies.values()).every((enemy) => enemy.snapshot.health.isDead)) {
       this.route = this.finalize("victory");
     }
   }
@@ -562,10 +484,7 @@ export class PlayerCombatRuntime {
       outcome,
       nextNodeIds: this.nextNodeIds,
       bossNode: this.bossNode,
-      rewardTier:
-        this.initialization.rewardPolicy === "standard"
-          ? "normal"
-          : this.initialization.rewardPolicy,
+      rewardTier: this.initialization.rewardPolicy === "standard" ? "normal" : this.initialization.rewardPolicy,
     });
     this.runState = route.runState;
     return route;
