@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { ENEMY_HEALTH_BAR_TRACK_WIDTH } from "../combat/enemy-health-bar";
 import type {
   EnemyAttackPhase,
   EnemyAttackSnapshot,
@@ -75,6 +76,8 @@ export type EnemyAttackGaugeState = Readonly<{
   elapsedMs: number;
   attacks: readonly EnemyAttackGaugeAttackState[];
 }>;
+
+export const ENEMY_ATTACK_GAUGE_TRACK_WIDTH = ENEMY_HEALTH_BAR_TRACK_WIDTH;
 
 const clampProgress = (value: number): number =>
   Math.min(Math.max(0, value), 1);
@@ -337,7 +340,7 @@ export class EnemyAttackGauge {
     const bodyHeight = Math.max(24, rowHeight - 3);
     const labelY = Math.max(2, bodyHeight * 0.08);
     const trackY = bodyHeight - 8;
-    const trackWidth = Math.max(24, this.panelWidth - 84);
+    const trackWidth = ENEMY_ATTACK_GAUGE_TRACK_WIDTH;
     const typeX = Math.max(112, this.panelWidth - 156);
     const phaseX = Math.max(162, this.panelWidth - 82);
     const progressX = Math.max(174, this.panelWidth - 44);

@@ -11,7 +11,10 @@ import type { ComboSnapshot } from "../combat/combo-tracker";
 import { CombatState } from "../combat/combat-state";
 import { CombatTargetingController } from "../combat/combat-targeting";
 import { CombatPauseController, type PauseDocument, type PauseWindow } from "../combat/combat-pause-controller";
-import type { CombatEncounterInitialization } from "../combat/encounter-initializer";
+import type {
+  CombatEnemyInitialization,
+  CombatEncounterInitialization,
+} from "../combat/encounter-initializer";
 import { EnemyHealthBar } from "../combat/enemy-health-bar";
 import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
@@ -23,11 +26,20 @@ import { createActorEffectPresentations } from "../hud/effect-presentation";
 import { EnemyAttackGauge } from "../hud/enemy-attack-gauge";
 import { RelicHud } from "../hud/relic-hud";
 import { CommandInputBuffer } from "../input/command-input-buffer";
+import { installCommandInputClipboardGuard } from "../input/command-input-clipboard-guard";
 import { CommandInputRecoveryController, updateCommandInputElement } from "../input/command-input-recovery";
 import { createCombatLayout } from "../layout/combat-layout";
 import { persistCombatRunTransition } from "../run/persist-terminal-run";
 import { MENU_SETTINGS_REGISTRY_KEYS } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
+
+const resolveEnemyMaxShield = (
+  enemy: CombatEnemyInitialization,
+): number =>
+  enemy.actions.reduce(
+    (maximum, action) => Math.max(maximum, action.shieldAmount ?? 0),
+    0,
+  );
 
 const MAGIC_SHIELD = defineSkill({
   id: "skill.magic-shield",
@@ -175,7 +187,9 @@ export class CombatFoundationScene extends Phaser.Scene {
       if (actor instanceof Phaser.GameObjects.Image) {
         this.enemyActorImages.set(enemy.instanceId, actor);
       }
-      const healthBar = new EnemyHealthBar(this, enemy.hp, enemy.hp);
+      const healthBar = new EnemyHealthBar(this, enemy.hp, enemy.hp, {
+        maxShield: resolveEnemyMaxShield(enemy),
+      });
       healthBar.container.setPosition(0, -158);
       placeholder.add(healthBar.container);
       this.enemyHealthBars.set(enemy.instanceId, healthBar);
@@ -251,7 +265,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       initialization.player.skills.length > 0
         ? initialization.player.skills.map((skill) => defineSkill(skill))
         : [MAGIC_SHIELD];
-    const initialSkill = availableSkills[0]!;
+    const initialSkill = availableSkills[0] ?? MAGIC_SHIELD;
     this.commandInputBuffer = new CommandInputBuffer(availableSkills.map((skill) => skill.command));
     this.commandInputRecovery = new CommandInputRecoveryController(this.commandInputBuffer);
     this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
@@ -460,6 +474,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     for (const enemy of this.combatInitialization?.enemies ?? []) {
       this.enemyHealthBars.get(enemy.instanceId)?.update(enemyHp[enemy.instanceId] ?? enemy.hp, enemy.hp, {
         shield: this.displayedEnemyShield[enemy.instanceId] ?? 0,
+        maxShield: resolveEnemyMaxShield(enemy),
         ...(this.targeting?.targetId === undefined ? {} : { targeted: this.targeting.targetId === enemy.instanceId }),
       });
     }
@@ -610,6 +625,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     input.addEventListener("compositionupdate", handleCompositionUpdate);
     input.addEventListener("compositionend", handleCompositionEnd);
     input.addEventListener("input", handleInput);
+    const removeClipboardGuard = installCommandInputClipboardGuard(input);
     document.body.appendChild(input);
     input.focus({ preventScroll: true });
     this.commandInputCleanup = () => {
@@ -617,6 +633,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       input.removeEventListener("compositionupdate", handleCompositionUpdate);
       input.removeEventListener("compositionend", handleCompositionEnd);
       input.removeEventListener("input", handleInput);
+      removeClipboardGuard();
       input.remove();
       this.commandInputCleanup = undefined;
     };
