@@ -47,7 +47,8 @@ const createRun = ({
 
 const shopOffer: ShopOffer = {
   id: "qa-offer",
-  equipmentId: "qa-equipment",
+  kind: "equipment" as const,
+  itemId: "qa-equipment",
   price: 25,
 };
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   EQUIPMENT_CONFIGS,
+  RELIC_CONFIGS,
   beginMapNode,
   createInitialRunState,
 } from "@typing-roguelike/shared";
@@ -38,9 +39,13 @@ describe("run reward scene entry", () => {
     expect(state.round).toBe(runState.map.currentRound);
     expect(state.currency).toBe(runState.runCurrency);
     expect(state.candidates.length).toBeGreaterThan(0);
+    // 보상에는 장비와 유물이 섞여 나온다.
     expect(state.candidates.every((candidate) =>
-      EQUIPMENT_CONFIGS.some((equipment) => equipment.id === candidate.id),
+      candidate.kind === "relic"
+        ? RELIC_CONFIGS.some((relic) => relic.id === candidate.id)
+        : EQUIPMENT_CONFIGS.some((equipment) => equipment.id === candidate.id),
     )).toBe(true);
+    expect(state.candidates.some((candidate) => candidate.kind === "weapon")).toBe(true);
   });
 
   test("applies one selection, completes the node, unlocks next nodes, and calls persistence once", () => {

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { RUN_STATE_SCHEMA_VERSION, type RunState, type ShopOffer } from "@typing-roguelike/shared";
+import {
+  RELIC_CONFIGS,
+  RUN_STATE_SCHEMA_VERSION,
+  type RunState,
+  type ShopOffer,
+} from "@typing-roguelike/shared";
 import {
   completeShopNode,
   createShopNodeFlow,
@@ -27,7 +32,7 @@ const run = (): RunState => ({
   },
 });
 
-const offers: readonly ShopOffer[] = [{ id: "offer", equipmentId: "equipment_blood_sword", price: 25 }];
+const offers: readonly ShopOffer[] = [{ id: "offer", kind: "equipment", itemId: "equipment_blood_sword", price: 25 }];
 
 describe("shop node flow", () => {
   test("purchase updates currency and inventory", () => {
@@ -84,7 +89,7 @@ describe("shop node flow", () => {
       createShopNodeFlow(ownedRun, "shop", ["next"], offers),
       () => 0,
     );
-    expect(rerolled.offers.some((offer) => offer.equipmentId === ownedId)).toBe(false);
+    expect(rerolled.offers.some((offer) => offer.itemId === ownedId)).toBe(false);
   });
 
   test("exit clears node and unlocks next map node", () => {
@@ -92,5 +97,52 @@ describe("shop node flow", () => {
     expect(next.runState.map.nodeStatuses.shop).toBe("cleared");
     expect(next.runState.map.nodeStatuses.next).toBe("available");
     expect(next.completed).toBe(true);
+  });
+});
+
+describe("shop node relic offers", () => {
+  test("lists relics next to equipment and buys one without touching the loadout", () => {
+    const runState = { ...run(), runCurrency: 500 };
+    const flow = createShopNodeFlow(runState, "shop-node", ["next"]);
+    const relicOffer = flow.offers.find((offer) => offer.kind === "relic");
+
+    expect(flow.offers.some((offer) => offer.kind === "equipment")).toBe(true);
+    expect(relicOffer).toBeDefined();
+
+    const purchased = purchaseShopOffer(flow, relicOffer!.id);
+
+    expect(purchased.runState.inventory.relicInstances).toEqual([relicOffer!.itemId]);
+    expect(purchased.runState.build.equippedRelicIds).toEqual([relicOffer!.itemId]);
+    expect(purchased.runState.loadout).toEqual(runState.loadout);
+    expect(purchased.runState.runCurrency).toBe(500 - relicOffer!.price);
+  });
+
+  test("never lists an owned relic, even when almost every relic is owned", () => {
+    // 후보가 거의 남지 않은 상태에서도 보유 유물이 새지 않아야 한다.
+    const owned = RELIC_CONFIGS.slice(0, -2).map((relic) => relic.id);
+    const runState: RunState = {
+      ...run(),
+      runCurrency: 5_000,
+      inventory: { itemInstances: [], relicInstances: owned },
+      build: { equippedRelicIds: owned },
+    };
+
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const flow = createShopNodeFlow(runState, "shop-node", ["next"]);
+      for (const offer of flow.offers) {
+        if (offer.kind === "relic") expect(owned).not.toContain(offer.itemId);
+      }
+    }
+  });
+
+  test("drops a relic from the shelf once it has been bought and rerolled", () => {
+    const first = createShopNodeFlow({ ...run(), runCurrency: 5_000 }, "shop-node", ["next"]);
+    const relicOffer = first.offers.find((offer) => offer.kind === "relic")!;
+    const purchased = purchaseShopOffer(first, relicOffer.id);
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const rerolled = rerollShopOffers(purchased);
+      expect(rerolled.offers.some((offer) => offer.itemId === relicOffer.itemId)).toBe(false);
+    }
   });
 });

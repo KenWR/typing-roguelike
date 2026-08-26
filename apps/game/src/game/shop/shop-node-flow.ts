@@ -29,6 +29,7 @@ const createAvailableOffers = (
   return createShopOffers({
     random,
     equipment: EQUIPMENT_CONFIGS.filter((equipment) => !owned.has(equipment.id)),
+    excludedRelicIds: runState.inventory.relicInstances,
   });
 };
 
