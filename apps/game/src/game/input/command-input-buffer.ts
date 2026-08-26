@@ -40,6 +40,7 @@ export class CommandInputBuffer {
   private committedInput = "";
   private status: CommandInputStatus = "idle";
   private completionEmitted = false;
+  private completedRawInput: string | null = null;
   private readonly completedListeners = new Set<CommandCompletedListener>();
   private readonly statusChangedListeners = new Set<CommandStatusChangedListener>();
 
@@ -67,9 +68,10 @@ export class CommandInputBuffer {
   }
 
   updateInput(
-    input: string,
+    rawInput: string,
     options: UpdateInputOptions = {},
   ): CommandInputSnapshot {
+    const input = this.prepareInputForNextCycle(rawInput);
     this.input = input;
 
     if (options.isComposing) {
@@ -82,6 +84,7 @@ export class CommandInputBuffer {
 
     if (this.status === "complete" && !this.completionEmitted) {
       this.completionEmitted = true;
+      this.completedRawInput = rawInput;
       this.emitCompleted();
     }
 
@@ -92,6 +95,7 @@ export class CommandInputBuffer {
     this.input = "";
     this.committedInput = "";
     this.completionEmitted = false;
+    this.completedRawInput = null;
     this.updateStatus("idle");
     return this.snapshot;
   }
@@ -108,6 +112,28 @@ export class CommandInputBuffer {
     return () => {
       this.statusChangedListeners.delete(listener);
     };
+  }
+
+  private prepareInputForNextCycle(rawInput: string): string {
+    if (!this.completionEmitted || this.completedRawInput === null) {
+      return rawInput;
+    }
+
+    if (rawInput === this.completedRawInput) {
+      return this.input;
+    }
+
+    const previousRawInput = this.completedRawInput;
+    this.input = "";
+    this.committedInput = "";
+    this.completionEmitted = false;
+    this.completedRawInput = null;
+
+    if (rawInput.startsWith(previousRawInput)) {
+      return rawInput.slice(previousRawInput.length);
+    }
+
+    return rawInput;
   }
 
   private validateCommand(command: string): string {
