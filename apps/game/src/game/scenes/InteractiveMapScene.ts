@@ -63,7 +63,10 @@ export class InteractiveMapScene extends MapScene {
         }
 
         void runRemotePersistence.checkpoint(route.runState);
-        this.scene.start(route.sceneKey, route.payload);
+        const scenePayload = route.sceneKey === SCENE_KEYS.reward
+          ? { ...route.payload, suppressPointerUntilRelease: true }
+          : route.payload;
+        this.scene.start(route.sceneKey, scenePayload);
       });
     });
   }

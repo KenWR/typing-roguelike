@@ -2,6 +2,10 @@ import Phaser from "phaser";
 import type { RunState } from "@typing-roguelike/shared";
 import type { RewardSelectionAdapter } from "../rewards/reward-selection-adapter";
 import { createRunRewardSceneEntry } from "../rewards/run-reward-scene-entry";
+import {
+  createRewardTransitionPointerGuard,
+  type RewardTransitionPointerGuard,
+} from "../rewards/reward-transition-pointer-guard";
 import { runSession } from "../run/run-session";
 import {
   RewardSelectionScene,
@@ -13,6 +17,7 @@ export type RunRewardSelectionSceneData = RewardSelectionSceneData &
     runState?: RunState;
     nodeId?: string;
     nextNodeIds?: readonly string[];
+    suppressPointerUntilRelease?: boolean;
   }>;
 
 const clamp = (value: number, minimum: number, maximum: number): number =>
@@ -48,10 +53,15 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
   private runAdapter?: RewardSelectionAdapter<RunState>;
   private routeData: RunRewardSelectionSceneData = {};
   private cardHitAreas: Phaser.GameObjects.Rectangle[] = [];
+  private transitionPointerGuard: RewardTransitionPointerGuard =
+    createRewardTransitionPointerGuard();
 
   override init(data: RunRewardSelectionSceneData = {}): void {
     this.routeData = data;
     this.cardHitAreas = [];
+    this.transitionPointerGuard = createRewardTransitionPointerGuard(
+      data.suppressPointerUntilRelease === true,
+    );
 
     if (data.adapter !== undefined) {
       const adapter = data.runState === undefined
@@ -97,6 +107,10 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
     if (this.runAdapter === undefined) return;
 
     this.installCardInputLayer();
+    if (!this.transitionPointerGuard.acceptsPointerDown()) {
+      this.input.once(Phaser.Input.Events.POINTER_UP, this.releaseTransitionPointer, this);
+    }
+    this.routeData = { ...this.routeData, suppressPointerUntilRelease: false };
     this.input.keyboard?.on("keydown", this.handleRewardKeyDown, this);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layoutCardHitAreas, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseRunInput, this);
@@ -111,10 +125,17 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
         .setOrigin(0)
         .setDepth(80)
         .setInteractive({ useHandCursor: true });
-      hitArea.on(Phaser.Input.Events.POINTER_DOWN, () => this.selectReward(candidate.id));
+      hitArea.on(Phaser.Input.Events.POINTER_DOWN, () => {
+        if (!this.transitionPointerGuard.acceptsPointerDown()) return;
+        this.selectReward(candidate.id);
+      });
       return hitArea;
     });
     this.layoutCardHitAreas();
+  }
+
+  private releaseTransitionPointer(): void {
+    this.transitionPointerGuard.release();
   }
 
   private layoutCardHitAreas(): void {
@@ -183,6 +204,7 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
   }
 
   private releaseRunInput(): void {
+    this.input.off(Phaser.Input.Events.POINTER_UP, this.releaseTransitionPointer, this);
     this.input.keyboard?.off("keydown", this.handleRewardKeyDown, this);
     this.scale.off(Phaser.Scale.Events.RESIZE, this.layoutCardHitAreas, this);
   }
