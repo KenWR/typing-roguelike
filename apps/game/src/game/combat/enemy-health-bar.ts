@@ -21,13 +21,13 @@ export type EnemyHealthBarOptions = Readonly<{
 }>;
 
 export const ENEMY_HEALTH_BAR_PANEL_WIDTH = 220;
-export const ENEMY_HEALTH_BAR_REGION_TOP = -56;
-export const ENEMY_HEALTH_BAR_REGION_BOTTOM = 28;
+export const ENEMY_HEALTH_BAR_REGION_TOP = -38;
+export const ENEMY_HEALTH_BAR_REGION_BOTTOM = 34;
 export const ENEMY_HEALTH_BAR_TRACK_WIDTH = 190;
+export const ENEMY_HEALTH_BAR_TRACK_Y = -7;
+export const ENEMY_TELEGRAPH_TRACK_Y = 7;
 const TRACK_HEIGHT = 11;
 const TRACK_X = -ENEMY_HEALTH_BAR_TRACK_WIDTH / 2;
-const TRACK_Y = -7;
-const TELEGRAPH_TRACK_Y = -30;
 
 const clamp = (value: number, maximum: number): number => Math.min(Math.max(0, value), Math.max(0, maximum));
 
@@ -97,9 +97,9 @@ export class EnemyHealthBar {
         0,
       );
     this.telegraphTrack = scene.add
-      .rectangle(TRACK_X, TELEGRAPH_TRACK_Y, ENEMY_HEALTH_BAR_TRACK_WIDTH, 6, 0x0f172a, 0.95)
+      .rectangle(TRACK_X, ENEMY_TELEGRAPH_TRACK_Y, ENEMY_HEALTH_BAR_TRACK_WIDTH, 6, 0x0f172a, 0.95)
       .setOrigin(0, 0.5);
-    this.telegraphFill = scene.add.rectangle(TRACK_X, TELEGRAPH_TRACK_Y, 0, 6, 0xef4444, 1).setOrigin(0, 0.5);
+    this.telegraphFill = scene.add.rectangle(TRACK_X, ENEMY_TELEGRAPH_TRACK_Y, 0, 6, 0xef4444, 1).setOrigin(0, 0.5);
     this.telegraphName = scene.add
       .text(0, ENEMY_HEALTH_BAR_REGION_TOP + 2, "", {
         color: "#f8fafc",
@@ -110,15 +110,15 @@ export class EnemyHealthBar {
       })
       .setOrigin(0.5, 0);
     this.track = scene.add
-      .rectangle(TRACK_X, TRACK_Y, ENEMY_HEALTH_BAR_TRACK_WIDTH, TRACK_HEIGHT, 0x0f172a, 0.95)
+      .rectangle(TRACK_X, ENEMY_HEALTH_BAR_TRACK_Y, ENEMY_HEALTH_BAR_TRACK_WIDTH, TRACK_HEIGHT, 0x0f172a, 0.95)
       .setOrigin(0, 0.5);
-    this.hpFill = scene.add.rectangle(TRACK_X, TRACK_Y, 0, TRACK_HEIGHT, 0xe35d6a).setOrigin(0, 0.5);
+    this.hpFill = scene.add.rectangle(TRACK_X, ENEMY_HEALTH_BAR_TRACK_Y, 0, TRACK_HEIGHT, 0xe35d6a).setOrigin(0, 0.5);
     this.shieldFill = scene.add
-      .rectangle(TRACK_X, TRACK_Y, 0, TRACK_HEIGHT, 0x6ad3f2)
+      .rectangle(TRACK_X, ENEMY_HEALTH_BAR_TRACK_Y, 0, TRACK_HEIGHT, 0x6ad3f2)
       .setOrigin(0, 0.5)
       .setVisible(false);
     this.value = scene.add
-      .text(0, 10, "", {
+      .text(0, 19, "", {
         color: "#f8fafc",
         fontFamily: "Galmuri9, monospace",
         fontSize: "13px",
@@ -181,7 +181,7 @@ export class EnemyHealthBar {
     this.telegraphName.setText(this.state.telegraphAttackName).setVisible(this.state.telegraphAttackName.length > 0);
     this.shieldFill
       .setVisible(shieldRatio > 0)
-      .setPosition(TRACK_X + ENEMY_HEALTH_BAR_TRACK_WIDTH * healthRatio, TRACK_Y)
+      .setPosition(TRACK_X + ENEMY_HEALTH_BAR_TRACK_WIDTH * healthRatio, ENEMY_HEALTH_BAR_TRACK_Y)
       .setSize(ENEMY_HEALTH_BAR_TRACK_WIDTH * shieldRatio, TRACK_HEIGHT);
     this.value.setText(formatEnemyHealthBarLabel(this.state));
     this.panel.setAlpha(0);

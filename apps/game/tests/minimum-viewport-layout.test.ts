@@ -25,7 +25,8 @@ Object.assign(globalThis, {
   },
 });
 
-const { createCombatLayout, ENEMY_HEALTH_BAR_OFFSET_Y } = await import("../src/game/layout/combat-layout");
+const { createCombatLayout } = await import("../src/game/layout/combat-layout");
+const { ENEMY_HEALTH_BAR_TRACK_Y, ENEMY_TELEGRAPH_TRACK_Y } = await import("../src/game/combat/enemy-health-bar");
 
 const VIEWPORT_WIDTH = 1280;
 const VIEWPORT_HEIGHT = 720;
@@ -73,10 +74,7 @@ describe("1280x720 minimum viewport layout", () => {
     expect(layout.enemy.y).toBeLessThan(layout.commandHudReservation.y);
   });
 
-  test("places the enemy telegraph above the enemy HP bar", () => {
-    const layout = createCombatLayout(VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
-    const enemyHealthBarTop = layout.enemy.y + ENEMY_HEALTH_BAR_OFFSET_Y * layout.actorScale;
-
-    expect(layout.enemyAttackGaugeReservation.bottom).toBeLessThan(enemyHealthBarTop);
+  test("places each enemy telegraph below its HP bar", () => {
+    expect(ENEMY_TELEGRAPH_TRACK_Y).toBeGreaterThan(ENEMY_HEALTH_BAR_TRACK_Y);
   });
 });

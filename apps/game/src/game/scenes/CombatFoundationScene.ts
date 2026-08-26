@@ -178,8 +178,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       const healthBar = new EnemyHealthBar(this, enemy.hp, enemy.hp, {
         maxShield: resolveEnemyMaxShield(enemy),
       });
-      // Keep the telegraph panel directly above the HP bar in the combat
-      // layout, with enough separation to read both at a glance.
+      // Keep each enemy's attack name and telegraph attached to its HP bar.
       healthBar.container.setPosition(0, ENEMY_HEALTH_BAR_OFFSET_Y);
       placeholder.add(healthBar.container);
       this.enemyHealthBars.set(enemy.instanceId, healthBar);
