@@ -73,14 +73,9 @@ export class ActorEffectHud {
     const ordered = effects
       .map((effect) => this.visuals.get(effect.id))
       .filter((visual): visual is EffectVisual => visual !== undefined);
-    const totalWidth = ordered.length === 0
-      ? 0
-      : ordered.length * ICON_SIZE + (ordered.length - 1) * ICON_GAP;
+    const totalWidth = ordered.length === 0 ? 0 : ordered.length * ICON_SIZE + (ordered.length - 1) * ICON_GAP;
     ordered.forEach((visual, index) => {
-      visual.container.setPosition(
-        -totalWidth / 2 + ICON_SIZE / 2 + index * (ICON_SIZE + ICON_GAP),
-        0,
-      );
+      visual.container.setPosition(-totalWidth / 2 + ICON_SIZE / 2 + index * (ICON_SIZE + ICON_GAP), 0);
     });
     this.container.setVisible(ordered.length > 0);
   }
@@ -94,9 +89,7 @@ export class ActorEffectHud {
 
   private createVisual(effect: EffectPresentation): EffectVisual {
     const slot = this.scene.add.container(0, 0);
-    const frame = this.scene.add
-      .rectangle(0, 0, ICON_SIZE, ICON_SIZE, 0x111827, 0.88)
-      .setStrokeStyle(1, 0x94a3b8, 0.8);
+    const frame = this.scene.add.rectangle(0, 0, ICON_SIZE, ICON_SIZE, 0x111827, 0.88).setStrokeStyle(1, 0x94a3b8, 0.8);
     const textureKey = this.scene.textures.exists(effect.textureKey)
       ? effect.textureKey
       : EFFECT_PLACEHOLDER_TEXTURE_KEY;

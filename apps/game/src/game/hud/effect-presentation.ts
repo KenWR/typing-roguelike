@@ -108,12 +108,14 @@ export function resolveEffectPresentation(input: EffectPresentationInput): Effec
   };
 }
 
-export function createActorEffectPresentations(input: Readonly<{
-  statuses?: readonly TimedStatusLike[];
-  shields?: readonly ShieldLike[];
-  apEffects?: readonly TimedApEffectLike[];
-  atMs?: number;
-}>): EffectPresentation[] {
+export function createActorEffectPresentations(
+  input: Readonly<{
+    statuses?: readonly TimedStatusLike[];
+    shields?: readonly ShieldLike[];
+    apEffects?: readonly TimedApEffectLike[];
+    atMs?: number;
+  }>,
+): EffectPresentation[] {
   const atMs = input.atMs ?? 0;
   const statusGroups = new Map<string, TimedStatusLike[]>();
   for (const status of input.statuses ?? []) {
@@ -142,31 +144,33 @@ export function createActorEffectPresentations(input: Readonly<{
   const shields = (input.shields ?? [])
     .filter((shield) => shield.amount > 0 && shield.endsAtMs > atMs)
     .sort((left, right) => left.endsAtMs - right.endsAtMs || left.id.localeCompare(right.id))
-    .map((shield) => resolveEffectPresentation({
-      id: `shield:${shield.id}`,
-      effectId: "shield",
-      description: `실드 ${shield.amount} / ${shield.maxAmount}`,
-      durationMs: Math.max(0, shield.endsAtMs - shield.startsAtMs),
-      remainingMs: Math.max(0, shield.endsAtMs - atMs),
-    }));
+    .map((shield) =>
+      resolveEffectPresentation({
+        id: `shield:${shield.id}`,
+        effectId: "shield",
+        description: `실드 ${shield.amount} / ${shield.maxAmount}`,
+        durationMs: Math.max(0, shield.endsAtMs - shield.startsAtMs),
+        remainingMs: Math.max(0, shield.endsAtMs - atMs),
+      }),
+    );
 
   const apEffects = (input.apEffects ?? [])
     .filter((effect) => effect.remainingMs > 0)
     .sort((left, right) => left.id.localeCompare(right.id))
-    .map((effect) => resolveEffectPresentation({
-      id: `ap:${effect.id}`,
-      effectId: effect.amountPerSecond >= 0 ? "ap-regen-up" : "ap-regen-down",
-      description: `AP 재생 ${effect.amountPerSecond >= 0 ? "+" : ""}${effect.amountPerSecond}/초`,
-      durationMs: effect.durationMs,
-      remainingMs: effect.remainingMs,
-    }));
+    .map((effect) =>
+      resolveEffectPresentation({
+        id: `ap:${effect.id}`,
+        effectId: effect.amountPerSecond >= 0 ? "ap-regen-up" : "ap-regen-down",
+        description: `AP 재생 ${effect.amountPerSecond >= 0 ? "+" : ""}${effect.amountPerSecond}/초`,
+        durationMs: effect.durationMs,
+        remainingMs: effect.remainingMs,
+      }),
+    );
 
   return [...statuses, ...shields, ...apEffects];
 }
 
-export function getEffectDarknessRatio(
-  effect: Pick<EffectPresentation, "durationMs" | "remainingMs">,
-): number {
+export function getEffectDarknessRatio(effect: Pick<EffectPresentation, "durationMs" | "remainingMs">): number {
   if (effect.durationMs === null || effect.remainingMs === null || effect.durationMs <= 0) return 0;
   const remainingRatio = Math.min(Math.max(effect.remainingMs / effect.durationMs, 0), 1);
   return 1 - remainingRatio;

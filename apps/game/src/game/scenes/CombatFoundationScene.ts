@@ -1,19 +1,8 @@
 import Phaser from "phaser";
-import {
-  defineSkill,
-  type GeneratedMapNode,
-  type RunState,
-  type SkillDefinition,
-} from "@typing-roguelike/shared";
+import { defineSkill, type GeneratedMapNode, type RunState, type SkillDefinition } from "@typing-roguelike/shared";
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
-import {
-  resolveEnemyTextureKey,
-  resolveEnemyVisualState,
-} from "../assets/enemy-visual-assets";
-import {
-  resolvePlayerAttackTextureKey,
-  resolvePlayerTextureKey,
-} from "../assets/player-visual-assets";
+import { resolveEnemyTextureKey, resolveEnemyVisualState } from "../assets/enemy-visual-assets";
+import { resolvePlayerAttackTextureKey, resolvePlayerTextureKey } from "../assets/player-visual-assets";
 import { playComboBreakSound } from "../audio/runtime-audio";
 import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
 import { ActionPointResource } from "../combat/action-point-resource";
@@ -21,19 +10,12 @@ import { CombatApEffectController } from "../combat/combat-ap-effects";
 import type { ComboSnapshot } from "../combat/combo-tracker";
 import { CombatState } from "../combat/combat-state";
 import { CombatTargetingController } from "../combat/combat-targeting";
-import {
-  CombatPauseController,
-  type PauseDocument,
-  type PauseWindow,
-} from "../combat/combat-pause-controller";
+import { CombatPauseController, type PauseDocument, type PauseWindow } from "../combat/combat-pause-controller";
 import type { CombatEncounterInitialization } from "../combat/encounter-initializer";
 import { EnemyHealthBar } from "../combat/enemy-health-bar";
 import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
-import {
-  CombatFeedbackController,
-  playProceduralCombatSound,
-} from "../feedback/combat-feedback";
+import { CombatFeedbackController, playProceduralCombatSound } from "../feedback/combat-feedback";
 import { ActorEffectHud } from "../hud/actor-effect-hud";
 import { CombatHud } from "../hud/combat-hud";
 import { CommandHud } from "../hud/command-hud";
@@ -41,10 +23,7 @@ import { createActorEffectPresentations } from "../hud/effect-presentation";
 import { EnemyAttackGauge } from "../hud/enemy-attack-gauge";
 import { RelicHud } from "../hud/relic-hud";
 import { CommandInputBuffer } from "../input/command-input-buffer";
-import {
-  CommandInputRecoveryController,
-  updateCommandInputElement,
-} from "../input/command-input-recovery";
+import { CommandInputRecoveryController, updateCommandInputElement } from "../input/command-input-recovery";
 import { createCombatLayout } from "../layout/combat-layout";
 import { persistCombatRunTransition } from "../run/persist-terminal-run";
 import { MENU_SETTINGS_REGISTRY_KEYS } from "./menu-settings";
@@ -162,13 +141,13 @@ export class CombatFoundationScene extends Phaser.Scene {
     }
 
     this.feedback = new CombatFeedbackController({
-      playSound: (key) => playProceduralCombatSound(key, {
-        muted: this.sound.mute,
-        volume: this.sound.volume,
-      }),
+      playSound: (key) =>
+        playProceduralCombatSound(key, {
+          muted: this.sound.mute,
+          volume: this.sound.volume,
+        }),
       shakeCamera: () => this.cameras.main.shake(110, 0.006),
-      isScreenShakeEnabled: () =>
-        this.registry.get(MENU_SETTINGS_REGISTRY_KEYS.screenShakeEnabled) !== false,
+      isScreenShakeEnabled: () => this.registry.get(MENU_SETTINGS_REGISTRY_KEYS.screenShakeEnabled) !== false,
     });
 
     this.backgroundLayer = this.add.container(0, 0).setDepth(0);
@@ -181,11 +160,7 @@ export class CombatFoundationScene extends Phaser.Scene {
 
     const primaryWeaponId = initialization.player.equipmentIds[0];
     this.playerRestTextureKey = resolvePlayerTextureKey(primaryWeaponId);
-    this.playerPlaceholder = this.createActorPlaceholder(
-      "플레이어",
-      0x3f7f84,
-      this.playerRestTextureKey,
-    );
+    this.playerPlaceholder = this.createActorPlaceholder("플레이어", 0x3f7f84, this.playerRestTextureKey);
     const playerActor = this.playerPlaceholder.getAt(0);
     if (playerActor instanceof Phaser.GameObjects.Image) {
       this.playerActorImage = playerActor;
@@ -195,11 +170,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.playerPlaceholder.add(this.playerEffectHud.container);
 
     this.enemyPlaceholders = initialization.enemies.map((enemy) => {
-      const placeholder = this.createActorPlaceholder(
-        enemy.name,
-        0x8d4b52,
-        resolveEnemyTextureKey(enemy.enemyId),
-      );
+      const placeholder = this.createActorPlaceholder(enemy.name, 0x8d4b52, resolveEnemyTextureKey(enemy.enemyId));
       const actor = placeholder.getAt(0);
       if (actor instanceof Phaser.GameObjects.Image) {
         this.enemyActorImages.set(enemy.instanceId, actor);
@@ -226,16 +197,11 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.worldLayer.add([this.playerPlaceholder, ...this.enemyPlaceholders]);
 
     this.encounterLabel = this.add
-      .text(
-        0,
-        0,
-        `${initialization.encounterId} · ${initialization.rewardPolicy.toUpperCase()}`,
-        {
-          color: "#9eb0c4",
-          fontFamily: "Galmuri9, monospace",
-          fontSize: "14px",
-        },
-      )
+      .text(0, 0, `${initialization.encounterId} · ${initialization.rewardPolicy.toUpperCase()}`, {
+        color: "#9eb0c4",
+        fontFamily: "Galmuri9, monospace",
+        fontSize: "14px",
+      })
       .setOrigin(1, 0);
     this.uiLayer.add(this.encounterLabel);
 
@@ -257,10 +223,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       maxAp: this.actionPoints.snapshot.maxAp,
       shield: 0,
     });
-    this.relicHud = new RelicHud(
-      this,
-      this.runState?.inventory.relicInstances ?? [],
-    );
+    this.relicHud = new RelicHud(this, this.runState?.inventory.relicInstances ?? []);
     this.relicHud.container.setDepth(900);
     this.uiLayer.add(this.combatHud.container);
 
@@ -281,22 +244,16 @@ export class CombatFoundationScene extends Phaser.Scene {
         });
       }
     }
-    this.enemyAttackGauge = new EnemyAttackGauge(
-      this,
-      this.enemyAttackTimeline.snapshot,
-    );
+    this.enemyAttackGauge = new EnemyAttackGauge(this, this.enemyAttackTimeline.snapshot);
     this.uiLayer.add(this.enemyAttackGauge.container);
 
-    const availableSkills = initialization.player.skills.length > 0
-      ? initialization.player.skills.map((skill) => defineSkill(skill))
-      : [MAGIC_SHIELD];
+    const availableSkills =
+      initialization.player.skills.length > 0
+        ? initialization.player.skills.map((skill) => defineSkill(skill))
+        : [MAGIC_SHIELD];
     const initialSkill = availableSkills[0]!;
-    this.commandInputBuffer = new CommandInputBuffer(
-      availableSkills.map((skill) => skill.command),
-    );
-    this.commandInputRecovery = new CommandInputRecoveryController(
-      this.commandInputBuffer,
-    );
+    this.commandInputBuffer = new CommandInputBuffer(availableSkills.map((skill) => skill.command));
+    this.commandInputRecovery = new CommandInputRecoveryController(this.commandInputBuffer);
     this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
     this.uiLayer.add(this.commandHud.container);
     this.comboText = this.add
@@ -330,35 +287,27 @@ export class CombatFoundationScene extends Phaser.Scene {
       actionPoints: this.actionPoints,
       combat: this.combat,
       actorId: "player",
-      targetId:
-        initialSkill.kind === "defense"
-          ? "player"
-          : (initialization.enemies[0]?.instanceId ?? "player"),
+      targetId: initialSkill.kind === "defense" ? "player" : (initialization.enemies[0]?.instanceId ?? "player"),
       resolveApCost: (skill) => this.apEffects.resolveSkillCost(skill),
       resolveTargetId: (skill) =>
         skill.kind === "defense"
           ? "player"
-          : (this.targeting?.refresh() ??
-            initialization.enemies[0]?.instanceId ??
-            "player"),
+          : (this.targeting?.refresh() ?? initialization.enemies[0]?.instanceId ?? "player"),
     });
     this.skillStarter = skillStarter;
-    this.commandCompletionCleanup = skillStarter.connect(
-      this.commandInputBuffer,
-      (result) => {
-        if (result.started) {
-          this.apEffects.onSkillStarted(result.skill, result.combo.count);
-          this.playerCombatRuntime?.registerAction(result.actionId, result.skill);
-          this.updateComboDisplay(result.combo);
-          this.playPlayerAttackVisual(primaryWeaponId, result.skill);
-          if (result.skill.kind === "defense") {
-            this.feedback?.trigger("guard");
-          }
-          this.commandHud.showSkillStarted();
+    this.commandCompletionCleanup = skillStarter.connect(this.commandInputBuffer, (result) => {
+      if (result.started) {
+        this.apEffects.onSkillStarted(result.skill, result.combo.count);
+        this.playerCombatRuntime?.registerAction(result.actionId, result.skill);
+        this.updateComboDisplay(result.combo);
+        this.playPlayerAttackVisual(primaryWeaponId, result.skill);
+        if (result.skill.kind === "defense") {
+          this.feedback?.trigger("guard");
         }
-        this.combatHud.update({ ap: this.actionPoints.snapshot.currentAp });
-      },
-    );
+        this.commandHud.showSkillStarted();
+      }
+      this.combatHud.update({ ap: this.actionPoints.snapshot.currentAp });
+    });
     this.commandStatusCleanup = this.commandInputBuffer.onStatusChanged(({ snapshot }) => {
       if (snapshot.status === "complete") {
         this.feedback?.trigger("command-success");
@@ -399,15 +348,13 @@ export class CombatFoundationScene extends Phaser.Scene {
     if (playerUpdate === undefined) {
       const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
       this.enemyAttackGauge.update(enemyUpdate.snapshot);
-      this.playerEffectHud?.update(createActorEffectPresentations({
-        apEffects: this.actionPoints.snapshot.timedEffects,
-        atMs: enemyUpdate.snapshot.elapsedMs,
-      }));
-      this.updateEnemyVisuals(
-        Object.fromEntries(this.displayedEnemyHp),
-        safeDelta,
-        enemyUpdate.snapshot,
+      this.playerEffectHud?.update(
+        createActorEffectPresentations({
+          apEffects: this.actionPoints.snapshot.timedEffects,
+          atMs: enemyUpdate.snapshot.elapsedMs,
+        }),
       );
+      this.updateEnemyVisuals(Object.fromEntries(this.displayedEnemyHp), safeDelta, enemyUpdate.snapshot);
       return;
     }
 
@@ -419,19 +366,12 @@ export class CombatFoundationScene extends Phaser.Scene {
     });
     this.displayedEnemyShield = playerUpdate.enemyShield;
     this.refreshActorEffects(playerUpdate);
-    this.updateEnemyVisuals(
-      playerUpdate.enemyHp,
-      safeDelta,
-      playerUpdate.enemyTimeline.snapshot,
-    );
+    this.updateEnemyVisuals(playerUpdate.enemyHp, safeDelta, playerUpdate.enemyTimeline.snapshot);
     this.targeting?.refresh();
     this.refreshTargetPresentation();
     this.updateEnemyHealth(playerUpdate.enemyHp);
 
-    if (
-      previousPlayerHp !== undefined &&
-      playerUpdate.playerHp < previousPlayerHp
-    ) {
+    if (previousPlayerHp !== undefined && playerUpdate.playerHp < previousPlayerHp) {
       this.skillStarter?.breakCombo("player-hit");
       this.updateComboDisplay(this.skillStarter?.comboSnapshot);
       this.feedback?.trigger("command-failure");
@@ -446,24 +386,20 @@ export class CombatFoundationScene extends Phaser.Scene {
       });
       const outcome = this.combat.snapshot.status;
       this.feedback?.trigger(outcome === "victory" ? "victory" : "defeat");
-      this.startCombatRoute(
-        playerUpdate.route.sceneKey,
-        playerUpdate.route.payload,
-        outcome === "victory" ? 1_500 : 0,
-      );
+      this.startCombatRoute(playerUpdate.route.sceneKey, playerUpdate.route.payload, outcome === "victory" ? 1_500 : 0);
     }
   }
 
-  private refreshActorEffects(
-    update: ReturnType<PlayerCombatRuntime["advance"]>,
-  ): void {
+  private refreshActorEffects(update: ReturnType<PlayerCombatRuntime["advance"]>): void {
     const atMs = update.enemyTimeline.snapshot.elapsedMs;
-    this.playerEffectHud?.update(createActorEffectPresentations({
-      statuses: update.playerStatuses,
-      shields: update.playerShields,
-      apEffects: this.actionPoints.snapshot.timedEffects,
-      atMs,
-    }));
+    this.playerEffectHud?.update(
+      createActorEffectPresentations({
+        statuses: update.playerStatuses,
+        shields: update.playerShields,
+        apEffects: this.actionPoints.snapshot.timedEffects,
+        atMs,
+      }),
+    );
 
     for (const enemy of this.combatInitialization?.enemies ?? []) {
       const alive = (update.enemyHp[enemy.instanceId] ?? 0) > 0;
@@ -490,9 +426,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       const currentHp = enemyHp[enemy.instanceId] ?? enemy.hp;
       const previousHp = this.displayedEnemyHp.get(enemy.instanceId) ?? enemy.hp;
       const previousHitMs = this.enemyHitRemainingMs.get(enemy.instanceId) ?? 0;
-      const hitRemainingMs = currentHp < previousHp
-        ? 240
-        : Math.max(0, previousHitMs - deltaMs);
+      const hitRemainingMs = currentHp < previousHp ? 240 : Math.max(0, previousHitMs - deltaMs);
       this.displayedEnemyHp.set(enemy.instanceId, currentHp);
       this.enemyHitRemainingMs.set(enemy.instanceId, hitRemainingMs);
 
@@ -506,9 +440,8 @@ export class CombatFoundationScene extends Phaser.Scene {
       });
       const textureKey = resolveEnemyTextureKey(enemy.enemyId, state);
       const readyTextureKey = resolveEnemyTextureKey(enemy.enemyId);
-      const nextTextureKey = textureKey !== undefined && this.textures.exists(textureKey)
-        ? textureKey
-        : readyTextureKey;
+      const nextTextureKey =
+        textureKey !== undefined && this.textures.exists(textureKey) ? textureKey : readyTextureKey;
       if (
         nextTextureKey !== undefined &&
         this.textures.exists(nextTextureKey) &&
@@ -522,16 +455,10 @@ export class CombatFoundationScene extends Phaser.Scene {
 
   private updateEnemyHealth(enemyHp: Readonly<Record<string, number>>): void {
     for (const enemy of this.combatInitialization?.enemies ?? []) {
-      this.enemyHealthBars.get(enemy.instanceId)?.update(
-        enemyHp[enemy.instanceId] ?? enemy.hp,
-        enemy.hp,
-        {
-          shield: this.displayedEnemyShield[enemy.instanceId] ?? 0,
-          ...(this.targeting?.targetId === undefined
-            ? {}
-            : { targeted: this.targeting.targetId === enemy.instanceId }),
-        },
-      );
+      this.enemyHealthBars.get(enemy.instanceId)?.update(enemyHp[enemy.instanceId] ?? enemy.hp, enemy.hp, {
+        shield: this.displayedEnemyShield[enemy.instanceId] ?? 0,
+        ...(this.targeting?.targetId === undefined ? {} : { targeted: this.targeting.targetId === enemy.instanceId }),
+      });
     }
   }
 
@@ -551,17 +478,11 @@ export class CombatFoundationScene extends Phaser.Scene {
       const alive = (this.displayedEnemyHp.get(enemyId) ?? 0) > 0;
       marker.setVisible(alive && enemyId === targetId);
       this.enemyHealthBars.get(enemyId)?.setTargeted(alive && enemyId === targetId);
-      this.enemyActorImages
-        .get(enemyId)
-        ?.setAlpha(!alive || enemyId === targetId ? 1 : 0.62);
+      this.enemyActorImages.get(enemyId)?.setAlpha(!alive || enemyId === targetId ? 1 : 0.62);
     }
   }
 
-  private startCombatRoute(
-    sceneKey: string,
-    payload: Readonly<Record<string, unknown>>,
-    delayMs: number,
-  ): void {
+  private startCombatRoute(sceneKey: string, payload: Readonly<Record<string, unknown>>, delayMs: number): void {
     this.transitionStarted = true;
     this.releaseCommandInputElement();
     const transition = resolveSceneTransition(sceneKey, payload);
@@ -571,14 +492,18 @@ export class CombatFoundationScene extends Phaser.Scene {
   }
 
   private createPauseHandling(): void {
-    this.pauseOverlay = this.add.text(0, 0, "일시정지\nESC로 재개", {
-      fontFamily: "Galmuri9, monospace",
-      fontSize: "28px",
-      color: "#f9fafb",
-      backgroundColor: "#111827",
-      align: "center",
-      padding: { x: 30, y: 20 },
-    }).setOrigin(0.5).setDepth(1000).setVisible(false);
+    this.pauseOverlay = this.add
+      .text(0, 0, "일시정지\nESC로 재개", {
+        fontFamily: "Galmuri9, monospace",
+        fontSize: "28px",
+        color: "#f9fafb",
+        backgroundColor: "#111827",
+        align: "center",
+        padding: { x: 30, y: 20 },
+      })
+      .setOrigin(0.5)
+      .setDepth(1000)
+      .setVisible(false);
 
     this.pauseController = new CombatPauseController(
       [this.combat, this.actionPoints, this.enemyAttackTimeline],
@@ -588,10 +513,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     );
 
     if (typeof document !== "undefined" && typeof window !== "undefined") {
-      this.pauseController.bind(
-        document as unknown as PauseDocument,
-        window as unknown as PauseWindow,
-      );
+      this.pauseController.bind(document as unknown as PauseDocument, window as unknown as PauseWindow);
     }
   }
 
@@ -610,74 +532,38 @@ export class CombatFoundationScene extends Phaser.Scene {
     const layout = createCombatLayout(width, height);
     this.cameras.main.setViewport(0, 0, width, height);
 
-    const backgroundScale = Math.max(
-      width / this.background.width,
-      height / this.background.height,
-    );
-    this.background
-      .setPosition(width / 2, height / 2)
-      .setScale(backgroundScale);
+    const backgroundScale = Math.max(width / this.background.width, height / this.background.height);
+    this.background.setPosition(width / 2, height / 2).setScale(backgroundScale);
     this.overlay.setSize(width, height);
 
-    this.playerPlaceholder
-      .setPosition(layout.player.x, layout.player.y)
-      .setScale(layout.actorScale);
+    this.playerPlaceholder.setPosition(layout.player.x, layout.player.y).setScale(layout.actorScale);
     const enemyCount = this.enemyPlaceholders.length;
     const enemySpan = Math.min(width * 0.38, 420 * layout.actorScale);
     const enemySpacing = enemyCount > 1 ? enemySpan / (enemyCount - 1) : 0;
     this.enemyPlaceholders.forEach((placeholder, index) => {
       placeholder
-        .setPosition(
-          layout.enemy.x + (index - (enemyCount - 1) / 2) * enemySpacing,
-          layout.enemy.y,
-        )
+        .setPosition(layout.enemy.x + (index - (enemyCount - 1) / 2) * enemySpacing, layout.enemy.y)
         .setScale(layout.actorScale);
     });
-    this.relicHud.setPosition(
-      layout.relicHudReservation.x,
-      layout.relicHudReservation.y,
-    );
-    this.relicHud.setSize(
-      layout.relicHudReservation.width,
-      layout.relicHudReservation.height,
-      width >= 720 ? 260 : 0,
-    );
+    this.relicHud.setPosition(layout.relicHudReservation.x, layout.relicHudReservation.y);
+    this.relicHud.setSize(layout.relicHudReservation.width, layout.relicHudReservation.height, width >= 720 ? 260 : 0);
     this.encounterLabel
-      .setPosition(
-        layout.relicHudReservation.right - 12,
-        layout.relicHudReservation.y + 15,
-      )
+      .setPosition(layout.relicHudReservation.right - 12, layout.relicHudReservation.y + 15)
       .setVisible(width >= 720);
     this.combatHud.setPosition(layout.hudReservation.x, layout.hudReservation.y);
     this.combatHud.setSize(layout.hudReservation.width, layout.hudReservation.height);
-    this.enemyAttackGauge.setPosition(
-      layout.enemyAttackGaugeReservation.x,
-      layout.enemyAttackGaugeReservation.y,
-    );
-    this.enemyAttackGauge.setSize(
-      layout.enemyAttackGaugeReservation.width,
-      layout.enemyAttackGaugeReservation.height,
-    );
-    this.commandHud.setPosition(
-      layout.commandHudReservation.x,
-      layout.commandHudReservation.y,
-    );
-    this.commandHud.setSize(
-      layout.commandHudReservation.width,
-      layout.commandHudReservation.height,
-    );
-    this.comboText
-      .setPosition(width - 24, height - 24)
-      .setVisible(this.skillStarter !== undefined);
+    this.enemyAttackGauge.setPosition(layout.enemyAttackGaugeReservation.x, layout.enemyAttackGaugeReservation.y);
+    this.enemyAttackGauge.setSize(layout.enemyAttackGaugeReservation.width, layout.enemyAttackGaugeReservation.height);
+    this.commandHud.setPosition(layout.commandHudReservation.x, layout.commandHudReservation.y);
+    this.commandHud.setSize(layout.commandHudReservation.width, layout.commandHudReservation.height);
+    this.comboText.setPosition(width - 24, height - 24).setVisible(this.skillStarter !== undefined);
     this.pauseOverlay?.setPosition(width / 2, height / 2);
   }
 
   private updateComboDisplay(snapshot: ComboSnapshot | undefined): void {
     if (snapshot === undefined) return;
     const bonusPercent = Math.round((snapshot.multiplier - 1) * 100);
-    this.comboText
-      .setText(`x${snapshot.count} +${bonusPercent}%`)
-      .setColor(snapshot.count > 0 ? "#fcd34d" : "#94a3b8");
+    this.comboText.setText(`x${snapshot.count} +${bonusPercent}%`).setColor(snapshot.count > 0 ? "#fcd34d" : "#94a3b8");
   }
 
   private createCommandInputElement(): void {
@@ -754,11 +640,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     textureKey?: string,
   ): Phaser.GameObjects.Container {
     const container = this.add.container(0, 0);
-    const silhouette = textureKey !== undefined && this.textures.exists(textureKey)
-      ? this.add.image(0, 0, textureKey)
-      : this.add
-          .rectangle(0, 0, 120, 180, 0x111827, 0.82)
-          .setStrokeStyle(3, accentColor, 1);
+    const silhouette =
+      textureKey !== undefined && this.textures.exists(textureKey)
+        ? this.add.image(0, 0, textureKey)
+        : this.add.rectangle(0, 0, 120, 180, 0x111827, 0.82).setStrokeStyle(3, accentColor, 1);
     if (silhouette instanceof Phaser.GameObjects.Image) {
       const scale = Math.min(220 / silhouette.width, 260 / silhouette.height);
       silhouette.setScale(scale);
@@ -776,21 +661,11 @@ export class CombatFoundationScene extends Phaser.Scene {
     return container;
   }
 
-  private playPlayerAttackVisual(
-    primaryWeaponId: string | undefined,
-    skill: SkillDefinition,
-  ): void {
+  private playPlayerAttackVisual(primaryWeaponId: string | undefined, skill: SkillDefinition): void {
     if (!skill.effects.some((effect) => effect.type === "damage")) return;
     const actor = this.playerActorImage;
-    const attackTextureKey = resolvePlayerAttackTextureKey(
-      primaryWeaponId,
-      skill.category,
-    );
-    if (
-      actor === undefined ||
-      attackTextureKey === undefined ||
-      !this.textures.exists(attackTextureKey)
-    ) {
+    const attackTextureKey = resolvePlayerAttackTextureKey(primaryWeaponId, skill.category);
+    if (actor === undefined || attackTextureKey === undefined || !this.textures.exists(attackTextureKey)) {
       return;
     }
 
@@ -806,21 +681,15 @@ export class CombatFoundationScene extends Phaser.Scene {
       ease: "Sine.Out",
     });
 
-    this.playerAttackReset = this.time.delayedCall(
-      Math.max(180, skill.windupMs + skill.recoveryMs),
-      () => {
-        actor.setPosition(0, 0);
-        if (
-          this.playerRestTextureKey !== undefined &&
-          this.textures.exists(this.playerRestTextureKey)
-        ) {
-          actor.setTexture(this.playerRestTextureKey);
-          actor.setScale(Math.min(220 / actor.width, 260 / actor.height));
-        }
-        this.playerAttackReset = undefined;
-        this.playerAttackTween = undefined;
-      },
-    );
+    this.playerAttackReset = this.time.delayedCall(Math.max(180, skill.windupMs + skill.recoveryMs), () => {
+      actor.setPosition(0, 0);
+      if (this.playerRestTextureKey !== undefined && this.textures.exists(this.playerRestTextureKey)) {
+        actor.setTexture(this.playerRestTextureKey);
+        actor.setScale(Math.min(220 / actor.width, 260 / actor.height));
+      }
+      this.playerAttackReset = undefined;
+      this.playerAttackTween = undefined;
+    });
   }
 
   private releaseResizeListener(): void {

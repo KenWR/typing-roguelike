@@ -4,34 +4,16 @@ import {
   type RunState,
   type SkillDefinition,
 } from "@typing-roguelike/shared";
-import {
-  playPlayerHitSound,
-  playRuntimeBgm,
-  playWeaponImpactSound,
-} from "../audio/runtime-audio";
+import { playPlayerHitSound, playRuntimeBgm, playWeaponImpactSound } from "../audio/runtime-audio";
 import { ActionPointResource } from "./action-point-resource";
 import { CombatApEffectController } from "./combat-ap-effects";
-import type {
-  CombatEnemyInitialization,
-  CombatEncounterInitialization,
-} from "./encounter-initializer";
+import type { CombatEnemyInitialization, CombatEncounterInitialization } from "./encounter-initializer";
 import { CombatState, type CombatUpdate } from "./combat-state";
 import { ShieldPool, type ShieldInstance } from "./shield-pool";
-import {
-  EnemyAttackTimeline,
-  type EnemyAttackEvent,
-  type EnemyAttackTimelineUpdate,
-} from "./enemy-attack-timeline";
+import { EnemyAttackTimeline, type EnemyAttackEvent, type EnemyAttackTimelineUpdate } from "./enemy-attack-timeline";
 import { EnemyImpactResolver } from "./enemy-impact-resolver";
-import {
-  SkillCombatantState,
-  SkillImpactResolver,
-  type TimedStatusEffect,
-} from "./skill-impact-resolver";
-import {
-  finalizeCombatOutcome,
-  type CombatOutcomeRoute,
-} from "./combat-outcome-routing";
+import { SkillCombatantState, SkillImpactResolver, type TimedStatusEffect } from "./skill-impact-resolver";
+import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome-routing";
 
 export type PlayerCombatRuntimeConfig = Readonly<{
   combat: CombatState;
@@ -76,9 +58,7 @@ type OrderedRuntimeImpact =
       sequence: number;
     }>;
 
-const resolveAttackPower = (
-  initialization: CombatEncounterInitialization,
-): number => {
+const resolveAttackPower = (initialization: CombatEncounterInitialization): number => {
   const total = initialization.player.equipmentIds.reduce((sum, equipmentId) => {
     const equipment = EQUIPMENT_CONFIGS.find(({ id }) => id === equipmentId);
     return sum + (equipment?.baseAttack ?? 0);
@@ -112,10 +92,7 @@ export class PlayerCombatRuntime {
   private readonly enemyShieldIdByTimelineId = new Map<string, string>();
   private readonly player: SkillCombatantState;
   private readonly enemies = new Map<string, SkillCombatantState>();
-  private readonly skillsByActionId = new Map<
-    string,
-    Readonly<{ skill: SkillDefinition; damageMultiplier: number }>
-  >();
+  private readonly skillsByActionId = new Map<string, Readonly<{ skill: SkillDefinition; damageMultiplier: number }>>();
   private route: CombatOutcomeRoute | null = null;
   private nextEnemyTimelineSequence = 1;
 
@@ -166,11 +143,7 @@ export class PlayerCombatRuntime {
     }
   }
 
-  registerAction(
-    actionId: string,
-    skill: SkillDefinition,
-    damageMultiplier = 1,
-  ): void {
+  registerAction(actionId: string, skill: SkillDefinition, damageMultiplier = 1): void {
     if (this.route !== null) return;
     this.skillsByActionId.set(actionId, { skill, damageMultiplier });
     this.grantSkillShields(actionId, skill);
@@ -200,9 +173,7 @@ export class PlayerCombatRuntime {
   }
 
   get enemyStatuses(): Readonly<Record<string, readonly TimedStatusEffect[]>> {
-    return Object.fromEntries(
-      Array.from(this.enemies, ([enemyId, enemy]) => [enemyId, enemy.timedStatuses]),
-    );
+    return Object.fromEntries(Array.from(this.enemies, ([enemyId, enemy]) => [enemyId, enemy.timedStatuses]));
   }
 
   get playerShield(): number {
@@ -262,10 +233,7 @@ export class PlayerCombatRuntime {
     };
   }
 
-  private resolveImpactsChronologically(
-    combatUpdate: CombatUpdate,
-    enemyEvents: readonly EnemyAttackEvent[],
-  ): void {
+  private resolveImpactsChronologically(combatUpdate: CombatUpdate, enemyEvents: readonly EnemyAttackEvent[]): void {
     const playerImpacts: OrderedRuntimeImpact[] = combatUpdate.events
       .filter((event) => event.type === "impact-resolved")
       .map((event, sequence) => ({ source: "player", event, priority: 1, sequence }));
@@ -293,13 +261,9 @@ export class PlayerCombatRuntime {
     this.shields.pruneExpired(this.elapsedMs);
   }
 
-  private releaseFinishedWindupShields(
-    timeline: Readonly<EnemyAttackTimeline["snapshot"]>,
-  ): void {
+  private releaseFinishedWindupShields(timeline: Readonly<EnemyAttackTimeline["snapshot"]>): void {
     const activeWindupTimelineIds = new Set(
-      timeline.attacks
-        .filter((attack) => attack.phase === "windup")
-        .map((attack) => attack.timelineId),
+      timeline.attacks.filter((attack) => attack.phase === "windup").map((attack) => attack.timelineId),
     );
 
     for (const timelineId of this.enemyShieldIdByTimelineId.keys()) {
@@ -320,9 +284,7 @@ export class PlayerCombatRuntime {
     if (entry === undefined) return;
     const { skill, damageMultiplier } = entry;
 
-    const target = event.targetId === "player"
-      ? this.player
-      : this.resolveLivingEnemyTarget(event.targetId);
+    const target = event.targetId === "player" ? this.player : this.resolveLivingEnemyTarget(event.targetId);
     if (target === undefined) return;
 
     const impactEvent = target.id === event.targetId ? event : { ...event, targetId: target.id };
@@ -338,10 +300,7 @@ export class PlayerCombatRuntime {
 
     this.apEffects.onSkillImpact(skill);
 
-    if (
-      target.id !== this.player.id &&
-      (result.damageApplied > 0 || result.shieldAbsorbedDamage > 0)
-    ) {
+    if (target.id !== this.player.id && (result.damageApplied > 0 || result.shieldAbsorbedDamage > 0)) {
       playWeaponImpactSound(this.initialization.player.equipmentIds);
     }
 
@@ -353,9 +312,7 @@ export class PlayerCombatRuntime {
   }
 
   private cancelEnemyAttacks(enemyId: string): void {
-    const attacks = this.enemyTimeline.snapshot.attacks.filter(
-      (attack) => attack.enemyId === enemyId,
-    );
+    const attacks = this.enemyTimeline.snapshot.attacks.filter((attack) => attack.enemyId === enemyId);
     for (const attack of attacks) {
       this.releaseEnemyShield(attack.timelineId);
       this.enemyTimeline.cancelAttack(attack.timelineId);
@@ -368,9 +325,7 @@ export class PlayerCombatRuntime {
     this.enemyTimelineByShieldId.delete(shieldId);
     this.enemyShieldIdByTimelineId.delete(timelineId);
 
-    const attack = this.enemyTimeline.snapshot.attacks.find(
-      (candidate) => candidate.timelineId === timelineId,
-    );
+    const attack = this.enemyTimeline.snapshot.attacks.find((candidate) => candidate.timelineId === timelineId);
     if (attack === undefined || attack.phase !== "windup") return;
 
     this.enemyTimeline.cancelAttack(timelineId);
@@ -412,9 +367,11 @@ export class PlayerCombatRuntime {
   }
 
   private isEnemyDefenseImpact(event: ResolvedEnemyImpactEvent): boolean {
-    return this.findEnemy(event.enemyId)?.actions.some(
-      (action) => action.id === event.attackId && action.kind === "defense",
-    ) ?? false;
+    return (
+      this.findEnemy(event.enemyId)?.actions.some(
+        (action) => action.id === event.attackId && action.kind === "defense",
+      ) ?? false
+    );
   }
 
   private startNextEnemyAttack(enemyId: string): void {
@@ -422,7 +379,8 @@ export class PlayerCombatRuntime {
       this.route !== null ||
       this.combat.snapshot.status !== "active" ||
       this.enemyTimeline.snapshot.status !== "active"
-    ) return;
+    )
+      return;
 
     const enemyState = this.enemies.get(enemyId);
     if (enemyState?.snapshot.health.isDead !== false) return;
@@ -436,10 +394,7 @@ export class PlayerCombatRuntime {
     if (hasActiveAttack) return;
 
     const randomValue = validateRandomValue(this.random());
-    const actionIndex = Math.min(
-      Math.floor(randomValue * enemy.actions.length),
-      enemy.actions.length - 1,
-    );
+    const actionIndex = Math.min(Math.floor(randomValue * enemy.actions.length), enemy.actions.length - 1);
     const action = enemy.actions[actionIndex];
     if (action === undefined) return;
 
@@ -515,10 +470,7 @@ export class PlayerCombatRuntime {
       return;
     }
 
-    if (
-      this.enemies.size > 0 &&
-      Array.from(this.enemies.values()).every((enemy) => enemy.snapshot.health.isDead)
-    ) {
+    if (this.enemies.size > 0 && Array.from(this.enemies.values()).every((enemy) => enemy.snapshot.health.isDead)) {
       this.route = this.finalize("victory");
     }
   }
@@ -531,10 +483,7 @@ export class PlayerCombatRuntime {
       outcome,
       nextNodeIds: this.nextNodeIds,
       bossNode: this.bossNode,
-      rewardTier:
-        this.initialization.rewardPolicy === "standard"
-          ? "normal"
-          : this.initialization.rewardPolicy,
+      rewardTier: this.initialization.rewardPolicy === "standard" ? "normal" : this.initialization.rewardPolicy,
     });
     this.runState = route.runState;
     return route;

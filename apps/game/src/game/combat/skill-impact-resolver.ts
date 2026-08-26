@@ -1,7 +1,4 @@
-import type {
-  SkillDefinition,
-  SkillStatusEffect,
-} from "@typing-roguelike/shared";
+import type { SkillDefinition, SkillStatusEffect } from "@typing-roguelike/shared";
 import type { CombatActionEvent } from "./combat-state";
 import { calculateDamage } from "./damage-formula";
 import { HealthState, type HealthSnapshot } from "./health-state";
@@ -13,9 +10,10 @@ export type ActiveStatusEffect = Readonly<{
   stacks: number;
 }>;
 
-export type TimedStatusEffect = ActiveStatusEffect & Readonly<{
-  remainingMs: number;
-}>;
+export type TimedStatusEffect = ActiveStatusEffect &
+  Readonly<{
+    remainingMs: number;
+  }>;
 
 export type SkillCombatantSnapshot = Readonly<{
   id: string;
@@ -140,14 +138,7 @@ export type SkillImpactResult = Readonly<{
 export class SkillImpactResolver {
   private readonly resolvedActionIds = new Set<string>();
 
-  resolve({
-    event,
-    skill,
-    actor,
-    target,
-    shields,
-    damageMultiplier = 1,
-  }: ResolveSkillImpactInput): SkillImpactResult {
+  resolve({ event, skill, actor, target, shields, damageMultiplier = 1 }: ResolveSkillImpactInput): SkillImpactResult {
     if (event.type !== "impact-resolved") {
       return this.emptyResult(event.actionId);
     }

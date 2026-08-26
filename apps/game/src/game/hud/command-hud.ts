@@ -2,10 +2,7 @@ import type Phaser from "phaser";
 import { resolveEffectTextureKey } from "../assets/effect-visual-assets";
 import { RING_CONFIGS } from "@typing-roguelike/shared";
 import { MENU_SETTINGS_REGISTRY_KEYS, type CommandLanguage } from "../scenes/menu-settings";
-import type {
-  CommandInputSnapshot,
-  CommandInputStatus,
-} from "../input/command-input-buffer";
+import type { CommandInputSnapshot, CommandInputStatus } from "../input/command-input-buffer";
 import {
   EFFECT_PLACEHOLDER_TEXTURE_KEY,
   formatEffectRemainingTime,
@@ -68,14 +65,15 @@ type TimedApEffectLike = Readonly<{
   remainingMs: number;
 }>;
 
-type EffectAwareScene = Phaser.Scene & Readonly<{
-  combatInitialization?: Readonly<{
-    player: Readonly<{ skills: readonly SkillLike[] }>;
+type EffectAwareScene = Phaser.Scene &
+  Readonly<{
+    combatInitialization?: Readonly<{
+      player: Readonly<{ skills: readonly SkillLike[] }>;
+    }>;
+    actionPoints?: Readonly<{
+      snapshot: Readonly<{ timedEffects?: readonly TimedApEffectLike[] }>;
+    }>;
   }>;
-  actionPoints?: Readonly<{
-    snapshot: Readonly<{ timedEffects?: readonly TimedApEffectLike[] }>;
-  }>;
-}>;
 
 type EffectVisual = Readonly<{
   container: Phaser.GameObjects.Container;
@@ -100,8 +98,7 @@ const EFFECT_TOP = 8;
 const EFFECT_LEFT = 8;
 const EFFECT_RADIUS = 7;
 const MISSING_ASSET_TEXTURE_KEY = EFFECT_PLACEHOLDER_TEXTURE_KEY;
-const effectTextureKey = (effectId: string): string =>
-  resolveEffectTextureKey(effectId) ?? MISSING_ASSET_TEXTURE_KEY;
+const effectTextureKey = (effectId: string): string => resolveEffectTextureKey(effectId) ?? MISSING_ASSET_TEXTURE_KEY;
 const SCENE_UPDATE_EVENT = "update";
 const SCENE_SHUTDOWN_EVENT = "shutdown";
 const SCENE_DESTROY_EVENT = "destroy";
@@ -118,12 +115,12 @@ export function splitRingCommand(command: string): CommandHudSegments {
   let baseCommand = command;
   let prefix: string | undefined;
   let suffix: string | undefined;
-  const prefixes = RING_CONFIGS
-    .filter((ring) => ring.position === "prefix")
-    .sort((left, right) => right.commandAffix.length - left.commandAffix.length);
-  const suffixes = RING_CONFIGS
-    .filter((ring) => ring.position === "suffix")
-    .sort((left, right) => right.commandAffix.length - left.commandAffix.length);
+  const prefixes = RING_CONFIGS.filter((ring) => ring.position === "prefix").sort(
+    (left, right) => right.commandAffix.length - left.commandAffix.length,
+  );
+  const suffixes = RING_CONFIGS.filter((ring) => ring.position === "suffix").sort(
+    (left, right) => right.commandAffix.length - left.commandAffix.length,
+  );
 
   for (const ring of prefixes) {
     const token = `${ring.commandAffix} `;
@@ -155,7 +152,9 @@ export function formatSegmentedCommand(command: string): string {
     segments.prefix === undefined ? null : `접두사: ${segments.prefix}`,
     `명령어: ${segments.baseCommand}`,
     segments.suffix === undefined ? null : `접미사: ${segments.suffix}`,
-  ].filter((part): part is string => part !== null).join("  |  ");
+  ]
+    .filter((part): part is string => part !== null)
+    .join("  |  ");
 }
 
 export function formatSegmentedAvailableCommands(commands: readonly string[]): string {
@@ -168,33 +167,39 @@ export function createSkillCommandEffects(skill: SkillLike | undefined): Command
     if (effect.type === "damage") return [];
     if (effect.type === "guard") {
       const reduction = Math.round((1 - effect.damageMultiplier) * 100);
-      return [{
-        id: `${skill.id}:guard:${index}`,
-        name: "피해 감소",
-        description: `${skill.name}: 받는 피해 ${reduction}% 감소 · ${effect.durationMs / 1_000}초`,
-        durationMs: effect.durationMs,
-        remainingMs: null,
-        textureKey: effectTextureKey("guard"),
-      }];
+      return [
+        {
+          id: `${skill.id}:guard:${index}`,
+          name: "피해 감소",
+          description: `${skill.name}: 받는 피해 ${reduction}% 감소 · ${effect.durationMs / 1_000}초`,
+          durationMs: effect.durationMs,
+          remainingMs: null,
+          textureKey: effectTextureKey("guard"),
+        },
+      ];
     }
     if (effect.type === "shield") {
-      return [{
-        id: `${skill.id}:shield:${index}`,
-        name: "실드",
-        description: `${skill.name}: 실드 ${effect.amount} · ${effect.durationMs / 1_000}초`,
+      return [
+        {
+          id: `${skill.id}:shield:${index}`,
+          name: "실드",
+          description: `${skill.name}: 실드 ${effect.amount} · ${effect.durationMs / 1_000}초`,
+          durationMs: effect.durationMs,
+          remainingMs: null,
+          textureKey: effectTextureKey("shield"),
+        },
+      ];
+    }
+    return [
+      {
+        id: `${skill.id}:status:${effect.statusId}:${index}`,
+        name: effect.statusId,
+        description: `${skill.name}: ${effect.statusId} ${effect.stacks ?? 1}중첩 · ${effect.durationMs / 1_000}초`,
         durationMs: effect.durationMs,
         remainingMs: null,
-        textureKey: effectTextureKey("shield"),
-      }];
-    }
-    return [{
-      id: `${skill.id}:status:${effect.statusId}:${index}`,
-      name: effect.statusId,
-      description: `${skill.name}: ${effect.statusId} ${effect.stacks ?? 1}중첩 · ${effect.durationMs / 1_000}초`,
-      durationMs: effect.durationMs,
-      remainingMs: null,
-      textureKey: effectTextureKey(effect.statusId),
-    }];
+        textureKey: effectTextureKey(effect.statusId),
+      },
+    ];
   });
 }
 
@@ -205,9 +210,7 @@ export function createTimedApCommandEffects(effects: readonly TimedApEffectLike[
     description: `AP 재생 ${effect.amountPerSecond >= 0 ? "+" : ""}${effect.amountPerSecond}/초`,
     durationMs: effect.durationMs,
     remainingMs: effect.remainingMs,
-    textureKey: effectTextureKey(
-      effect.amountPerSecond >= 0 ? "ap-regen-up" : "ap-regen-down",
-    ),
+    textureKey: effectTextureKey(effect.amountPerSecond >= 0 ? "ap-regen-up" : "ap-regen-down"),
   }));
 }
 
@@ -243,7 +246,12 @@ export function getCommandHudCharacters(state: CommandHudState): CommandHudChara
   const matchedLength = clamp(state.matchedLength, 0, commandCharacters.length);
   return commandCharacters.map((value, index) => ({
     value,
-    state: index < matchedLength ? "matched" : state.status === "incorrect" && index === matchedLength ? "incorrect" : "pending",
+    state:
+      index < matchedLength
+        ? "matched"
+        : state.status === "incorrect" && index === matchedLength
+          ? "incorrect"
+          : "pending",
   }));
 }
 
@@ -270,17 +278,64 @@ export class CommandHud {
     this.scene = scene;
     this.state = createCommandHudState(initialSnapshot);
     this.container = scene.add.container(0, 0);
-    this.panel = scene.add.rectangle(0, 0, this.panelWidth, this.panelHeight, 0x0b1220, 0.94).setOrigin(0).setStrokeStyle(2, 0x64748b, 0.95);
-    this.title = scene.add.text(18, 10, "COMMAND // AVAILABLE", { color: "#94a3b8", fontFamily: "Galmuri9, monospace", fontSize: "13px" });
-    this.commandText = scene.add.text(18, 30, "", { color: "#f8fafc", fontFamily: "Galmuri9, monospace", fontSize: "18px", lineSpacing: 2 });
-    this.inputText = scene.add.text(18, 76, "", { color: "#cbd5e1", fontFamily: "Galmuri9, monospace", fontSize: "16px" });
-    this.statusText = scene.add.text(18, 104, "", { color: "#cbd5e1", fontFamily: "Galmuri9, monospace", fontSize: "13px" });
+    this.panel = scene.add
+      .rectangle(0, 0, this.panelWidth, this.panelHeight, 0x0b1220, 0.94)
+      .setOrigin(0)
+      .setStrokeStyle(2, 0x64748b, 0.95);
+    this.title = scene.add.text(18, 10, "COMMAND // AVAILABLE", {
+      color: "#94a3b8",
+      fontFamily: "Galmuri9, monospace",
+      fontSize: "13px",
+    });
+    this.commandText = scene.add.text(18, 30, "", {
+      color: "#f8fafc",
+      fontFamily: "Galmuri9, monospace",
+      fontSize: "18px",
+      lineSpacing: 2,
+    });
+    this.inputText = scene.add.text(18, 76, "", {
+      color: "#cbd5e1",
+      fontFamily: "Galmuri9, monospace",
+      fontSize: "16px",
+    });
+    this.statusText = scene.add.text(18, 104, "", {
+      color: "#cbd5e1",
+      fontFamily: "Galmuri9, monospace",
+      fontSize: "13px",
+    });
     this.progressTrack = scene.add.rectangle(18, 128, 190, 8, 0x1e293b, 1).setOrigin(0, 0.5);
     this.progressFill = scene.add.rectangle(18, 128, 1, 8, 0x14b8a6, 1).setOrigin(0, 0.5);
-    this.feedbackText = scene.add.text(226, 104, "", { color: "#fcd34d", fontFamily: "Galmuri9, monospace", fontSize: "13px" });
-    this.tooltipBackground = scene.add.rectangle(0, 0, 220, 64, 0x020617, 0.98).setOrigin(0).setStrokeStyle(1, 0x94a3b8, 0.9).setVisible(false);
-    this.tooltipText = scene.add.text(0, 0, "", { color: "#f8fafc", fontFamily: "Galmuri9, monospace", fontSize: "11px", lineSpacing: 4, wordWrap: { width: 196, useAdvancedWrap: true } }).setVisible(false);
-    this.container.add([this.panel, this.title, this.commandText, this.inputText, this.statusText, this.progressTrack, this.progressFill, this.feedbackText, this.tooltipBackground, this.tooltipText]);
+    this.feedbackText = scene.add.text(226, 104, "", {
+      color: "#fcd34d",
+      fontFamily: "Galmuri9, monospace",
+      fontSize: "13px",
+    });
+    this.tooltipBackground = scene.add
+      .rectangle(0, 0, 220, 64, 0x020617, 0.98)
+      .setOrigin(0)
+      .setStrokeStyle(1, 0x94a3b8, 0.9)
+      .setVisible(false);
+    this.tooltipText = scene.add
+      .text(0, 0, "", {
+        color: "#f8fafc",
+        fontFamily: "Galmuri9, monospace",
+        fontSize: "11px",
+        lineSpacing: 4,
+        wordWrap: { width: 196, useAdvancedWrap: true },
+      })
+      .setVisible(false);
+    this.container.add([
+      this.panel,
+      this.title,
+      this.commandText,
+      this.inputText,
+      this.statusText,
+      this.progressTrack,
+      this.progressFill,
+      this.feedbackText,
+      this.tooltipBackground,
+      this.tooltipText,
+    ]);
     this.container.setSize(this.panelWidth, this.panelHeight);
     scene.events.on(SCENE_UPDATE_EVENT, this.refreshEffects, this);
     scene.events.once(SCENE_SHUTDOWN_EVENT, this.release, this);
@@ -288,7 +343,9 @@ export class CommandHud {
     this.refresh();
   }
 
-  setPosition(x: number, y: number): void { this.container.setPosition(x, y); }
+  setPosition(x: number, y: number): void {
+    this.container.setPosition(x, y);
+  }
   setSize(width: number, height: number): void {
     this.panelWidth = Math.max(260, width);
     this.panelHeight = Math.max(132, height);
@@ -296,10 +353,24 @@ export class CommandHud {
     this.container.setSize(this.panelWidth, this.panelHeight);
     this.refresh();
   }
-  update(snapshot: CommandInputSnapshot): void { this.state = updateCommandHudState(this.state, snapshot); this.refresh(); }
-  showSkillStarted(): void { this.state = markSkillStarted(this.state); this.refresh(); }
-  getState(): CommandHudState { return { ...this.state, commands: [...this.state.commands], feedback: this.state.feedback ? { ...this.state.feedback } : null }; }
-  getEffects(): readonly CommandHudEffect[] { return this.resolveEffects(); }
+  update(snapshot: CommandInputSnapshot): void {
+    this.state = updateCommandHudState(this.state, snapshot);
+    this.refresh();
+  }
+  showSkillStarted(): void {
+    this.state = markSkillStarted(this.state);
+    this.refresh();
+  }
+  getState(): CommandHudState {
+    return {
+      ...this.state,
+      commands: [...this.state.commands],
+      feedback: this.state.feedback ? { ...this.state.feedback } : null,
+    };
+  }
+  getEffects(): readonly CommandHudEffect[] {
+    return this.resolveEffects();
+  }
 
   private getLanguage(): CommandLanguage {
     return this.scene.registry.get(MENU_SETTINGS_REGISTRY_KEYS.commandLanguage) === "en" ? "en" : "ko";
@@ -307,7 +378,9 @@ export class CommandHud {
 
   private resolveEffects(): CommandHudEffect[] {
     const effectScene = this.scene as EffectAwareScene;
-    const currentSkill = effectScene.combatInitialization?.player.skills.find((skill) => skill.command === this.state.command);
+    const currentSkill = effectScene.combatInitialization?.player.skills.find(
+      (skill) => skill.command === this.state.command,
+    );
     const skillEffects = createSkillCommandEffects(currentSkill);
     const timedApEffects = createTimedApCommandEffects(effectScene.actionPoints?.snapshot.timedEffects);
     return [...skillEffects, ...timedApEffects];
@@ -321,9 +394,7 @@ export class CommandHud {
       const x = EFFECT_LEFT + index * (EFFECT_SIZE + EFFECT_GAP);
       const darknessHeight = EFFECT_SIZE * getEffectDarknessRatio(effect);
       visual.container.setPosition(x, EFFECT_TOP).setVisible(true).setActive(true);
-      const textureKey = this.scene.textures.exists(effect.textureKey)
-        ? effect.textureKey
-        : MISSING_ASSET_TEXTURE_KEY;
+      const textureKey = this.scene.textures.exists(effect.textureKey) ? effect.textureKey : MISSING_ASSET_TEXTURE_KEY;
       if (visual.icon.texture.key !== textureKey) visual.icon.setTexture(textureKey);
       visual.darkness.setPosition(0, EFFECT_SIZE - darknessHeight).setSize(EFFECT_SIZE, darknessHeight);
       visual.hitArea.setData("effectId", effect.id);
@@ -338,7 +409,10 @@ export class CommandHud {
       this.hideTooltip();
       return;
     }
-    this.showTooltip(hovered, effects.findIndex((effect) => effect.id === hovered.id));
+    this.showTooltip(
+      hovered,
+      effects.findIndex((effect) => effect.id === hovered.id),
+    );
   }
 
   private getOrCreateEffectVisual(index: number): EffectVisual {
@@ -360,8 +434,14 @@ export class CommandHud {
     maskShape.fillStyle(0xffffff, 1);
     maskShape.fillRoundedRect(0, 0, EFFECT_SIZE, EFFECT_SIZE, EFFECT_RADIUS);
     const darknessMask = maskShape.createGeometryMask();
-    const darkness = this.scene.add.rectangle(0, EFFECT_SIZE, EFFECT_SIZE, 0, 0x000000, 0.68).setOrigin(0).setMask(darknessMask);
-    const hitArea = this.scene.add.zone(0, 0, EFFECT_SIZE, EFFECT_SIZE).setOrigin(0).setInteractive({ useHandCursor: true });
+    const darkness = this.scene.add
+      .rectangle(0, EFFECT_SIZE, EFFECT_SIZE, 0, 0x000000, 0.68)
+      .setOrigin(0)
+      .setMask(darknessMask);
+    const hitArea = this.scene.add
+      .zone(0, 0, EFFECT_SIZE, EFFECT_SIZE)
+      .setOrigin(0)
+      .setInteractive({ useHandCursor: true });
     hitArea.on(POINTER_OVER_EVENT, () => {
       const effect = hitArea.getData("effect") as CommandHudEffect | undefined;
       if (effect === undefined) return;
@@ -384,11 +464,21 @@ export class CommandHud {
 
   private showTooltip(effect: CommandHudEffect, index: number): void {
     const tooltipWidth = 220;
-    const x = clamp(EFFECT_LEFT + index * (EFFECT_SIZE + EFFECT_GAP), 8, Math.max(8, this.panelWidth - tooltipWidth - 8));
+    const x = clamp(
+      EFFECT_LEFT + index * (EFFECT_SIZE + EFFECT_GAP),
+      8,
+      Math.max(8, this.panelWidth - tooltipWidth - 8),
+    );
     const label = `${effect.name}\n${effect.description}\n${formatEffectRemainingTime(effect.remainingMs)}`;
-    this.tooltipText.setText(label).setPosition(x + 12, EFFECT_TOP + EFFECT_SIZE + 13).setVisible(true);
+    this.tooltipText
+      .setText(label)
+      .setPosition(x + 12, EFFECT_TOP + EFFECT_SIZE + 13)
+      .setVisible(true);
     const tooltipHeight = Math.max(64, this.tooltipText.height + 20);
-    this.tooltipBackground.setPosition(x, EFFECT_TOP + EFFECT_SIZE + 7).setSize(tooltipWidth, tooltipHeight).setVisible(true);
+    this.tooltipBackground
+      .setPosition(x, EFFECT_TOP + EFFECT_SIZE + 7)
+      .setSize(tooltipWidth, tooltipHeight)
+      .setVisible(true);
     this.container.bringToTop(this.tooltipBackground);
     this.container.bringToTop(this.tooltipText);
   }
@@ -414,7 +504,10 @@ export class CommandHud {
     const isCompact = this.panelWidth < 620;
     const commandFontSize = this.panelWidth < 380 ? 12 : isCompact ? 14 : 18;
     const effectCount = this.resolveEffects().length;
-    const contentLeft = effectCount > 0 ? Math.min(18 + effectCount * (EFFECT_SIZE + EFFECT_GAP), Math.max(18, this.panelWidth - 180)) : 18;
+    const contentLeft =
+      effectCount > 0
+        ? Math.min(18 + effectCount * (EFFECT_SIZE + EFFECT_GAP), Math.max(18, this.panelWidth - 180))
+        : 18;
 
     this.panel.setStrokeStyle(2, presentation.accent, 0.95);
     this.title.setX(contentLeft);
@@ -426,10 +519,7 @@ export class CommandHud {
       .setColor("#f8fafc");
 
     const listBottom = 30 + this.commandText.height;
-    const inputY = Math.min(
-      Math.max(58, listBottom + 5),
-      Math.max(58, this.panelHeight - 58),
-    );
+    const inputY = Math.min(Math.max(58, listBottom + 5), Math.max(58, this.panelHeight - 58));
     const statusY = Math.min(inputY + 23, this.panelHeight - 33);
     const progressY = Math.min(statusY + 23, this.panelHeight - 12);
 
@@ -443,11 +533,16 @@ export class CommandHud {
     const statusLabel = language === "ko" ? presentation.labelKo : presentation.labelEn;
     this.statusText
       .setPosition(18, statusY)
-      .setText(`${activePrefix}: ${formatSegmentedCommand(this.state.command)} · ${statusLabel} ${matchedLength}/${commandLength}`)
+      .setText(
+        `${activePrefix}: ${formatSegmentedCommand(this.state.command)} · ${statusLabel} ${matchedLength}/${commandLength}`,
+      )
       .setColor(presentation.color);
 
     this.progressTrack.setPosition(18, progressY).setSize(progressWidth, 8);
-    this.progressFill.setPosition(18, progressY).setSize(progressWidth * progressRatio, 8).setFillStyle(presentation.accent, 1);
+    this.progressFill
+      .setPosition(18, progressY)
+      .setSize(progressWidth * progressRatio, 8)
+      .setFillStyle(presentation.accent, 1);
     this.feedbackText
       .setText(this.state.feedback?.type === "skill-started" ? `[SKILL START] ${this.state.feedback.command}` : "")
       .setColor(presentation.color)
