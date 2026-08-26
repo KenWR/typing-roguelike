@@ -4,6 +4,10 @@ import type { GeneratedMapNode } from "../../rules/map-generation.ts";
 export type RunStatus = RunStateStatus;
 export type RunEndReason = Exclude<RunStatus, "active">;
 
+export interface CreateRunRequest {
+	seed?: number;
+}
+
 export interface CreateRunResponse {
 	runId: string;
 	stateVersion: number;
