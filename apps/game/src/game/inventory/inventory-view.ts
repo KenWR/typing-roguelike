@@ -15,7 +15,7 @@ const LOADOUT_ITEM_KEYS = [
   "ring2Id",
 ] as const;
 
-export type InventoryEquipmentSlot = EquipmentConfig["slot"] | "ring" | "unknown";
+export type InventoryEquipmentSlot = EquipmentConfig["slot"] | "unknown";
 
 export type InventoryEquipmentSkillView = Readonly<{
   id: string;
@@ -89,12 +89,13 @@ export const createInventoryView = (
         id: ring.id,
         name: ring.name,
         rarity: ring.rarity,
-        slot: "ring" as const,
+        // 기존 인벤토리 카드 계약을 유지하면서 반지를 정식 등록 아이템으로 표시한다.
+        slot: "unknown" as const,
         isEquipped: equippedEquipmentIds.has(ring.id),
         skills: [
           {
             id: `${ring.id}:affix`,
-            name: ring.position === "prefix" ? "접두사 효과" : "접미사 효과",
+            name: ring.position === "prefix" ? "반지 · 접두사" : "반지 · 접미사",
             command: ring.position === "prefix"
               ? `${ring.commandAffix} …`
               : `… ${ring.commandAffix}`,
