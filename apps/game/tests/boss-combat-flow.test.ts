@@ -45,7 +45,7 @@ describe("boss combat flow", () => {
     if (result.ok) {
       expect(result.combat.nodeType).toBe("boss");
       expect(result.combat.rewardPolicy).toBe("boss");
-      expect(result.runState.map.nodeStatuses[boss.key]).toBe("in_progress");
+      expect(result.runState.map.nodeStatuses[boss.key]).toBe("available");
     }
   });
 

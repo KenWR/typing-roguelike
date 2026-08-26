@@ -34,18 +34,57 @@ const NODE_LABEL: Record<string, string> = {
   cleared: "CLEARED",
 };
 
+const removeLegacyNodeStatusHud = (
+  baseChildren: readonly Phaser.GameObjects.GameObject[],
+  panelX: number,
+): void => {
+  const statusLabels = new Set(Object.values(NODE_LABEL));
+  const legacyLegendSquareYs = new Set([159, 189, 219, 249]);
+  for (const child of baseChildren) {
+    const text = (child as Phaser.GameObjects.GameObject & { text?: unknown }).text;
+    if (text === "NODE STATUS" || (typeof text === "string" && statusLabels.has(text))) {
+      child.destroy();
+      continue;
+    }
+
+    const positioned = child as Phaser.GameObjects.GameObject & {
+      x?: unknown;
+      y?: unknown;
+      type?: unknown;
+    };
+    const isLegacyPanelBackground =
+      positioned.type === "Rectangle" && positioned.x === panelX && positioned.y === 92;
+    const isLegacyLegendSquare =
+      positioned.type === "Rectangle" &&
+      positioned.x === panelX + 32 &&
+      typeof positioned.y === "number" &&
+      legacyLegendSquareYs.has(positioned.y);
+    if (isLegacyPanelBackground || isLegacyLegendSquare) {
+      child.destroy();
+    }
+  }
+};
+
 export class InteractiveMapScene extends MapScene {
   protected override readonly renderLegacyMapChoices: boolean = false;
   private routeRunState?: Readonly<RunState>;
   private selectionLocked = false;
 
-  init(data: { runState?: Readonly<RunState> }): void {
+  init(data: { runState?: Readonly<RunState>; recoveryAvailable?: boolean }): void {
     this.routeRunState = data.runState;
     this.selectionLocked = false;
     super.init(data);
+
+    if (data.runState !== undefined && runSession.get() !== data.runState) {
+      runSession.replace(data.runState);
+    }
+    if (data.recoveryAvailable === true) {
+      runSession.clearCheckpoint();
+    }
   }
 
   create(): void {
+    const baseChildrenBeforeCreate = this.children.list.slice();
     super.create();
 
     const activeRun = this.routeRunState ?? runSession.get();
@@ -57,33 +96,19 @@ export class InteractiveMapScene extends MapScene {
 
     const hudSideMargin = width < 960 ? 16 : 28;
     const hudPanelWidth = Phaser.Math.Clamp(Math.floor((width - 360) / 2), 220, 300);
-    const leftHudX = hudSideMargin;
     const rightHudX = width - hudSideMargin - hudPanelWidth;
-    const hudDepth = 110;
-    this.add.rectangle(leftHudX, 92, hudPanelWidth, 190, 0x111827).setOrigin(0).setDepth(hudDepth);
-    this.add.rectangle(rightHudX, 92, hudPanelWidth, 190, 0x111827).setOrigin(0).setDepth(hudDepth);
-    this.add.rectangle(leftHudX, 92, hudPanelWidth, 190, 0x1f2937).setOrigin(0).setDepth(hudDepth + 1);
-    this.add.text(leftHudX + 22, 110, "RUN HUD", {
-      fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
-      fontSize: "22px",
-      color: "#f9fafb",
-    }).setDepth(hudDepth + 2);
-    this.add.text(leftHudX + 22, 150, `HP  ${view.hpText}`, {
-      fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
-      fontSize: "20px",
-      color: "#f9fafb",
-    }).setDepth(hudDepth + 2);
-    this.add.text(leftHudX + 22, 184, `골드  ${view.currencyText}`, {
-      fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
-      fontSize: "20px",
-      color: "#f9fafb",
-    }).setDepth(hudDepth + 2);
-    this.add.text(leftHudX + 22, 218, `장비  ${view.equipmentText}`, {
-      fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
-      fontSize: "18px",
-      color: "#d1d5db",
-      wordWrap: { width: hudPanelWidth - 50 },
-    }).setDepth(hudDepth + 2);
+    const baseChildren = this.children.list.filter(
+      (child) => !baseChildrenBeforeCreate.includes(child),
+    );
+    const baseCurrencyText = baseChildren.find(
+      (child) =>
+        (child as Phaser.GameObjects.GameObject & { text?: unknown }).text ===
+        `재화  ${view.currencyText}`,
+    );
+    if (baseCurrencyText !== undefined) {
+      (baseCurrencyText as Phaser.GameObjects.Text).setText(`골드  ${view.currencyText}`);
+    }
+    removeLegacyNodeStatusHud(baseChildren, rightHudX);
 
     const mapLeft = MAP_VIEW_SIDE_PADDING;
     const mapRight = width - MAP_VIEW_SIDE_PADDING;

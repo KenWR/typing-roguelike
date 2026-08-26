@@ -32,14 +32,14 @@ const run = (overrides: Partial<RunState> = {}): RunState => ({
 const offer: ShopOffer = { id: "offer", equipmentId: "ember-blade", price: 25 };
 
 describe("core map/shop/rest rules", () => {
-  test("map selection locks competing nodes and completion unlocks next exactly once", () => {
+  test("map selection preserves competing nodes until completion", () => {
     const map = {
       ...run().map,
       nodeStatuses: { a: "available" as const, b: "available" as const, next: "locked" as const },
     };
     const begun = beginMapNode(map, "a");
-    expect(begun.nodeStatuses.a).toBe("in_progress");
-    expect(begun.nodeStatuses.b).toBe("locked");
+    expect(begun.nodeStatuses.a).toBe("available");
+    expect(begun.nodeStatuses.b).toBe("available");
 
     const first = completeMapNode(begun, "a", ["next"]);
     expect(first.applied).toBe(true);

@@ -1,4 +1,4 @@
-import { type RunState } from "@typing-roguelike/shared";
+import { generateNodeChoices, type RunState } from "@typing-roguelike/shared";
 import { SCENE_KEYS } from "../scenes/scene-contract";
 
 export type RunResumeRoute = Readonly<{
@@ -12,21 +12,53 @@ export type RunResumeRoute = Readonly<{
  * closed while a node is active, the run returns to map selection and the
  * selected node is made available again.
  */
+const hasPersistedSelectionPath = (runState: Readonly<RunState>): boolean => {
+  const { currentNodeId, currentRound, choicePath, seed } = runState.map;
+  if (currentNodeId === "start" || choicePath.length !== currentRound || choicePath.length === 0) {
+    return false;
+  }
+
+  try {
+    const previousPath = choicePath.slice(0, -1);
+    const selectedChoice = choicePath[choicePath.length - 1];
+    return generateNodeChoices(seed, currentRound, previousPath).some(
+      (node) => node.key === currentNodeId && node.choice === selectedChoice,
+    );
+  } catch {
+    return false;
+  }
+};
+
 const normalizeInterruptedRun = (runState: Readonly<RunState>): RunState => {
   const currentNodeId = runState.map.currentNodeId;
-  if (runState.map.nodeStatuses[currentNodeId] !== "in_progress") {
-    return runState as RunState;
+  const currentStatus = runState.map.nodeStatuses[currentNodeId];
+  let normalizedMap = runState.map;
+
+  if (currentStatus === "in_progress") {
+    normalizedMap = {
+      ...normalizedMap,
+      nodeStatuses: {
+        ...normalizedMap.nodeStatuses,
+        [currentNodeId]: "available",
+      },
+    };
   }
+
+  if (
+    (currentStatus === "available" || currentStatus === "in_progress") &&
+    hasPersistedSelectionPath(runState)
+  ) {
+    normalizedMap = {
+      ...normalizedMap,
+      choicePath: normalizedMap.choicePath.slice(0, -1),
+    };
+  }
+
+  if (normalizedMap === runState.map) return runState as RunState;
 
   return {
     ...runState,
-    map: {
-      ...runState.map,
-      nodeStatuses: {
-        ...runState.map.nodeStatuses,
-        [currentNodeId]: "available",
-      },
-    },
+    map: normalizedMap,
   };
 };
 
