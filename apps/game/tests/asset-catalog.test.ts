@@ -7,6 +7,7 @@ import {
   RUNTIME_IMAGE_ASSETS,
   getRelicIconTextureKey,
 } from "../src/game/assets/asset-catalog";
+import { EQUIPMENT_ICON_ASSETS } from "../src/game/assets/equipment-icon-assets";
 import { PLAYER_WEAPON_IMAGE_ASSETS } from "../src/game/assets/player-visual-assets";
 
 describe("relic icon asset catalog", () => {
@@ -32,12 +33,18 @@ describe("relic icon asset catalog", () => {
     }
   });
 
-  test("includes relic and combat catalogs exactly once in the runtime preload contract", () => {
+  test("includes relic, equipment, and combat catalogs exactly once in the runtime preload contract", () => {
     expect(RUNTIME_IMAGE_ASSETS).toHaveLength(
-      RELIC_ICON_ASSETS.length + COMBAT_IMAGE_ASSETS.length,
+      RELIC_ICON_ASSETS.length
+        + EQUIPMENT_ICON_ASSETS.length
+        + COMBAT_IMAGE_ASSETS.length,
     );
     expect(RUNTIME_IMAGE_ASSETS).toEqual(
-      expect.arrayContaining([...RELIC_ICON_ASSETS, ...COMBAT_IMAGE_ASSETS]),
+      expect.arrayContaining([
+        ...RELIC_ICON_ASSETS,
+        ...EQUIPMENT_ICON_ASSETS,
+        ...COMBAT_IMAGE_ASSETS,
+      ]),
     );
     expect(new Set(RUNTIME_IMAGE_ASSETS.map((asset) => asset.key)).size).toBe(
       RUNTIME_IMAGE_ASSETS.length,
