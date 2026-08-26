@@ -50,9 +50,12 @@ describe("core RunState integration", () => {
         outcome: "victory",
         nextNodeIds: selectable.nextNodeKeys,
       });
-      expect(outcome.sceneKey).toBe(SCENE_KEYS.map);
+      expect(outcome.sceneKey).toBe(SCENE_KEYS.reward);
       expect(outcome.runState.map.seed).toBe(17);
       expect(outcome.runState.status).toBe("active");
+      expect(outcome.payload.runState).toBe(outcome.runState);
+      expect(outcome.payload.adapter).toBeDefined();
+      expect(outcome.payload.nextSceneKey).toBe(SCENE_KEYS.map);
     }
   });
 
