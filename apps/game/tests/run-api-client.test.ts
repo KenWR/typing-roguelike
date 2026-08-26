@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { RunApiClient, RunApiError, type FetchLike } from "../src/game/api/run-api-client";
+import {
+  RunApiClient,
+  RunApiError,
+  resolveGameApiBaseUrl,
+  type FetchLike,
+} from "../src/game/api/run-api-client";
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -8,6 +13,15 @@ const jsonResponse = (body: unknown, status = 200): Response =>
   });
 
 describe("RunApiClient", () => {
+  test("uses a mode-specific API base URL contract", () => {
+    expect(resolveGameApiBaseUrl(undefined, "development")).toBe("http://localhost:3000");
+    expect(resolveGameApiBaseUrl(undefined, "preview")).toBe("");
+    expect(resolveGameApiBaseUrl(undefined, "production")).toBe("");
+    expect(resolveGameApiBaseUrl(" https://api.example.test/// ", "production")).toBe(
+      "https://api.example.test",
+    );
+  });
+
   test("starts a run with credentials and the configured base URL", async () => {
     const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
     const fetchImpl: FetchLike = async (input, init) => {

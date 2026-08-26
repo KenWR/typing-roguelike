@@ -78,4 +78,4 @@ bun run typecheck
 bun run build
 ```
 
-게임 클라이언트는 정적 결과물인 `apps/game/dist`를 생성합니다. 배포 제공자가 확정되면 해당 디렉터리를 Cloudflare Pages 또는 Vercel에 연결할 수 있습니다.
+게임 클라이언트는 정적 결과물인 `apps/game/dist`를 생성합니다. Cloudflare Workers Static Assets 배포 설정과 로컬 검증 절차는 [게임 Worker 배포 문서](docs/game-workers-static-assets.md)에 정리되어 있습니다.
