@@ -4,6 +4,7 @@ import {
   continueRewardSelection,
   createRewardSelectionViewState,
   selectReward,
+  skipRewardSelection,
   type RewardCandidate,
   type RewardSelectionViewState,
 } from "./reward-selection-view-state";
@@ -19,13 +20,16 @@ export type RewardSelectionAdapter<TRunState = RewardSelectionRunState> = Readon
   getRunState: () => TRunState;
   selectReward: (rewardId: string) => RewardSelectionViewState;
   continue: () => RewardSelectionViewState;
+  skip: () => RewardSelectionViewState;
 }>;
 
 export type CreateRewardSelectionAdapterOptions<TRunState> = Readonly<{
   initialViewState: RewardSelectionViewState;
   initialRunState: TRunState;
   applySelection: (runState: TRunState, reward: RewardCandidate) => TRunState;
+  applySkip?: (runState: TRunState) => TRunState;
   onContinue?: (runState: TRunState, reward: RewardCandidate) => void;
+  onSkip?: (runState: TRunState) => void;
 }>;
 
 export function createRewardSelectionAdapter<TRunState>(options: CreateRewardSelectionAdapterOptions<TRunState>): RewardSelectionAdapter<TRunState> {
@@ -54,6 +58,12 @@ export function createRewardSelectionAdapter<TRunState>(options: CreateRewardSel
       viewState = continueRewardSelection(viewState);
       runState = options.applySelection(runState, reward);
       options.onContinue?.(runState, reward);
+      return viewState;
+    },
+    skip: () => {
+      viewState = skipRewardSelection(viewState);
+      runState = options.applySkip?.(runState) ?? runState;
+      options.onSkip?.(runState);
       return viewState;
     },
   };
