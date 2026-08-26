@@ -3,6 +3,7 @@ import {
   RUNTIME_IMAGE_ASSETS,
   TEXTURE_KEYS,
 } from "../assets/asset-catalog";
+import { runSession } from "../run/run-session";
 import { applyMenuSettings, loadMenuSettings } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
 
@@ -66,7 +67,10 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    const transition = resolveSceneTransition(SCENE_KEYS.start, undefined);
+    const restoredRun = runSession.restore();
+    const transition = restoredRun === null
+      ? resolveSceneTransition(SCENE_KEYS.start, undefined)
+      : resolveSceneTransition(SCENE_KEYS.map, { runState: restoredRun });
     this.scene.start(transition.key, transition.payload);
   }
 
