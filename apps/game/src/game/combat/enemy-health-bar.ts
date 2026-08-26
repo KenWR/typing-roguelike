@@ -17,7 +17,7 @@ export type EnemyHealthBarOptions = Readonly<{
   targeted?: boolean;
 }>;
 
-export const ENEMY_HEALTH_BAR_PANEL_WIDTH = 220;
+const ENEMY_HEALTH_BAR_PANEL_WIDTH = 220;
 const PANEL_HEIGHT = 40;
 export const ENEMY_HEALTH_BAR_TRACK_WIDTH = 190;
 const TRACK_HEIGHT = 11;
