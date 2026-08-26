@@ -14,6 +14,10 @@ import {
   CombatState,
   type CombatUpdate,
 } from "./combat-state";
+import {
+  ComboTracker,
+  type ComboSnapshot,
+} from "./combo-tracker";
 
 export type SkillStartFailureReason =
   | "unknown-command"
@@ -27,12 +31,14 @@ export type SkillStartResult =
       actionId: string;
       ap: ActionPointSnapshot;
       combat: CombatUpdate;
+      combo: ComboSnapshot;
     }>
   | Readonly<{
       started: false;
       command: string;
       reason: SkillStartFailureReason;
       ap: ActionPointSnapshot;
+      combo: ComboSnapshot;
     }>;
 
 export type SkillStartListener = (result: SkillStartResult) => void;
@@ -43,6 +49,7 @@ export type SkillCommandStarterConfig = Readonly<{
   combat: CombatState;
   actorId: string;
   targetId: string;
+  combo?: ComboTracker;
 }>;
 
 const normalizeCommand = (command: string): string => command.normalize("NFC");
@@ -59,6 +66,7 @@ export class SkillCommandStarter {
   private readonly skillsByCommand = new Map<string, SkillDefinition>();
   private readonly actionPoints: ActionPointResource;
   private readonly combat: CombatState;
+  private readonly combo: ComboTracker;
   private readonly actorId: string;
   private readonly targetId: string;
   private nextActionSequence = 1;
@@ -66,6 +74,7 @@ export class SkillCommandStarter {
   constructor(config: SkillCommandStarterConfig) {
     this.actionPoints = config.actionPoints;
     this.combat = config.combat;
+    this.combo = config.combo ?? new ComboTracker();
     this.actorId = requireIdentifier("Actor id", config.actorId);
     this.targetId = requireIdentifier("Target id", config.targetId);
 
@@ -78,13 +87,27 @@ export class SkillCommandStarter {
     }
   }
 
+  get comboSnapshot(): ComboSnapshot {
+    return this.combo.snapshot;
+  }
+
   connect(
     inputBuffer: CommandInputBuffer,
     listener: SkillStartListener,
   ): () => void {
-    return inputBuffer.onCompleted((event) => {
+    const disconnectCompleted = inputBuffer.onCompleted((event) => {
       listener(this.tryStart(event));
     });
+    const disconnectStatus = inputBuffer.onStatusChanged((event) => {
+      if (event.snapshot.status === "incorrect") {
+        this.combo.breakCombo("incorrect-input");
+      }
+    });
+
+    return () => {
+      disconnectCompleted();
+      disconnectStatus();
+    };
   }
 
   tryStart(event: CommandCompletedEvent): SkillStartResult {
@@ -105,6 +128,7 @@ export class SkillCommandStarter {
         command: event.command,
         reason: "insufficient-ap",
         ap: spend.snapshot,
+        combo: this.combo.snapshot,
       };
     }
 
@@ -116,6 +140,7 @@ export class SkillCommandStarter {
         targetId: this.targetId,
       }),
     );
+    const combo = this.combo.recordCorrectInput();
 
     return {
       started: true,
@@ -123,6 +148,7 @@ export class SkillCommandStarter {
       actionId,
       ap: spend.snapshot,
       combat,
+      combo,
     };
   }
 
@@ -135,6 +161,7 @@ export class SkillCommandStarter {
       command,
       reason,
       ap: this.actionPoints.snapshot,
+      combo: this.combo.snapshot,
     };
   }
 

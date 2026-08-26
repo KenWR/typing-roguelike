@@ -35,11 +35,11 @@ const createFixture = (initialAp: number) => {
   const results: SkillStartResult[] = [];
   starter.connect(input, (result) => results.push(result));
 
-  return { input, actionPoints, combat, results };
+  return { input, actionPoints, combat, starter, results };
 };
 
 describe("SkillCommandStarter", () => {
-  test("spends AP and starts the matching skill when input completes", () => {
+  test("spends AP, starts the matching skill, and increments combo", () => {
     const { input, actionPoints, combat, results } = createFixture(6);
 
     input.updateInput("매직실드");
@@ -50,6 +50,7 @@ describe("SkillCommandStarter", () => {
       skill: { id: "skill.magic-shield" },
       actionId: "player:skill.magic-shield:1",
       ap: { currentAp: 4 },
+      combo: { count: 1, multiplier: 1, lastBreakReason: null },
       combat: {
         snapshot: {
           actions: [
@@ -65,30 +66,26 @@ describe("SkillCommandStarter", () => {
     expect(combat.snapshot.actions).toHaveLength(1);
   });
 
-  test("does not spend AP or start a skill when AP is insufficient", () => {
-    const { input, actionPoints, combat, results } = createFixture(1);
+  test("does not increase combo when AP is insufficient", () => {
+    const { input, actionPoints, combat, starter, results } = createFixture(1);
 
     input.updateInput("매직실드");
 
-    expect(results).toEqual([
-      {
-        started: false,
-        command: "매직실드",
-        reason: "insufficient-ap",
-        ap: {
-          currentAp: 1,
-          maxAp: 6,
-          regenerationPerSecond: 1,
-          paused: false,
-        },
-      },
-    ]);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      started: false,
+      command: "매직실드",
+      reason: "insufficient-ap",
+      ap: { currentAp: 1 },
+      combo: { count: 0, multiplier: 1 },
+    });
+    expect(starter.comboSnapshot.count).toBe(0);
     expect(actionPoints.snapshot.currentAp).toBe(1);
     expect(combat.snapshot.actions).toEqual([]);
   });
 
-  test("does not spend AP when combat cannot accept input", () => {
-    const { input, actionPoints, combat, results } = createFixture(6);
+  test("does not increase combo when combat cannot accept input", () => {
+    const { input, actionPoints, combat, starter, results } = createFixture(6);
     combat.pause();
 
     input.updateInput("매직실드");
@@ -97,8 +94,30 @@ describe("SkillCommandStarter", () => {
       started: false,
       reason: "combat-unavailable",
       ap: { currentAp: 6 },
+      combo: { count: 0, multiplier: 1 },
     });
+    expect(starter.comboSnapshot.count).toBe(0);
     expect(actionPoints.snapshot.currentAp).toBe(6);
     expect(combat.snapshot.actions).toEqual([]);
+  });
+
+  test("tracks consecutive successful commands and breaks on incorrect input", () => {
+    const { input, starter, results } = createFixture(6);
+
+    input.updateInput("매직실드");
+    expect(results[0]).toMatchObject({ combo: { count: 1 } });
+
+    input.reset();
+    input.updateInput("매직실드");
+    expect(results[1]).toMatchObject({ combo: { count: 2 } });
+    expect(starter.comboSnapshot.count).toBe(2);
+
+    input.reset();
+    input.updateInput("매직X");
+    expect(starter.comboSnapshot).toEqual({
+      count: 0,
+      multiplier: 1,
+      lastBreakReason: "incorrect-input",
+    });
   });
 });
