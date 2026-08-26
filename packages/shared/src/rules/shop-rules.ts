@@ -98,7 +98,7 @@ const getRandomIndex = (length: number, random: () => number): number => {
 export const createShopOffers = ({
 	count = 3,
 	relicCount = 2,
-	ringCount = 1,
+	ringCount = 0,
 	priceMultiplier = 2,
 	minimumPrice = 1,
 	random = Math.random,
