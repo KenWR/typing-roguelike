@@ -8,6 +8,7 @@ import {
   SCENE_BACKGROUND_ASSETS,
   getRelicIconTextureKey,
 } from "../src/game/assets/asset-catalog";
+import { EQUIPMENT_ICON_ASSETS } from "../src/game/assets/equipment-icon-assets";
 import { PLAYER_WEAPON_IMAGE_ASSETS } from "../src/game/assets/player-visual-assets";
 
 describe("relic icon asset catalog", () => {
@@ -27,7 +28,12 @@ describe("relic icon asset catalog", () => {
       const bytes = new Uint8Array(
         await Bun.file(`apps/game/public${relativePath}`).arrayBuffer(),
       );
-      const pngHeader = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const pngHeader = new DataView(
+        bytes.buffer,
+        bytes.byteOffset,
+        bytes.byteLength,
+      );
+
       expect(pngHeader.getUint32(16)).toBe(96);
       expect(pngHeader.getUint32(20)).toBe(96);
     }
@@ -35,20 +41,29 @@ describe("relic icon asset catalog", () => {
 
   test("includes every image catalog exactly once in the runtime preload contract", async () => {
     expect(RUNTIME_IMAGE_ASSETS).toHaveLength(
-      RELIC_ICON_ASSETS.length + COMBAT_IMAGE_ASSETS.length + SCENE_BACKGROUND_ASSETS.length,
+      RELIC_ICON_ASSETS.length
+        + EQUIPMENT_ICON_ASSETS.length
+        + COMBAT_IMAGE_ASSETS.length
+        + SCENE_BACKGROUND_ASSETS.length,
     );
+
     expect(RUNTIME_IMAGE_ASSETS).toEqual(
       expect.arrayContaining([
         ...RELIC_ICON_ASSETS,
+        ...EQUIPMENT_ICON_ASSETS,
         ...COMBAT_IMAGE_ASSETS,
         ...SCENE_BACKGROUND_ASSETS,
       ]),
     );
+
     expect(new Set(RUNTIME_IMAGE_ASSETS.map((asset) => asset.key)).size).toBe(
       RUNTIME_IMAGE_ASSETS.length,
     );
+
     for (const asset of SCENE_BACKGROUND_ASSETS) {
-      expect(await Bun.file(`apps/game/public${asset.path}`).exists()).toBe(true);
+      expect(await Bun.file(`apps/game/public${asset.path}`).exists()).toBe(
+        true,
+      );
     }
   });
 

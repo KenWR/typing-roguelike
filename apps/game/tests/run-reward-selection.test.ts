@@ -1,10 +1,43 @@
 import { describe, expect, test } from "bun:test";
 import { EQUIPMENT_CONFIGS, createInitialRunState } from "@typing-roguelike/shared";
+import { resolveEquipmentIconTextureKey } from "../src/game/assets/equipment-icon-assets";
 import {
   applyEquipmentReward,
   createRunRewardSelectionFlow,
   getRunAvailableSkills,
 } from "../src/game/rewards/run-reward-selection";
+
+describe("run reward equipment presentation", () => {
+  test("gives weapon candidates the matching equipment icon", () => {
+    const weapon = EQUIPMENT_CONFIGS.find((equipment) => equipment.slot === "weapon");
+    expect(weapon).toBeDefined();
+
+    const flow = createRunRewardSelectionFlow({
+      runState: createInitialRunState({ seed: 30 }),
+      equipmentIds: [weapon!.id],
+    });
+    const candidate = flow.adapter.getViewState().candidates[0];
+
+    expect(candidate?.imageKey).toBe(`equipment-icon:${weapon!.id}`);
+    expect(candidate?.imageKey).toBe(resolveEquipmentIconTextureKey(weapon!.id));
+  });
+
+  test("keeps subweapon candidates on the emoji fallback", () => {
+    const subweapon = EQUIPMENT_CONFIGS.find(
+      (equipment) => equipment.slot === "subweapon",
+    );
+    expect(subweapon).toBeDefined();
+
+    const flow = createRunRewardSelectionFlow({
+      runState: createInitialRunState({ seed: 31 }),
+      equipmentIds: [subweapon!.id],
+    });
+    const candidate = flow.adapter.getViewState().candidates[0];
+
+    expect(candidate?.imageKey).toBeUndefined();
+    expect(candidate?.icon).toBe("◇");
+  });
+});
 
 describe("run reward equipment flow", () => {
   test("adds and equips a selected weapon and refreshes available skills", () => {
