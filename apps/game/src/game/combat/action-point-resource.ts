@@ -34,9 +34,7 @@ const validateNonNegative = (name: string, value: number): number => {
 };
 
 const validateFinite = (name: string, value: number): number => {
-  if (!Number.isFinite(value)) {
-    throw new RangeError(`${name} must be finite.`);
-  }
+  if (!Number.isFinite(value)) throw new RangeError(`${name} must be finite.`);
   return value;
 };
 
@@ -103,13 +101,13 @@ export class ActionPointResource {
   advance(deltaMs: number): ActionPointSnapshot {
     validateNonNegative("AP delta", deltaMs);
     if (!this.paused) {
-      const activeRegen =
-        this.regenerationPerSecond +
-        this.timedRegenModifiers.reduce((sum, modifier) => sum + modifier.amountPerSecond, 0);
-      this.currentAp = Math.min(
-        this.maxAp,
-        Math.max(0, this.currentAp + activeRegen * (deltaMs / 1_000)),
-      );
+      let apDelta = this.regenerationPerSecond * (deltaMs / 1_000);
+      for (const modifier of this.timedRegenModifiers) {
+        const activeMs = Math.min(deltaMs, modifier.remainingMs);
+        apDelta += modifier.amountPerSecond * (activeMs / 1_000);
+      }
+      this.currentAp = Math.min(this.maxAp, Math.max(0, this.currentAp + apDelta));
+
       for (let index = this.timedRegenModifiers.length - 1; index >= 0; index -= 1) {
         const modifier = this.timedRegenModifiers[index]!;
         modifier.remainingMs -= deltaMs;
