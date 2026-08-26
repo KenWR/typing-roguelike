@@ -14,9 +14,11 @@ import {
   resolvePlayerAttackTextureKey,
   resolvePlayerTextureKey,
 } from "../assets/player-visual-assets";
+import { playComboBreakSound } from "../audio/runtime-audio";
 import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
 import { ActionPointResource } from "../combat/action-point-resource";
 import { CombatApEffectController } from "../combat/combat-ap-effects";
+import type { ComboSnapshot } from "../combat/combo-tracker";
 import { CombatState } from "../combat/combat-state";
 import { CombatTargetingController } from "../combat/combat-targeting";
 import {
@@ -102,6 +104,8 @@ export class CombatFoundationScene extends Phaser.Scene {
   private pauseController?: CombatPauseController;
   private pauseOverlay?: Phaser.GameObjects.Text;
   private commandHud!: CommandHud;
+  private comboText!: Phaser.GameObjects.Text;
+  private skillStarter?: SkillCommandStarter;
   private commandInputBuffer!: CommandInputBuffer;
   private commandInputRecovery!: CommandInputRecoveryController;
   private targeting?: CombatTargetingController;
@@ -135,6 +139,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.playerAttackReset = undefined;
     this.playerAttackTween = undefined;
     this.playerEffectHud = undefined;
+    this.skillStarter = undefined;
     this.enemyActorImages.clear();
     this.enemyEffectHuds.clear();
     this.enemyTargetMarkers.clear();
@@ -294,14 +299,17 @@ export class CombatFoundationScene extends Phaser.Scene {
     );
     this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
     this.uiLayer.add(this.commandHud.container);
-    this.commandStatusCleanup = this.commandInputBuffer.onStatusChanged(({ snapshot }) => {
-      if (snapshot.status === "complete") {
-        this.feedback?.trigger("command-success");
-      } else if (snapshot.status === "incorrect") {
-        this.apEffects.onCommandFailed();
-        this.feedback?.trigger("command-failure");
-      }
-    });
+    this.comboText = this.add
+      .text(0, 0, "x0 +0%", {
+        color: "#fcd34d",
+        fontFamily: "Galmuri9, monospace",
+        fontSize: "18px",
+        fontStyle: "bold",
+        stroke: "#101827",
+        strokeThickness: 4,
+      })
+      .setOrigin(1, 1);
+    this.uiLayer.add(this.comboText);
 
     if (this.runState !== undefined) {
       this.playerCombatRuntime = new PlayerCombatRuntime({
@@ -334,12 +342,14 @@ export class CombatFoundationScene extends Phaser.Scene {
             initialization.enemies[0]?.instanceId ??
             "player"),
     });
+    this.skillStarter = skillStarter;
     this.commandCompletionCleanup = skillStarter.connect(
       this.commandInputBuffer,
       (result) => {
         if (result.started) {
           this.apEffects.onSkillStarted(result.skill, result.combo.count);
           this.playerCombatRuntime?.registerAction(result.actionId, result.skill);
+          this.updateComboDisplay(result.combo);
           this.playPlayerAttackVisual(primaryWeaponId, result.skill);
           if (result.skill.kind === "defense") {
             this.feedback?.trigger("guard");
@@ -349,6 +359,17 @@ export class CombatFoundationScene extends Phaser.Scene {
         this.combatHud.update({ ap: this.actionPoints.snapshot.currentAp });
       },
     );
+    this.commandStatusCleanup = this.commandInputBuffer.onStatusChanged(({ snapshot }) => {
+      if (snapshot.status === "complete") {
+        this.feedback?.trigger("command-success");
+      } else if (snapshot.status === "incorrect") {
+        this.apEffects.onCommandFailed();
+        this.feedback?.trigger("command-failure");
+        playComboBreakSound();
+        this.updateComboDisplay(this.skillStarter?.comboSnapshot);
+      }
+    });
+
     this.createCommandInputElement();
     this.createPauseHandling();
     this.createTargetHandling();
@@ -411,6 +432,10 @@ export class CombatFoundationScene extends Phaser.Scene {
       previousPlayerHp !== undefined &&
       playerUpdate.playerHp < previousPlayerHp
     ) {
+      this.skillStarter?.breakCombo("player-hit");
+      this.updateComboDisplay(this.skillStarter?.comboSnapshot);
+      this.feedback?.trigger("command-failure");
+      playComboBreakSound();
       this.feedback?.trigger("player-hit");
     }
 
@@ -520,7 +545,6 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.targeting?.dispose();
   }
 
-  /** 지정한 적에게만 조준 테두리를 보여 주고 나머지는 살짝 흐리게 둡니다. */
   private refreshTargetPresentation(): void {
     const targetId = this.targeting?.targetId;
     for (const [enemyId, marker] of this.enemyTargetMarkers) {
@@ -642,7 +666,18 @@ export class CombatFoundationScene extends Phaser.Scene {
       layout.commandHudReservation.width,
       layout.commandHudReservation.height,
     );
+    this.comboText
+      .setPosition(width - 24, height - 24)
+      .setVisible(this.skillStarter !== undefined);
     this.pauseOverlay?.setPosition(width / 2, height / 2);
+  }
+
+  private updateComboDisplay(snapshot: ComboSnapshot | undefined): void {
+    if (snapshot === undefined) return;
+    const bonusPercent = Math.round((snapshot.multiplier - 1) * 100);
+    this.comboText
+      .setText(`x${snapshot.count} +${bonusPercent}%`)
+      .setColor(snapshot.count > 0 ? "#fcd34d" : "#94a3b8");
   }
 
   private createCommandInputElement(): void {
