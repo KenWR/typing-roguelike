@@ -63,10 +63,10 @@ export class CombatFoundationScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Image;
   private overlay!: Phaser.GameObjects.Rectangle;
   private playerPlaceholder!: Phaser.GameObjects.Container;
-  private enemyPlaceholder!: Phaser.GameObjects.Container;
-  private enemyActorImage?: Phaser.GameObjects.Image;
-  private displayedEnemyHp = 0;
-  private enemyHitRemainingMs = 0;
+  private enemyPlaceholders: Phaser.GameObjects.Container[] = [];
+  private enemyActorImages = new Map<string, Phaser.GameObjects.Image>();
+  private displayedEnemyHp = new Map<string, number>();
+  private enemyHitRemainingMs = new Map<string, number>();
   private enemyHealthText!: Phaser.GameObjects.Text;
   private encounterLabel!: Phaser.GameObjects.Text;
   private combatHud!: CombatHud;
@@ -104,9 +104,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.playerCombatRuntime = undefined;
     this.feedback = undefined;
     this.transitionStarted = false;
-    this.enemyActorImage = undefined;
-    this.displayedEnemyHp = 0;
-    this.enemyHitRemainingMs = 0;
+    this.enemyPlaceholders = [];
+    this.enemyActorImages.clear();
+    this.displayedEnemyHp.clear();
+    this.enemyHitRemainingMs.clear();
   }
 
   create(): void {
@@ -143,15 +144,21 @@ export class CombatFoundationScene extends Phaser.Scene {
       0x3f7f84,
       resolvePlayerTextureKey(initialization.player.equipmentIds[0]),
     );
-    this.enemyPlaceholder = this.createActorPlaceholder(
-      this.createEnemyLabel(initialization),
-      0x8d4b52,
-      resolveEnemyTextureKey(initialization.enemies[0]?.enemyId),
-    );
-    this.worldLayer.add([this.playerPlaceholder, this.enemyPlaceholder]);
-    const enemyActor = this.enemyPlaceholder.getAt(0);
-    this.enemyActorImage = enemyActor instanceof Phaser.GameObjects.Image ? enemyActor : undefined;
-    this.displayedEnemyHp = initialization.enemies[0]?.hp ?? 0;
+    this.enemyPlaceholders = initialization.enemies.map((enemy) => {
+      const placeholder = this.createActorPlaceholder(
+        enemy.name,
+        0x8d4b52,
+        resolveEnemyTextureKey(enemy.enemyId),
+      );
+      const actor = placeholder.getAt(0);
+      if (actor instanceof Phaser.GameObjects.Image) {
+        this.enemyActorImages.set(enemy.instanceId, actor);
+      }
+      this.displayedEnemyHp.set(enemy.instanceId, enemy.hp);
+      this.enemyHitRemainingMs.set(enemy.instanceId, 0);
+      return placeholder;
+    });
+    this.worldLayer.add([this.playerPlaceholder, ...this.enemyPlaceholders]);
 
     this.encounterLabel = this.add
       .text(
@@ -309,21 +316,22 @@ export class CombatFoundationScene extends Phaser.Scene {
     if (playerUpdate === undefined) {
       const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
       this.enemyAttackGauge.update(enemyUpdate.snapshot);
-      this.updateEnemyVisual(this.displayedEnemyHp, safeDelta, enemyUpdate.snapshot);
+      this.updateEnemyVisuals(
+        Object.fromEntries(this.displayedEnemyHp),
+        safeDelta,
+        enemyUpdate.snapshot,
+      );
       return;
     }
 
     this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);
     this.combatHud.update({ hp: playerUpdate.playerHp, ap: playerUpdate.playerAp });
     this.updateEnemyHealth(playerUpdate.enemyHp);
-    const displayedEnemy = this.combatInitialization.enemies[0];
-    if (displayedEnemy !== undefined) {
-      this.updateEnemyVisual(
-        playerUpdate.enemyHp[displayedEnemy.instanceId] ?? displayedEnemy.hp,
-        safeDelta,
-        playerUpdate.enemyTimeline.snapshot,
-      );
-    }
+    this.updateEnemyVisuals(
+      playerUpdate.enemyHp,
+      safeDelta,
+      playerUpdate.enemyTimeline.snapshot,
+    );
 
     if (
       previousPlayerHp !== undefined &&
@@ -335,50 +343,52 @@ export class CombatFoundationScene extends Phaser.Scene {
     if (playerUpdate.route !== null) {
       const outcome = this.combat.snapshot.status;
       this.feedback?.trigger(outcome === "victory" ? "victory" : "defeat");
-      this.startCombatRoute(playerUpdate.route.sceneKey, playerUpdate.route.payload);
+      this.startCombatRoute(
+        playerUpdate.route.sceneKey,
+        playerUpdate.route.payload,
+        outcome === "victory" ? 1_500 : 0,
+      );
     }
   }
 
-  private updateEnemyVisual(
-    currentHp: number,
+  private updateEnemyVisuals(
+    enemyHp: Readonly<Record<string, number>>,
     deltaMs: number,
     timeline: Readonly<EnemyAttackTimeline["snapshot"]>,
   ): void {
-    const enemy = this.combatInitialization?.enemies[0];
-    if (enemy === undefined || this.enemyActorImage === undefined) return;
+    for (const enemy of this.combatInitialization?.enemies ?? []) {
+      const actorImage = this.enemyActorImages.get(enemy.instanceId);
+      if (actorImage === undefined) continue;
+      const currentHp = enemyHp[enemy.instanceId] ?? enemy.hp;
+      const previousHp = this.displayedEnemyHp.get(enemy.instanceId) ?? enemy.hp;
+      const previousHitMs = this.enemyHitRemainingMs.get(enemy.instanceId) ?? 0;
+      const hitRemainingMs = currentHp < previousHp
+        ? 240
+        : Math.max(0, previousHitMs - deltaMs);
+      this.displayedEnemyHp.set(enemy.instanceId, currentHp);
+      this.enemyHitRemainingMs.set(enemy.instanceId, hitRemainingMs);
 
-    if (currentHp < this.displayedEnemyHp) {
-      this.enemyHitRemainingMs = 240;
-    } else {
-      this.enemyHitRemainingMs = Math.max(0, this.enemyHitRemainingMs - deltaMs);
-    }
-    this.displayedEnemyHp = currentHp;
-
-    const activeAttack = timeline.attacks.find(
-      (attack) => attack.enemyId === enemy.instanceId && !attack.impactResolved,
-    );
-    const state = resolveEnemyVisualState({
-      currentHp,
-      hitRemainingMs: this.enemyHitRemainingMs,
-      ...(activeAttack === undefined ? {} : { activeAttackId: activeAttack.attackId }),
-    });
-    const textureKey = resolveEnemyTextureKey(enemy.enemyId, state);
-    const readyTextureKey = resolveEnemyTextureKey(enemy.enemyId);
-    const nextTextureKey =
-      textureKey !== undefined && this.textures.exists(textureKey)
+      const activeAttack = timeline.attacks.find(
+        (attack) => attack.enemyId === enemy.instanceId && !attack.impactResolved,
+      );
+      const state = resolveEnemyVisualState({
+        currentHp,
+        hitRemainingMs,
+        ...(activeAttack === undefined ? {} : { activeAttackId: activeAttack.attackId }),
+      });
+      const textureKey = resolveEnemyTextureKey(enemy.enemyId, state);
+      const readyTextureKey = resolveEnemyTextureKey(enemy.enemyId);
+      const nextTextureKey = textureKey !== undefined && this.textures.exists(textureKey)
         ? textureKey
         : readyTextureKey;
-    if (
-      nextTextureKey !== undefined &&
-      this.textures.exists(nextTextureKey) &&
-      this.enemyActorImage.texture.key !== nextTextureKey
-    ) {
-      this.enemyActorImage.setTexture(nextTextureKey);
-      const scale = Math.min(
-        220 / this.enemyActorImage.width,
-        260 / this.enemyActorImage.height,
-      );
-      this.enemyActorImage.setScale(scale);
+      if (
+        nextTextureKey !== undefined &&
+        this.textures.exists(nextTextureKey) &&
+        actorImage.texture.key !== nextTextureKey
+      ) {
+        actorImage.setTexture(nextTextureKey);
+        actorImage.setScale(Math.min(220 / actorImage.width, 260 / actorImage.height));
+      }
     }
   }
   private updateEnemyHealth(enemyHp: Readonly<Record<string, number>>): void {
@@ -390,11 +400,17 @@ export class CombatFoundationScene extends Phaser.Scene {
     );
   }
 
-  private startCombatRoute(sceneKey: string, payload: Readonly<Record<string, unknown>>): void {
+  private startCombatRoute(
+    sceneKey: string,
+    payload: Readonly<Record<string, unknown>>,
+    delayMs: number,
+  ): void {
     this.transitionStarted = true;
     this.releaseCommandInputElement();
     const transition = resolveSceneTransition(sceneKey, payload);
-    this.scene.start(transition.key, transition.payload);
+    this.time.delayedCall(delayMs, () => {
+      this.scene.start(transition.key, transition.payload);
+    });
   }
 
   private createPauseHandling(): void {
@@ -449,9 +465,17 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.playerPlaceholder
       .setPosition(layout.player.x, layout.player.y)
       .setScale(layout.actorScale);
-    this.enemyPlaceholder
-      .setPosition(layout.enemy.x, layout.enemy.y)
-      .setScale(layout.actorScale);
+    const enemyCount = this.enemyPlaceholders.length;
+    const enemySpan = Math.min(width * 0.38, 420 * layout.actorScale);
+    const enemySpacing = enemyCount > 1 ? enemySpan / (enemyCount - 1) : 0;
+    this.enemyPlaceholders.forEach((placeholder, index) => {
+      placeholder
+        .setPosition(
+          layout.enemy.x + (index - (enemyCount - 1) / 2) * enemySpacing,
+          layout.enemy.y,
+        )
+        .setScale(layout.actorScale);
+    });
     this.enemyHealthText.setPosition(
       layout.enemy.x,
       layout.enemy.y - 135 * layout.actorScale,
@@ -552,14 +576,6 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandStatusCleanup?.();
     this.commandStatusCleanup = undefined;
     this.isComposing = false;
-  }
-
-  private createEnemyLabel(initialization: CombatEncounterInitialization): string {
-    return initialization.enemies.length === 0
-      ? "적"
-      : initialization.enemies
-          .map((enemy) => `${enemy.name} HP ${enemy.hp}/${enemy.hp}`)
-          .join(" / ");
   }
 
   private createActorPlaceholder(

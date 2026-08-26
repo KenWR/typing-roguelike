@@ -72,11 +72,6 @@ export class InteractiveMapScene extends MapScene {
     const mapViewportHeight = Math.max(MAP_NODE_HEIGHT, mapBottom - MAP_VIEW_TOP);
     const floorY = (round: number): number => MAP_BOSS_Y + (10 - round) * MAP_ROW_GAP;
 
-    this.add
-      .rectangle(centerX, MAP_VIEW_TOP + mapViewportHeight / 2, mapWidth, mapViewportHeight, 0x111827, 1)
-      .setOrigin(0.5)
-      .setDepth(80);
-
     const maskShape = this.make.graphics({ x: 0, y: 0 }, false);
     maskShape.fillStyle(0xffffff);
     maskShape.fillRect(mapLeft, MAP_VIEW_TOP, mapWidth, mapViewportHeight);

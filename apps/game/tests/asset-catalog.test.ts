@@ -5,6 +5,7 @@ import {
   COMBAT_IMAGE_ASSETS,
   RELIC_ICON_ASSETS,
   RUNTIME_IMAGE_ASSETS,
+  SCENE_BACKGROUND_ASSETS,
   getRelicIconTextureKey,
 } from "../src/game/assets/asset-catalog";
 import { PLAYER_WEAPON_IMAGE_ASSETS } from "../src/game/assets/player-visual-assets";
@@ -32,16 +33,23 @@ describe("relic icon asset catalog", () => {
     }
   });
 
-  test("includes relic and combat catalogs exactly once in the runtime preload contract", () => {
+  test("includes every image catalog exactly once in the runtime preload contract", async () => {
     expect(RUNTIME_IMAGE_ASSETS).toHaveLength(
-      RELIC_ICON_ASSETS.length + COMBAT_IMAGE_ASSETS.length,
+      RELIC_ICON_ASSETS.length + COMBAT_IMAGE_ASSETS.length + SCENE_BACKGROUND_ASSETS.length,
     );
     expect(RUNTIME_IMAGE_ASSETS).toEqual(
-      expect.arrayContaining([...RELIC_ICON_ASSETS, ...COMBAT_IMAGE_ASSETS]),
+      expect.arrayContaining([
+        ...RELIC_ICON_ASSETS,
+        ...COMBAT_IMAGE_ASSETS,
+        ...SCENE_BACKGROUND_ASSETS,
+      ]),
     );
     expect(new Set(RUNTIME_IMAGE_ASSETS.map((asset) => asset.key)).size).toBe(
       RUNTIME_IMAGE_ASSETS.length,
     );
+    for (const asset of SCENE_BACKGROUND_ASSETS) {
+      expect(await Bun.file(`apps/game/public${asset.path}`).exists()).toBe(true);
+    }
   });
 
   test("keeps all eight player weapon mappings in the runtime catalog contract", () => {

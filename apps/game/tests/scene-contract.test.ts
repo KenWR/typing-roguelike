@@ -13,7 +13,6 @@ describe("scene contract", () => {
       "BootScene",
       "StartScene",
       "SettingsScene",
-      "LobbyScene",
       "MapScene",
       "CombatFoundationScene",
       "RewardSelectionScene",

@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { RunState } from "@typing-roguelike/shared";
 import { playRuntimeBgm, setRuntimeAudioMuted } from "../audio/runtime-audio";
+import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import { createMapHudView } from "../run/map-hud-view";
 import { runRemotePersistence } from "../run/run-remote-persistence";
 import { runSession } from "../run/run-session";
@@ -18,14 +19,40 @@ const createMenuButton = (scene: Phaser.Scene, x: number, y: number, label: stri
   return button;
 };
 
+const createCoverBackground = (
+  scene: Phaser.Scene,
+  textureKey: string,
+  width: number,
+  height: number,
+): Phaser.GameObjects.Image => {
+  const image = scene.add.image(width / 2, height / 2, textureKey);
+  return image.setScale(Math.max(width / image.width, height / image.height));
+};
+
 export class StartScene extends EmptyCoreScene {
+  private readonly runStarter = new LobbyRunStarter();
   constructor() { super(SCENE_KEYS.start); }
   create(): void {
     playRuntimeBgm("menu");
     const { width, height } = this.scale.gameSize;
-    this.add.rectangle(0, 0, width, height, 0x111827).setOrigin(0);
+    createCoverBackground(this, TEXTURE_KEYS.mainBackground, width, height);
+    this.add.rectangle(0, 0, width, height, 0x08101b, 0.28).setOrigin(0);
     this.add.text(width / 2, height * 0.28, "TYPING ROGUELIKE", { fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace', fontSize: "48px", color: "#f9fafb" }).setOrigin(0.5);
-    createMenuButton(this, width / 2, height * 0.52, "게임 시작", () => { const transition = resolveSceneTransition(SCENE_KEYS.lobby, undefined); this.scene.start(transition.key, transition.payload); });
+    const startRunButton = createMenuButton(this, width / 2, height * 0.52, "게임 시작", async () => {
+      startRunButton.disableInteractive();
+      startRunButton.setText("게임 시작 중...");
+      startRunButton.setStyle({ backgroundColor: "#4b5563" });
+      try {
+        const runState = await this.runStarter.startPersisted();
+        if (runState === null) return;
+        const transition = resolveSceneTransition(SCENE_KEYS.map, { runState });
+        this.scene.start(transition.key, transition.payload);
+      } catch {
+        startRunButton.setText("게임 시작 · 다시 시도");
+        startRunButton.setStyle({ backgroundColor: "#1f2937" });
+        startRunButton.setInteractive({ useHandCursor: true });
+      }
+    });
     createMenuButton(this, width / 2, height * 0.66, "설정", () => { const transition = resolveSceneTransition(SCENE_KEYS.settings, undefined); this.scene.start(transition.key, transition.payload); });
   }
 }
@@ -49,23 +76,6 @@ export class SettingsScene extends EmptyCoreScene {
   private refreshSoundLabel(): void { this.soundLabel?.setText(`효과음: ${this.draftSettings.soundEnabled ? "켜짐" : "꺼짐"}`); }
 }
 
-export class LobbyScene extends EmptyCoreScene {
-  private readonly runStarter = new LobbyRunStarter();
-  constructor() { super(SCENE_KEYS.lobby); }
-  create(): void {
-    playRuntimeBgm("tower");
-    const { width, height } = this.scale.gameSize;
-    this.add.rectangle(0, 0, width, height, 0x111827).setOrigin(0);
-    this.add.text(width / 2, height * 0.3, "로비", { fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace', fontSize: "48px", color: "#f9fafb" }).setOrigin(0.5);
-    this.add.text(width / 2, height * 0.43, "새 런을 시작할 수 있습니다.", { fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace', fontSize: "24px", color: "#9ca3af" }).setOrigin(0.5);
-    const startRunButton = createMenuButton(this, width / 2, height * 0.62, "새 런 시작", async () => {
-      startRunButton.disableInteractive(); startRunButton.setText("런 시작 중..."); startRunButton.setStyle({ backgroundColor: "#4b5563" });
-      try { const runState = await this.runStarter.startPersisted(); if (runState === null) return; const transition = resolveSceneTransition(SCENE_KEYS.map, { runState }); this.scene.start(transition.key, transition.payload); }
-      catch { startRunButton.setText("새 런 시작 · 다시 시도"); startRunButton.setStyle({ backgroundColor: "#1f2937" }); startRunButton.setInteractive({ useHandCursor: true }); }
-    });
-  }
-}
-
 export class MapScene extends EmptyCoreScene {
   protected readonly renderLegacyMapChoices: boolean = true;
   private runState?: Readonly<RunState>;
@@ -75,7 +85,7 @@ export class MapScene extends EmptyCoreScene {
     playRuntimeBgm("tower");
     const { width, height } = this.scale.gameSize;
     const activeRun = this.runState ?? runSession.get();
-    this.add.rectangle(0, 0, width, height, 0x111827).setOrigin(0);
+    createCoverBackground(this, TEXTURE_KEYS.mapBackground, width, height);
     if (activeRun === null || activeRun === undefined) { this.add.text(width / 2, height / 2, "런 상태를 찾을 수 없습니다.", { fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace', fontSize: "28px", color: "#fca5a5" }).setOrigin(0.5); return; }
     const view = createMapHudView(activeRun);
     const fontFamily = 'Galmuri9, "Apple SD Gothic Neo", monospace';
