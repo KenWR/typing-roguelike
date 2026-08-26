@@ -5,6 +5,11 @@ import {
   type RunState,
 } from "@typing-roguelike/shared";
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
+import {
+  resolveEnemyTextureKey,
+  resolveEnemyVisualState,
+} from "../assets/enemy-visual-assets";
+import { resolvePlayerTextureKey } from "../assets/player-visual-assets";
 import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
 import { ActionPointResource } from "../combat/action-point-resource";
 import { CombatState } from "../combat/combat-state";
@@ -29,8 +34,6 @@ import { createCombatLayout } from "../layout/combat-layout";
 import { MENU_SETTINGS_REGISTRY_KEYS } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
 
-const BACKGROUND_WIDTH = 1600;
-const BACKGROUND_HEIGHT = 900;
 const MAGIC_SHIELD = defineSkill({
   id: "skill.magic-shield",
   name: "매직 실드",
@@ -59,6 +62,9 @@ export class CombatFoundationScene extends Phaser.Scene {
   private overlay!: Phaser.GameObjects.Rectangle;
   private playerPlaceholder!: Phaser.GameObjects.Container;
   private enemyPlaceholder!: Phaser.GameObjects.Container;
+  private enemyActorImage?: Phaser.GameObjects.Image;
+  private displayedEnemyHp = 0;
+  private enemyHitRemainingMs = 0;
   private enemyHealthText!: Phaser.GameObjects.Text;
   private combatHud!: CombatHud;
   private enemyAttackGauge!: EnemyAttackGauge;
@@ -93,6 +99,9 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.playerCombatRuntime = undefined;
     this.feedback = undefined;
     this.transitionStarted = false;
+    this.enemyActorImage = undefined;
+    this.displayedEnemyHp = 0;
+    this.enemyHitRemainingMs = 0;
   }
 
   create(): void {
@@ -124,12 +133,20 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.overlay = this.add.rectangle(0, 0, 1, 1, 0x08101b, 0.3).setOrigin(0);
     this.backgroundLayer.add([this.background, this.overlay]);
 
-    this.playerPlaceholder = this.createActorPlaceholder("플레이어", 0x3f7f84);
+    this.playerPlaceholder = this.createActorPlaceholder(
+      "플레이어",
+      0x3f7f84,
+      resolvePlayerTextureKey(initialization.player.equipmentIds[0]),
+    );
     this.enemyPlaceholder = this.createActorPlaceholder(
       this.createEnemyLabel(initialization),
       0x8d4b52,
+      resolveEnemyTextureKey(initialization.enemies[0]?.enemyId),
     );
     this.worldLayer.add([this.playerPlaceholder, this.enemyPlaceholder]);
+    const enemyActor = this.enemyPlaceholder.getAt(0);
+    this.enemyActorImage = enemyActor instanceof Phaser.GameObjects.Image ? enemyActor : undefined;
+    this.displayedEnemyHp = initialization.enemies[0]?.hp ?? 0;
 
     const encounterLabel = this.add
       .text(
@@ -274,12 +291,21 @@ export class CombatFoundationScene extends Phaser.Scene {
     if (playerUpdate === undefined) {
       const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
       this.enemyAttackGauge.update(enemyUpdate.snapshot);
+      this.updateEnemyVisual(this.displayedEnemyHp, safeDelta, enemyUpdate.snapshot);
       return;
     }
 
     this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);
     this.combatHud.update({ hp: playerUpdate.playerHp });
     this.updateEnemyHealth(playerUpdate.enemyHp);
+    const displayedEnemy = this.combatInitialization.enemies[0];
+    if (displayedEnemy !== undefined) {
+      this.updateEnemyVisual(
+        playerUpdate.enemyHp[displayedEnemy.instanceId] ?? displayedEnemy.hp,
+        safeDelta,
+        playerUpdate.enemyTimeline.snapshot,
+      );
+    }
 
     if (
       previousPlayerHp !== undefined &&
@@ -295,6 +321,48 @@ export class CombatFoundationScene extends Phaser.Scene {
     }
   }
 
+  private updateEnemyVisual(
+    currentHp: number,
+    deltaMs: number,
+    timeline: Readonly<EnemyAttackTimeline["snapshot"]>,
+  ): void {
+    const enemy = this.combatInitialization?.enemies[0];
+    if (enemy === undefined || this.enemyActorImage === undefined) return;
+
+    if (currentHp < this.displayedEnemyHp) {
+      this.enemyHitRemainingMs = 240;
+    } else {
+      this.enemyHitRemainingMs = Math.max(0, this.enemyHitRemainingMs - deltaMs);
+    }
+    this.displayedEnemyHp = currentHp;
+
+    const activeAttack = timeline.attacks.find(
+      (attack) => attack.enemyId === enemy.instanceId && !attack.impactResolved,
+    );
+    const state = resolveEnemyVisualState({
+      currentHp,
+      hitRemainingMs: this.enemyHitRemainingMs,
+      ...(activeAttack === undefined ? {} : { activeAttackId: activeAttack.attackId }),
+    });
+    const textureKey = resolveEnemyTextureKey(enemy.enemyId, state);
+    const readyTextureKey = resolveEnemyTextureKey(enemy.enemyId);
+    const nextTextureKey =
+      textureKey !== undefined && this.textures.exists(textureKey)
+        ? textureKey
+        : readyTextureKey;
+    if (
+      nextTextureKey !== undefined &&
+      this.textures.exists(nextTextureKey) &&
+      this.enemyActorImage.texture.key !== nextTextureKey
+    ) {
+      this.enemyActorImage.setTexture(nextTextureKey);
+      const scale = Math.min(
+        220 / this.enemyActorImage.width,
+        260 / this.enemyActorImage.height,
+      );
+      this.enemyActorImage.setScale(scale);
+    }
+  }
   private updateEnemyHealth(enemyHp: Readonly<Record<string, number>>): void {
     this.enemyHealthText.setText(
       createEnemyHealthListLabel(
@@ -352,8 +420,8 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.cameras.main.setViewport(0, 0, width, height);
 
     const backgroundScale = Math.max(
-      width / BACKGROUND_WIDTH,
-      height / BACKGROUND_HEIGHT,
+      width / this.background.width,
+      height / this.background.height,
     );
     this.background
       .setPosition(width / 2, height / 2)
@@ -464,13 +532,19 @@ export class CombatFoundationScene extends Phaser.Scene {
   private createActorPlaceholder(
     label: string,
     accentColor: number,
+    textureKey?: string,
   ): Phaser.GameObjects.Container {
     const container = this.add.container(0, 0);
-    const silhouette = this.add
-      .rectangle(0, 0, 120, 180, 0x111827, 0.82)
-      .setStrokeStyle(3, accentColor, 1);
-    const name = this.add
-      .text(0, 0, label, {
+    const silhouette = textureKey !== undefined && this.textures.exists(textureKey)
+      ? this.add.image(0, 0, textureKey)
+      : this.add
+          .rectangle(0, 0, 120, 180, 0x111827, 0.82)
+          .setStrokeStyle(3, accentColor, 1);
+    if (silhouette instanceof Phaser.GameObjects.Image) {
+      const scale = Math.min(220 / silhouette.width, 260 / silhouette.height);
+      silhouette.setScale(scale);
+    }    const name = this.add
+      .text(0, 128, label, {
         color: "#e5edf5",
         fontFamily: "Galmuri9, monospace",
         fontSize: "18px",

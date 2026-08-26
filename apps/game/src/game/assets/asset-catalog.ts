@@ -1,3 +1,6 @@
+import { COMBAT_BACKGROUND_ASSET, ENEMY_IMAGE_ASSETS } from "./enemy-visual-assets";
+import { PLAYER_WEAPON_IMAGE_ASSETS } from "./player-visual-assets";
+
 export const ASSET_PATHS = {
   weaponIcons: {
     hud: "/assets/images/weapon_icons_pixel/96",
@@ -14,9 +17,13 @@ export const ASSET_PATHS = {
 export const RUNTIME_IMAGE_ASSETS: readonly {
   key: string;
   path: string;
-}[] = [];
+}[] = [
+  COMBAT_BACKGROUND_ASSET,
+  ...ENEMY_IMAGE_ASSETS,
+  ...PLAYER_WEAPON_IMAGE_ASSETS,
+];
 
 export const TEXTURE_KEYS = {
-  combatBackground: "placeholder:combat-background",
+  combatBackground: COMBAT_BACKGROUND_ASSET.key,
   missingAsset: "placeholder:missing-asset",
 } as const;

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { GeneratedMapNode, RunState } from "@typing-roguelike/shared";
+import { playWalkSound } from "../audio/runtime-audio";
 import { createMapHudView } from "../run/map-hud-view";
 import { routeMapNodeSelection } from "../run/map-node-routing";
 import { runRemotePersistence } from "../run/run-remote-persistence";
@@ -150,6 +151,7 @@ export class InteractiveMapScene extends MapScene {
 
         this.selectionLocked = true;
         this.input.enabled = false;
+        playWalkSound();
         if (runSession.get()?.status === "active") {
           runSession.update(() => route.runState);
         }
