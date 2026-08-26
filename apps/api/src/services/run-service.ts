@@ -16,10 +16,14 @@ const hashState = (state: RunState): string =>
 const defaultState = (seed: number): RunState =>
   createInitialRunState({ seed });
 
-export const createRun = (playerId: string) => {
+const randomMapSeed = (): number => Math.floor(Math.random() * 2_147_483_647);
+
+export const createRun = (playerId: string, requestedSeed?: number) => {
   const runId = randomUUID();
   const timestamp = now();
-  const mapSeed = Math.floor(Math.random() * 2_147_483_647);
+  const mapSeed = Number.isSafeInteger(requestedSeed) && requestedSeed !== undefined && requestedSeed >= 0
+    ? requestedSeed
+    : randomMapSeed();
   const state = defaultState(mapSeed);
   const stateJson = JSON.stringify(state);
   const stateHash = hashState(state);
