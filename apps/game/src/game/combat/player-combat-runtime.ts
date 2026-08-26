@@ -16,7 +16,7 @@ import type {
   CombatEncounterInitialization,
 } from "./encounter-initializer";
 import { CombatState, type CombatUpdate } from "./combat-state";
-import { DefenseWindowTracker } from "./defense-window";
+import { ShieldPool } from "./shield-pool";
 import {
   EnemyAttackTimeline,
   type EnemyAttackEvent,
@@ -50,6 +50,8 @@ export type PlayerCombatRuntimeUpdate = Readonly<{
   playerHp: number;
   playerAp: number;
   enemyHp: Readonly<Record<string, number>>;
+  playerShield: number;
+  enemyShield: Readonly<Record<string, number>>;
   route: CombatOutcomeRoute | null;
 }>;
 
@@ -100,7 +102,9 @@ export class PlayerCombatRuntime {
   private readonly random: () => number;
   private readonly impactResolver = new SkillImpactResolver();
   private readonly enemyImpactResolver = new EnemyImpactResolver();
-  private readonly defenseWindows = new DefenseWindowTracker();
+  private readonly shields = new ShieldPool();
+  private readonly enemyTimelineByShieldId = new Map<string, string>();
+  private readonly enemyShieldIdByTimelineId = new Map<string, string>();
   private readonly player: SkillCombatantState;
   private readonly enemies = new Map<string, SkillCombatantState>();
   private readonly skillsByActionId = new Map<string, SkillDefinition>();
@@ -154,9 +158,14 @@ export class PlayerCombatRuntime {
     }
   }
 
+  /**
+   * 커맨드가 완성된 순간 호출됩니다. 스킬의 실드는 선딜을 기다리지 않고
+   * 이 시점에 즉시 부여됩니다.
+   */
   registerAction(actionId: string, skill: SkillDefinition): void {
     if (this.route !== null) return;
     this.skillsByActionId.set(actionId, skill);
+    this.grantSkillShields(actionId, skill);
   }
 
   setRunState(runState: Readonly<RunState>): void {
@@ -181,6 +190,26 @@ export class PlayerCombatRuntime {
     );
   }
 
+  /** 커맨드 완성으로 얻어 아직 남아 있는 플레이어 실드량입니다. */
+  get playerShield(): number {
+    return this.shields.totalAmount(this.player.id, this.elapsedMs);
+  }
+
+  /** 선딜 중이라 실드가 차 있는 적들의 남은 실드량입니다. */
+  get enemyShield(): Readonly<Record<string, number>> {
+    const atMs = this.elapsedMs;
+    return Object.fromEntries(
+      Array.from(this.enemies.keys(), (enemyId) => [
+        enemyId,
+        this.shields.totalAmount(enemyId, atMs),
+      ]),
+    );
+  }
+
+  private get elapsedMs(): number {
+    return this.enemyTimeline.snapshot.elapsedMs;
+  }
+
   advance(deltaMs: number): PlayerCombatRuntimeUpdate {
     const combatUpdate = this.combat.advance(deltaMs);
     const enemyTimelineUpdate = this.enemyTimeline.advance(deltaMs);
@@ -201,6 +230,8 @@ export class PlayerCombatRuntime {
       playerHp: this.playerHp,
       playerAp: this.actionPoints.snapshot.currentAp,
       enemyHp: this.enemyHp,
+      playerShield: this.playerShield,
+      enemyShield: this.enemyShield,
       route: this.route,
     };
   }
@@ -243,7 +274,26 @@ export class PlayerCombatRuntime {
     }
 
     if (orderedImpacts.length === 0) this.resolveOutcome();
-    this.defenseWindows.pruneExpired(this.enemyTimeline.snapshot.elapsedMs);
+    this.releaseFinishedWindupShields(enemyEvents);
+    this.shields.pruneExpired(this.elapsedMs);
+  }
+
+  /** 선딜이 끝나는 순간 적의 실드는 남은 양과 상관없이 사라집니다. */
+  private releaseFinishedWindupShields(
+    enemyEvents: readonly EnemyAttackEvent[],
+  ): void {
+    for (const event of enemyEvents) {
+      if (event.type !== "cast-completed") continue;
+      this.releaseEnemyShield(event.timelineId);
+    }
+  }
+
+  private releaseEnemyShield(timelineId: string): void {
+    const shieldId = this.enemyShieldIdByTimelineId.get(timelineId);
+    if (shieldId === undefined) return;
+    this.enemyShieldIdByTimelineId.delete(timelineId);
+    this.enemyTimelineByShieldId.delete(shieldId);
+    this.shields.release(shieldId);
   }
 
   private resolvePlayerImpact(event: PlayerImpactEvent): void {
@@ -263,27 +313,41 @@ export class PlayerCombatRuntime {
       skill,
       actor: this.player,
       target,
+      shields: this.shields,
     });
     if (!result.applied) return;
 
     this.apEffects.onSkillImpact(skill);
 
-    if (result.damageApplied > 0 && target.id !== this.player.id) {
-      target.clearTemporaryDefense();
+    if (
+      target.id !== this.player.id &&
+      (result.damageApplied > 0 || result.shieldAbsorbedDamage > 0)
+    ) {
       playWeaponImpactSound(this.initialization.player.equipmentIds);
     }
 
-    for (const [index, effect] of skill.effects.entries()) {
-      if (effect.type !== "guard") continue;
-      const windowId = `${event.actionId}:guard:${index}`;
-      this.defenseWindows.openWindow(
-        windowId,
-        this.player.id,
-        event.atMs,
-        this.apEffects.resolveGuardDuration(effect.durationMs),
-        effect.damageMultiplier,
-      );
+    for (const shieldId of result.brokenShieldIds) {
+      this.cancelAttackOnBrokenShield(shieldId);
     }
+  }
+
+  /**
+   * 선딜 중인 적의 실드를 모두 깎으면 그 행동은 취소되고 적은 곧바로 다음
+   * 행동을 고릅니다.
+   */
+  private cancelAttackOnBrokenShield(shieldId: string): void {
+    const timelineId = this.enemyTimelineByShieldId.get(shieldId);
+    if (timelineId === undefined) return;
+    this.enemyTimelineByShieldId.delete(shieldId);
+    this.enemyShieldIdByTimelineId.delete(timelineId);
+
+    const attack = this.enemyTimeline.snapshot.attacks.find(
+      (candidate) => candidate.timelineId === timelineId,
+    );
+    if (attack === undefined || attack.phase !== "windup") return;
+
+    this.enemyTimeline.cancelAttack(timelineId);
+    this.startNextEnemyAttack(attack.enemyId);
   }
 
   private resolveEnemyImpact(event: ResolvedEnemyImpactEvent): void {
@@ -299,21 +363,15 @@ export class PlayerCombatRuntime {
     if (enemy === undefined || action === undefined) return;
 
     if (action.kind === "defense") {
-      enemyState.setTemporaryDefense(action.defenseAmount ?? 0);
       this.startNextEnemyAttack(enemy.instanceId);
       return;
     }
 
-    const defense = this.defenseWindows.resolveImpact(this.player.id, event.atMs);
-    const defendedDamageMultiplier = defense.window === null
-      ? 1
-      : defense.window.damageMultiplier;
     const result = this.enemyImpactResolver.resolve({
       event,
       damage: action.damage,
       target: this.player,
-      defenseWindows: this.defenseWindows,
-      defendedDamageMultiplier,
+      shields: this.shields,
     });
     if (!result.applied) return;
 
@@ -372,8 +430,9 @@ export class PlayerCombatRuntime {
     const action = enemy.actions[actionIndex];
     if (action === undefined) return;
 
+    const timelineId = `${enemy.instanceId}:${action.id}:runtime:${this.nextEnemyTimelineSequence++}`;
     this.enemyTimeline.startAttack({
-      timelineId: `${enemy.instanceId}:${action.id}:runtime:${this.nextEnemyTimelineSequence++}`,
+      timelineId,
       enemyId: enemy.instanceId,
       targetId: this.player.id,
       attackId: action.id,
@@ -381,6 +440,47 @@ export class PlayerCombatRuntime {
       attackType: action.kind === "defense" ? "defense" : "attack",
       windupMs: action.windupMs,
       recoveryMs: action.recoveryMs,
+    });
+    this.grantEnemyWindupShield(timelineId, enemy.instanceId, action);
+  }
+
+  /** 적은 선딜이 시작되는 순간 실드가 가득 찬 상태로 행동을 시작합니다. */
+  private grantEnemyWindupShield(
+    timelineId: string,
+    enemyId: string,
+    action: CombatEnemyInitialization["actions"][number],
+  ): void {
+    const amount = action.shieldAmount ?? 0;
+    if (amount <= 0 || action.windupMs <= 0) return;
+
+    const shieldId = `${timelineId}:shield`;
+    this.shields.grant({
+      id: shieldId,
+      ownerId: enemyId,
+      amount,
+      durationMs: action.windupMs,
+      atMs: this.elapsedMs,
+    });
+    this.enemyTimelineByShieldId.set(shieldId, timelineId);
+    this.enemyShieldIdByTimelineId.set(timelineId, shieldId);
+  }
+
+  /** 커맨드를 완성한 순간 스킬의 실드를 즉시 부여합니다. */
+  private grantSkillShields(actionId: string, skill: SkillDefinition): void {
+    const atMs = this.elapsedMs;
+    skill.effects.forEach((effect, index) => {
+      if (effect.type !== "shield") return;
+      const amount = this.apEffects.resolveShieldAmount(effect.amount);
+      const durationMs = this.apEffects.resolveShieldDuration(effect.durationMs);
+      if (amount <= 0 || durationMs <= 0) return;
+      this.shields.grant({
+        id: `${actionId}:shield:${index}`,
+        ownerId: this.player.id,
+        amount,
+        durationMs,
+        atMs,
+      });
+      this.apEffects.onShieldGranted();
     });
   }
 

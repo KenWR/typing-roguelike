@@ -26,6 +26,42 @@ interface EnemyDefinition {
   specials?: readonly SpecialActionDefinition[];
 }
 
+/**
+ * 선딜 1초당 플레이어가 뽑아낼 수 있는 기준 피해량입니다.
+ * AP 재생 1/초에 1 AP 기본기술의 평균 피해가 10 안팎이라는 전제로 잡았습니다.
+ */
+const PLAYER_DAMAGE_PER_WINDUP_SECOND = 10;
+
+/** 선딜 동안 플레이어가 낼 수 있는 피해 중 실드가 흡수하는 비율입니다. */
+const SHIELD_RATIO_BY_KIND: Record<EnemyActionConfig["kind"], number> = {
+  attack: 0.4,
+  special: 0.48,
+  defense: 1,
+};
+
+const SHIELD_RATIO_BY_TIER: Record<EnemyConfig["tier"], number> = {
+  normal: 1,
+  summon: 1,
+  elite: 1.3,
+  boss: 1.6,
+};
+
+/**
+ * 선딜이 시작될 때 채워지는 실드량입니다. 선딜이 길수록, 등급이 높을수록 두꺼워지며
+ * 선딜 안에 플레이어가 실드를 모두 깎으면 그 행동은 취소됩니다.
+ */
+const createShieldAmount = (
+  enemy: EnemyDefinition,
+  kind: EnemyActionConfig["kind"],
+  windupMs: number,
+): number =>
+  Math.ceil(
+    (windupMs / 1000) *
+      PLAYER_DAMAGE_PER_WINDUP_SECOND *
+      SHIELD_RATIO_BY_KIND[kind] *
+      SHIELD_RATIO_BY_TIER[enemy.tier],
+  );
+
 const createAnimationRefs = (enemyId: string, actionId: string): EnemyActionConfig["animation"] => ({
   windup: `enemy:${enemyId}:${actionId}:windup`,
   impact: `enemy:${enemyId}:${actionId}:impact`,
@@ -39,6 +75,7 @@ const createAttackAction = (enemy: EnemyDefinition): EnemyActionConfig => ({
   damage: enemy.attackDamage,
   windupMs: enemy.attackWindupMs,
   recoveryMs: 300,
+  shieldAmount: createShieldAmount(enemy, "attack", enemy.attackWindupMs),
   description: enemy.attackDescription,
   animation: createAnimationRefs(enemy.id, "attack"),
 });
@@ -50,8 +87,8 @@ const createDefenseAction = (enemy: EnemyDefinition): EnemyActionConfig => ({
   damage: 0,
   windupMs: 3000,
   recoveryMs: 500,
-  defenseAmount: Math.ceil(enemy.attackDamage * 1.2),
-  description: "피해를 감소시키는 방어 자세",
+  shieldAmount: createShieldAmount(enemy, "defense", 3000),
+  description: "두꺼운 실드를 두르는 방어 자세",
   animation: createAnimationRefs(enemy.id, "defense"),
 });
 
@@ -73,6 +110,7 @@ const createSpecialActions = (enemy: EnemyDefinition): readonly EnemyActionConfi
     damage: special.damage,
     windupMs: special.windupMs,
     recoveryMs: special.recoveryMs,
+    shieldAmount: createShieldAmount(enemy, "special", special.windupMs),
     ...(special.apDelta === undefined ? {} : { apDelta: special.apDelta }),
     description: special.description,
     animation: createAnimationRefs(enemy.id, special.id),

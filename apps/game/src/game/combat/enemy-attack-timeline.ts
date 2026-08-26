@@ -111,6 +111,13 @@ export class EnemyAttackTimeline {
     return this.toTimelineUpdate(update);
   }
 
+  /** 선딜 중 실드가 깨진 적의 행동을 취소합니다. */
+  cancelAttack(timelineId: string): boolean {
+    if (!this.combat.cancelAction(timelineId)) return false;
+    this.metadataByTimelineId.delete(timelineId);
+    return true;
+  }
+
   advance(deltaMs: number): EnemyAttackTimelineUpdate {
     return this.toTimelineUpdate(this.combat.advance(deltaMs));
   }

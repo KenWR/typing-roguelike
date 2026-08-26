@@ -3,7 +3,7 @@ import { playPlayerHitSound } from "../audio/runtime-audio";
 import { ActionPointResource } from "./action-point-resource";
 import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome-routing";
 import { CombatState } from "./combat-state";
-import { DefenseWindowTracker } from "./defense-window";
+import { ShieldPool } from "./shield-pool";
 import type { CombatEncounterInitialization, CombatEnemyInitialization } from "./encounter-initializer";
 import { EnemyImpactResolver } from "./enemy-impact-resolver";
 import { EnemyAttackTimeline, type EnemyAttackTimelineSnapshot } from "./enemy-attack-timeline";
@@ -39,7 +39,7 @@ export class EnemyCombatRuntime {
   private readonly random: () => number;
   private readonly player: SkillCombatantState;
   private readonly impactResolver = new EnemyImpactResolver();
-  private readonly defenseWindows = new DefenseWindowTracker();
+  private readonly shields = new ShieldPool();
   private readonly activeTimelineByEnemy = new Map<string, string>();
   private enemyHp: Readonly<Record<string, number>>;
   private runState: RunState;
@@ -89,8 +89,7 @@ export class EnemyCombatRuntime {
         event,
         damage: action.damage,
         target: this.player,
-        defenseWindows: this.defenseWindows,
-        defendedDamageMultiplier: 0.5,
+        shields: this.shields,
       });
       if (!result.applied) continue;
 
@@ -138,6 +137,15 @@ export class EnemyCombatRuntime {
       windupMs: action.windupMs,
       recoveryMs: action.recoveryMs,
     });
+    if ((action.shieldAmount ?? 0) > 0 && action.windupMs > 0) {
+      this.shields.grant({
+        id: `${timelineId}:shield`,
+        ownerId: enemy.instanceId,
+        amount: action.shieldAmount ?? 0,
+        durationMs: action.windupMs,
+        atMs: this.enemyTimeline.snapshot.elapsedMs,
+      });
+    }
     this.activeTimelineByEnemy.set(enemy.instanceId, timelineId);
   }
 

@@ -3,8 +3,8 @@ export type SkillCategory = "basic" | "special" | "guard";
 export type SkillEffectConfig =
   | Readonly<{ type: "damage"; coefficient: number }>
   | Readonly<{
-      type: "guard";
-      damageMultiplier: number;
+      type: "shield";
+      amount: number;
       durationMs: number;
     }>
   | Readonly<{
@@ -67,7 +67,11 @@ export interface EnemyActionConfig {
   damage: number;
   windupMs: number;
   recoveryMs: number;
-  defenseAmount?: number;
+  /**
+   * 선딜이 시작되는 순간 이 적에게 채워지는 실드량입니다.
+   * 선딜이 끝나면 남은 양과 함께 사라지고, 선딜 중에 모두 깎이면 행동이 취소됩니다.
+   */
+  shieldAmount?: number;
   /** 적 행동이 적중했을 때 플레이어 AP에 적용할 변화량. */
   apDelta?: number;
   description: string;

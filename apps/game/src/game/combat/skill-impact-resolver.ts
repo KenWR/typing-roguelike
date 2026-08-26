@@ -1,16 +1,11 @@
 import type {
   SkillDefinition,
-  SkillGuardEffect,
   SkillStatusEffect,
 } from "@typing-roguelike/shared";
 import type { CombatActionEvent } from "./combat-state";
 import { calculateDamage } from "./damage-formula";
 import { HealthState, type HealthSnapshot } from "./health-state";
-
-export type ActiveGuardEffect = Readonly<{
-  damageMultiplier: number;
-  durationMs: number;
-}>;
+import type { ShieldPool } from "./shield-pool";
 
 export type ActiveStatusEffect = Readonly<{
   statusId: string;
@@ -23,7 +18,6 @@ export type SkillCombatantSnapshot = Readonly<{
   attackPower: number;
   defense: number;
   health: HealthSnapshot;
-  guards: readonly ActiveGuardEffect[];
   statuses: readonly ActiveStatusEffect[];
 }>;
 
@@ -54,8 +48,6 @@ export class SkillCombatantState {
   readonly attackPower: number;
   readonly health: HealthState;
   private readonly baseDefense: number;
-  private temporaryDefense = 0;
-  private readonly guards: ActiveGuardEffect[] = [];
   private readonly statuses: ActiveStatusEffect[] = [];
 
   constructor(config: SkillCombatantConfig) {
@@ -66,7 +58,7 @@ export class SkillCombatantState {
   }
 
   get defense(): number {
-    return this.baseDefense + this.temporaryDefense;
+    return this.baseDefense;
   }
 
   get snapshot(): SkillCombatantSnapshot {
@@ -75,16 +67,8 @@ export class SkillCombatantState {
       attackPower: this.attackPower,
       defense: this.defense,
       health: this.health.snapshot,
-      guards: [...this.guards],
       statuses: [...this.statuses],
     };
-  }
-
-  applyGuard(effect: SkillGuardEffect): void {
-    this.guards.push({
-      damageMultiplier: effect.damageMultiplier,
-      durationMs: effect.durationMs,
-    });
   }
 
   applyStatus(effect: SkillStatusEffect): void {
@@ -95,13 +79,6 @@ export class SkillCombatantState {
     });
   }
 
-  setTemporaryDefense(defense: number): void {
-    this.temporaryDefense = validateNonNegative("Temporary defense", defense);
-  }
-
-  clearTemporaryDefense(): void {
-    this.temporaryDefense = 0;
-  }
 }
 
 export type ResolveSkillImpactInput = Readonly<{
@@ -109,20 +86,30 @@ export type ResolveSkillImpactInput = Readonly<{
   skill: SkillDefinition;
   actor: SkillCombatantState;
   target: SkillCombatantState;
+  /** 대상의 실드 풀. 넘기면 피해가 실드를 먼저 깎고 남은 만큼만 HP로 갑니다. */
+  shields?: ShieldPool;
 }>;
 
 export type SkillImpactResult = Readonly<{
   applied: boolean;
   actionId: string;
   damageApplied: number;
-  guardEffectsApplied: number;
+  shieldAbsorbedDamage: number;
+  /** 이 피해로 완전히 소진된 대상 실드 id 목록 */
+  brokenShieldIds: readonly string[];
   statusEffectsApplied: number;
 }>;
 
 export class SkillImpactResolver {
   private readonly resolvedActionIds = new Set<string>();
 
-  resolve({ event, skill, actor, target }: ResolveSkillImpactInput): SkillImpactResult {
+  resolve({
+    event,
+    skill,
+    actor,
+    target,
+    shields,
+  }: ResolveSkillImpactInput): SkillImpactResult {
     if (event.type !== "impact-resolved") {
       return this.emptyResult(event.actionId);
     }
@@ -134,8 +121,9 @@ export class SkillImpactResolver {
     }
 
     let damageApplied = 0;
-    let guardEffectsApplied = 0;
+    let shieldAbsorbedDamage = 0;
     let statusEffectsApplied = 0;
+    const brokenShieldIds: string[] = [];
 
     for (const effect of skill.effects) {
       switch (effect.type) {
@@ -145,12 +133,17 @@ export class SkillImpactResolver {
             damageCoefficient: effect.coefficient,
             defense: target.defense,
           });
-          damageApplied += target.health.applyDamage(damage).appliedDamage;
+          const absorb = shields?.absorb(target.id, damage, event.atMs);
+          if (absorb !== undefined) {
+            shieldAbsorbedDamage += absorb.absorbedDamage;
+            brokenShieldIds.push(...absorb.brokenShieldIds);
+          }
+          const throughDamage = absorb === undefined ? damage : absorb.remainingDamage;
+          damageApplied += target.health.applyDamage(throughDamage).appliedDamage;
           break;
         }
-        case "guard":
-          actor.applyGuard(effect);
-          guardEffectsApplied += 1;
+        // 실드는 커맨드를 완성하는 순간 부여되므로 임팩트 시점에서는 처리하지 않습니다.
+        case "shield":
           break;
         case "status":
           target.applyStatus(effect);
@@ -164,7 +157,8 @@ export class SkillImpactResolver {
       applied: true,
       actionId: event.actionId,
       damageApplied,
-      guardEffectsApplied,
+      shieldAbsorbedDamage,
+      brokenShieldIds,
       statusEffectsApplied,
     };
   }
@@ -174,7 +168,8 @@ export class SkillImpactResolver {
       applied: false,
       actionId,
       damageApplied: 0,
-      guardEffectsApplied: 0,
+      shieldAbsorbedDamage: 0,
+      brokenShieldIds: [],
       statusEffectsApplied: 0,
     };
   }

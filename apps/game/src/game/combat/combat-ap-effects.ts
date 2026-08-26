@@ -29,6 +29,8 @@ export class CombatApEffectController {
   private meditationDiscountArmed = false;
   private metronomeTriggered = false;
   private deleteKeyTriggered = false;
+  private typoCorrectionCharges = 0;
+  private typoCorrectionTriggerCount = 0;
 
   constructor(config: CombatApEffectControllerConfig) {
     this.actionPoints = config.actionPoints;
@@ -52,15 +54,57 @@ export class CombatApEffectController {
     return cost;
   }
 
-  resolveGuardDuration(durationMs: number): number {
+  /**
+   * 실드 지속시간 유물을 적용합니다. 증가 유물과 감소 유물이 함께 있으면
+   * 합산한 뒤 0 아래로는 내려가지 않습니다.
+   */
+  resolveShieldDuration(durationMs: number): number {
     if (!Number.isFinite(durationMs) || durationMs < 0) {
-      throw new RangeError("Guard duration must be a finite non-negative number.");
+      throw new RangeError("Shield duration must be a finite non-negative number.");
     }
 
     let adjustedDurationMs = durationMs;
     if (this.relicIds.has("relic_time_wristband")) adjustedDurationMs += 200;
     if (this.relicIds.has("relic_old_shield")) adjustedDurationMs += 300;
-    return adjustedDurationMs;
+    if (this.relicIds.has("relic_rampart_shield")) adjustedDurationMs += 1_000;
+    if (this.relicIds.has("relic_greedy_pouch")) adjustedDurationMs -= 300;
+    return Math.max(0, adjustedDurationMs);
+  }
+
+  /**
+   * 실드량 유물을 적용합니다. 고정 증가를 먼저 더하고 비율 보정을 곱한 뒤
+   * 정수로 내림합니다.
+   */
+  resolveShieldAmount(amount: number): number {
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new RangeError("Shield amount must be a finite non-negative number.");
+    }
+
+    let flatBonus = 0;
+    if (this.relicIds.has("relic_steel_fragment")) flatBonus += 8;
+    if (this.typoCorrectionCharges > 0) flatBonus += 6;
+
+    let multiplier = 1;
+    if (this.relicIds.has("relic_heavy_armor")) multiplier += 0.3;
+    if (this.relicIds.has("relic_berserker_gloves")) multiplier -= 0.2;
+
+    return Math.max(0, Math.floor((amount + flatBonus) * Math.max(0, multiplier)));
+  }
+
+  /**
+   * 커맨드 입력 실패를 기록합니다. 오타 교정 부적은 실패할 때마다 다음 실드량을
+   * 늘려 주고, 전투당 두 번까지만 발동합니다.
+   */
+  onCommandFailed(): void {
+    if (!this.relicIds.has("relic_typo_correction_charm")) return;
+    if (this.typoCorrectionTriggerCount >= 2) return;
+    this.typoCorrectionTriggerCount += 1;
+    this.typoCorrectionCharges += 1;
+  }
+
+  /** 실드를 실제로 부여한 뒤 1회성 실드량 보정을 소모합니다. */
+  onShieldGranted(): void {
+    if (this.typoCorrectionCharges > 0) this.typoCorrectionCharges -= 1;
   }
 
   onSkillStarted(skill: SkillDefinition, comboCount: number): void {

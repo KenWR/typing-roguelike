@@ -19,9 +19,9 @@ type EquipmentSkillOverride = SkillValues & {
   effect: string;
 };
 
-type GuardEffectDefinition = Readonly<{
-  type: "guard";
-  damageMultiplier: number;
+type ShieldEffectDefinition = Readonly<{
+  type: "shield";
+  amount: number;
   durationMs: number;
 }>;
 
@@ -280,52 +280,52 @@ const EQUIPMENT_SKILL_OVERRIDES: Readonly<Record<string, readonly EquipmentSkill
     { name: "폭소 강타", command: "폭소 강타", category: "special", damageCoefficient: 2.4, damage: "240%", effect: "240%, 치명타면 한 번 더 120%", apCost: 4, windupMs: 500, recoveryMs: 100 },
   ],
   equipment_guard_round_shield: [
-    { name: "방패 들기", command: "방패 들기", category: "guard", damage: null, effect: "0.9초간 받는 피해 -60%", apCost: 1, windupMs: 100, recoveryMs: 0 },
-    { name: "방진 전개", command: "방진 전개", category: "guard", damage: null, effect: "1.2초간 모든 피해 -50%", apCost: 2, windupMs: 200, recoveryMs: 0 },
+    { name: "방패 들기", command: "방패 들기", category: "guard", damage: null, effect: "실드 24, 0.9초", apCost: 1, windupMs: 100, recoveryMs: 0 },
+    { name: "방진 전개", command: "방진 전개", category: "guard", damage: null, effect: "실드 30, 1.2초", apCost: 2, windupMs: 200, recoveryMs: 0 },
   ],
   equipment_thorn_shield: [
-    { name: "방패 들기", command: "방패 들기", category: "guard", damage: null, effect: "받는 피해 -55%, 차단 피해의 20% 반사", apCost: 1, windupMs: 100, recoveryMs: 0 },
-    { name: "가시 받아치기", command: "가시 받아치기", category: "guard", damage: null, effect: "차단 + 130% 반격", apCost: 2, windupMs: 150, recoveryMs: 0 },
+    { name: "방패 들기", command: "방패 들기", category: "guard", damage: null, effect: "실드 22, 0.8초. 흡수한 피해의 20% 반사", apCost: 1, windupMs: 100, recoveryMs: 0 },
+    { name: "가시 받아치기", command: "가시 받아치기", category: "guard", damage: null, effect: "실드 45, 0.35초 + 130% 반격", apCost: 2, windupMs: 150, recoveryMs: 0 },
   ],
   equipment_mirror_steel_shield: [
-    { name: "방패 들기", command: "방패 들기", category: "guard", damage: null, effect: "받는 피해 -50%", apCost: 1, windupMs: 100, recoveryMs: 0 },
-    { name: "거울 반격", command: "거울 반격", category: "guard", damage: null, effect: "마법 차단 시 100% 반사", apCost: 3, windupMs: 150, recoveryMs: 0 },
+    { name: "방패 들기", command: "방패 들기", category: "guard", damage: null, effect: "실드 20, 0.8초", apCost: 1, windupMs: 100, recoveryMs: 0 },
+    { name: "거울 반격", command: "거울 반격", category: "guard", damage: null, effect: "실드 50, 0.35초. 마법을 흡수하면 100% 반사", apCost: 3, windupMs: 150, recoveryMs: 0 },
   ],
   equipment_fortress_shield: [
-    { name: "방패 들기", command: "방패 들기", category: "guard", damage: null, effect: "1.2초간 피해 -70%, 이동 불가", apCost: 2, windupMs: 100, recoveryMs: 0 },
-    { name: "성벽 자세", command: "성벽 자세", category: "guard", damage: null, effect: "2초간 피해 -80%, 공격 불가", apCost: 3, windupMs: 150, recoveryMs: 0 },
+    { name: "방패 들기", command: "방패 들기", category: "guard", damage: null, effect: "실드 28, 1.2초. 이동 불가", apCost: 2, windupMs: 100, recoveryMs: 0 },
+    { name: "성벽 자세", command: "성벽 자세", category: "guard", damage: null, effect: "실드 40, 2초. 공격 불가", apCost: 3, windupMs: 150, recoveryMs: 0 },
   ],
   equipment_mobile_wall: [
-    { name: "방패 들기", command: "방패 들기", category: "guard", damage: null, effect: "1초간 피해 -65%, 대상 전환 가능", apCost: 1, windupMs: 100, recoveryMs: 0 },
-    { name: "전진 방벽", command: "전진 방벽", category: "guard", damage: null, effect: "방어 중 공격 명령 1회 예약", apCost: 3, windupMs: 150, recoveryMs: 0 },
+    { name: "방패 들기", command: "방패 들기", category: "guard", damage: null, effect: "실드 26, 1초. 대상 전환 가능", apCost: 1, windupMs: 100, recoveryMs: 0 },
+    { name: "전진 방벽", command: "전진 방벽", category: "guard", damage: null, effect: "실드 32, 1초. 실드 유지 중 공격 명령 1회 예약", apCost: 3, windupMs: 150, recoveryMs: 0 },
   ],
   equipment_reversal_crest_shield: [
-    { name: "방패 들기", command: "방패 들기", category: "guard", damage: null, effect: "완벽 방어 시 AP 1 회복", apCost: 1, windupMs: 100, recoveryMs: 0 },
-    { name: "문장 역전", command: "문장 역전", category: "guard", damage: null, effect: "공격 이름을 정확히 입력해 취소 + 180% 반격, 전투당 2회", apCost: 3, windupMs: 150, recoveryMs: 0 },
+    { name: "방패 들기", command: "방패 들기", category: "guard", damage: null, effect: "실드 22, 0.8초. 실드로 막아내면 AP 1 회복", apCost: 1, windupMs: 100, recoveryMs: 0 },
+    { name: "문장 역전", command: "문장 역전", category: "guard", damage: null, effect: "실드 48, 0.35초. 공격 이름을 정확히 입력해 취소 + 180% 반격, 전투당 2회", apCost: 3, windupMs: 150, recoveryMs: 0 },
   ],
   equipment_bronze_repair_tome: [
-    { name: "보호막", command: "보호막", category: "guard", damage: null, effect: "최대 HP 22%, 4초", apCost: 2, windupMs: 350, recoveryMs: 0 },
-    { name: "수복문", command: "수복문", category: "guard", damage: null, effect: "보호막 50% 복구 + 2초 연장", apCost: 3, windupMs: 450, recoveryMs: 0 },
+    { name: "보호막", command: "보호막", category: "guard", damage: null, effect: "실드 22, 4초", apCost: 2, windupMs: 350, recoveryMs: 0 },
+    { name: "수복문", command: "수복문", category: "guard", damage: null, effect: "실드 11, 6초", apCost: 3, windupMs: 450, recoveryMs: 0 },
   ],
   equipment_flame_guard_tome: [
-    { name: "보호막", command: "보호막", category: "guard", damage: null, effect: "최대 HP 18%. 깨질 때 주위 80%", apCost: 2, windupMs: 350, recoveryMs: 0 },
-    { name: "화염 반사", command: "화염 반사", category: "guard", damage: null, effect: "마법 차단 + 60% 반사와 출혈 1", apCost: 3, windupMs: 450, recoveryMs: 0 },
+    { name: "보호막", command: "보호막", category: "guard", damage: null, effect: "실드 18, 4초. 깨질 때 주위 80%", apCost: 2, windupMs: 350, recoveryMs: 0 },
+    { name: "화염 반사", command: "화염 반사", category: "guard", damage: null, effect: "실드 40, 0.6초. 흡수 시 60% 반사와 출혈 1", apCost: 3, windupMs: 450, recoveryMs: 0 },
   ],
   equipment_frost_veil_tome: [
-    { name: "보호막", command: "보호막", category: "guard", damage: null, effect: "최대 HP 20%. 공격자 게이지 0.2초 지연", apCost: 2, windupMs: 350, recoveryMs: 0 },
-    { name: "빙결 장막", command: "빙결 장막", category: "guard", damage: null, effect: "0.8초간 다음 피해 무효 + 기절", apCost: 3, windupMs: 450, recoveryMs: 0 },
+    { name: "보호막", command: "보호막", category: "guard", damage: null, effect: "실드 20, 4초. 공격자 게이지 0.2초 지연", apCost: 2, windupMs: 350, recoveryMs: 0 },
+    { name: "빙결 장막", command: "빙결 장막", category: "guard", damage: null, effect: "실드 45, 0.8초 + 기절", apCost: 3, windupMs: 450, recoveryMs: 0 },
   ],
   equipment_reflection_grammar: [
-    { name: "보호막", command: "보호막", category: "guard", damage: null, effect: "최대 HP 18% + 받는 피해 -20%", apCost: 2, windupMs: 350, recoveryMs: 0 },
-    { name: "완전 반사", command: "완전 반사", category: "guard", damage: null, effect: "0.5초 내 받은 피해 100% 반사", apCost: 4, windupMs: 450, recoveryMs: 0 },
+    { name: "보호막", command: "보호막", category: "guard", damage: null, effect: "실드 18, 4초", apCost: 2, windupMs: 350, recoveryMs: 0 },
+    { name: "완전 반사", command: "완전 반사", category: "guard", damage: null, effect: "실드 42, 0.5초. 흡수한 피해 100% 반사", apCost: 4, windupMs: 450, recoveryMs: 0 },
   ],
   equipment_infinite_pages: [
-    { name: "보호막", command: "보호막", category: "guard", damage: null, effect: "최대 HP 15%. 정확 입력 시 AP 1 반환, 전투당 3회", apCost: 2, windupMs: 350, recoveryMs: 0 },
-    { name: "연속 장막", command: "연속 장막", category: "guard", damage: null, effect: "보호막이 깨지면 50% 수치로 한 번 재생", apCost: 4, windupMs: 450, recoveryMs: 0 },
+    { name: "보호막", command: "보호막", category: "guard", damage: null, effect: "실드 15, 4초. 정확 입력 시 AP 1 반환, 전투당 3회", apCost: 2, windupMs: 350, recoveryMs: 0 },
+    { name: "연속 장막", command: "연속 장막", category: "guard", damage: null, effect: "실드 22, 4초. 깨지면 50% 수치로 한 번 재생", apCost: 4, windupMs: 450, recoveryMs: 0 },
   ],
   equipment_final_chapter: [
-    { name: "보호막", command: "보호막", category: "guard", damage: null, effect: "최대 HP 25%, HP 30% 이하면 40%", apCost: 2, windupMs: 350, recoveryMs: 0 },
-    { name: "결말 거부", command: "결말 거부", category: "guard", damage: null, effect: "1초간 치명 피해를 막고 HP 1 유지, 전투당 1회", apCost: 5, windupMs: 450, recoveryMs: 0 },
+    { name: "보호막", command: "보호막", category: "guard", damage: null, effect: "실드 25, 4초. HP 30% 이하면 40", apCost: 2, windupMs: 350, recoveryMs: 0 },
+    { name: "결말 거부", command: "결말 거부", category: "guard", damage: null, effect: "실드 55, 1초. 치명 피해를 막고 HP 1 유지, 전투당 1회", apCost: 5, windupMs: 450, recoveryMs: 0 },
   ],
   equipment_forewarning_orb: [
     { name: "명상", command: "명상", category: "basic", damage: null, effect: "AP 1 회복 + 다음 적 공격 공개", apCost: 0, windupMs: 800, recoveryMs: 0 },
@@ -378,60 +378,63 @@ const EQUIPMENT_SKILL_OVERRIDES: Readonly<Record<string, readonly EquipmentSkill
 };
 
 /**
- * 방패의 생략된 유효 시간은 공통 방패 규칙(기본 0.8초, 받아치기 0.35초)을
- * 따릅니다. 보호막 전용 런타임이 아직 없으므로 마법서의 보호막 수치는 같은
- * 비율의 피해 감소로 표현하고, 기본 보호막 지속 시간인 4초를 사용합니다.
+ * 실드는 커맨드를 완성하는 순간 부여되어 `amount`만큼의 피해를 흡수하고,
+ * `durationMs`가 지나면 남은 양과 함께 사라집니다.
+ *
+ * 수치 기준은 최대 HP 100입니다. 마법서의 보호막은 설명에 적힌 "최대 HP N%"를
+ * 그대로 실드량으로 쓰고, 방패는 기존 피해 감소율을 같은 체감의 흡수량으로
+ * 환산했습니다. 받아치기 계열은 지속 시간이 짧은 대신 실드량이 큽니다.
  */
-const EQUIPMENT_GUARD_EFFECTS: Readonly<
-  Record<string, readonly GuardEffectDefinition[]>
+const EQUIPMENT_SHIELD_EFFECTS: Readonly<
+  Record<string, readonly ShieldEffectDefinition[]>
 > = {
   equipment_guard_round_shield: [
-    { type: "guard", damageMultiplier: 0.4, durationMs: 900 },
-    { type: "guard", damageMultiplier: 0.5, durationMs: 1_200 },
+    { type: "shield", amount: 24, durationMs: 900 },
+    { type: "shield", amount: 30, durationMs: 1_200 },
   ],
   equipment_thorn_shield: [
-    { type: "guard", damageMultiplier: 0.45, durationMs: 800 },
-    { type: "guard", damageMultiplier: 0, durationMs: 350 },
+    { type: "shield", amount: 22, durationMs: 800 },
+    { type: "shield", amount: 45, durationMs: 350 },
   ],
   equipment_mirror_steel_shield: [
-    { type: "guard", damageMultiplier: 0.5, durationMs: 800 },
-    { type: "guard", damageMultiplier: 0, durationMs: 350 },
+    { type: "shield", amount: 20, durationMs: 800 },
+    { type: "shield", amount: 50, durationMs: 350 },
   ],
   equipment_fortress_shield: [
-    { type: "guard", damageMultiplier: 0.3, durationMs: 1_200 },
-    { type: "guard", damageMultiplier: 0.2, durationMs: 2_000 },
+    { type: "shield", amount: 28, durationMs: 1_200 },
+    { type: "shield", amount: 40, durationMs: 2_000 },
   ],
   equipment_mobile_wall: [
-    { type: "guard", damageMultiplier: 0.35, durationMs: 1_000 },
-    { type: "guard", damageMultiplier: 0.35, durationMs: 1_000 },
+    { type: "shield", amount: 26, durationMs: 1_000 },
+    { type: "shield", amount: 32, durationMs: 1_000 },
   ],
   equipment_reversal_crest_shield: [
-    { type: "guard", damageMultiplier: 0.4, durationMs: 800 },
-    { type: "guard", damageMultiplier: 0, durationMs: 350 },
+    { type: "shield", amount: 22, durationMs: 800 },
+    { type: "shield", amount: 48, durationMs: 350 },
   ],
   equipment_bronze_repair_tome: [
-    { type: "guard", damageMultiplier: 0.78, durationMs: 4_000 },
-    { type: "guard", damageMultiplier: 0.78, durationMs: 2_000 },
+    { type: "shield", amount: 22, durationMs: 4_000 },
+    { type: "shield", amount: 11, durationMs: 6_000 },
   ],
   equipment_flame_guard_tome: [
-    { type: "guard", damageMultiplier: 0.82, durationMs: 4_000 },
-    { type: "guard", damageMultiplier: 0, durationMs: 600 },
+    { type: "shield", amount: 18, durationMs: 4_000 },
+    { type: "shield", amount: 40, durationMs: 600 },
   ],
   equipment_frost_veil_tome: [
-    { type: "guard", damageMultiplier: 0.8, durationMs: 4_000 },
-    { type: "guard", damageMultiplier: 0, durationMs: 800 },
+    { type: "shield", amount: 20, durationMs: 4_000 },
+    { type: "shield", amount: 45, durationMs: 800 },
   ],
   equipment_reflection_grammar: [
-    { type: "guard", damageMultiplier: 0.8, durationMs: 4_000 },
-    { type: "guard", damageMultiplier: 0, durationMs: 500 },
+    { type: "shield", amount: 18, durationMs: 4_000 },
+    { type: "shield", amount: 42, durationMs: 500 },
   ],
   equipment_infinite_pages: [
-    { type: "guard", damageMultiplier: 0.85, durationMs: 4_000 },
-    { type: "guard", damageMultiplier: 0.85, durationMs: 4_000 },
+    { type: "shield", amount: 15, durationMs: 4_000 },
+    { type: "shield", amount: 22, durationMs: 4_000 },
   ],
   equipment_final_chapter: [
-    { type: "guard", damageMultiplier: 0.75, durationMs: 4_000 },
-    { type: "guard", damageMultiplier: 0, durationMs: 1_000 },
+    { type: "shield", amount: 25, durationMs: 4_000 },
+    { type: "shield", amount: 55, durationMs: 1_000 },
   ],
 };
 
@@ -531,7 +534,7 @@ const createSkill = (
   index: number,
   effect: string,
   tags: readonly string[],
-  effects?: readonly GuardEffectDefinition[],
+  effects?: readonly ShieldEffectDefinition[],
 ): SkillConfig => ({
   id: `${equipment.id}-skill-${index}`,
   type: category === "basic" ? "basic" : "special",
@@ -556,7 +559,7 @@ const createSkills = (equipment: EquipmentDefinition): readonly SkillConfig[] =>
   if (overrides !== undefined) {
     return overrides.map((skill, index) => {
       const isBasic = index === 0 || (equipment.kind === "crossbow" && index === 1);
-      const guardEffect = EQUIPMENT_GUARD_EFFECTS[equipment.id]?.[index];
+      const shieldEffect = EQUIPMENT_SHIELD_EFFECTS[equipment.id]?.[index];
       return {
         ...createSkill(
           equipment,
@@ -572,7 +575,7 @@ const createSkills = (equipment: EquipmentDefinition): readonly SkillConfig[] =>
           index + 1,
           skill.effect,
           [equipment.kind, isBasic ? "basic" : "signature"],
-          guardEffect === undefined ? undefined : [guardEffect],
+          shieldEffect === undefined ? undefined : [shieldEffect],
         ),
         type: isBasic ? "basic" : "special",
         command: skill.command,
