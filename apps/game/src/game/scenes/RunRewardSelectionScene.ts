@@ -62,12 +62,16 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
   private runAdapter?: RewardSelectionAdapter<RunState>;
   private routeData: RunRewardSelectionSceneData = {};
   private cardHitAreas: Phaser.GameObjects.Rectangle[] = [];
+  private skipButton?: Phaser.GameObjects.Rectangle;
+  private skipText?: Phaser.GameObjects.Text;
   private transitionPointerGuard: RewardTransitionPointerGuard =
     createRewardTransitionPointerGuard();
 
   override init(data: RunRewardSelectionSceneData = {}): void {
     this.routeData = data;
     this.cardHitAreas = [];
+    this.skipButton = undefined;
+    this.skipText = undefined;
     this.transitionPointerGuard = createRewardTransitionPointerGuard(
       data.suppressPointerUntilRelease === true,
     );
@@ -116,12 +120,13 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
     if (this.runAdapter === undefined) return;
 
     this.installCardInputLayer();
+    this.installSkipControl();
     if (!this.transitionPointerGuard.acceptsPointerDown()) {
       this.input.once(Phaser.Input.Events.POINTER_UP, this.releaseTransitionPointer, this);
     }
     this.routeData = { ...this.routeData, suppressPointerUntilRelease: false };
     this.input.keyboard?.on("keydown", this.handleRewardKeyDown, this);
-    this.scale.on(Phaser.Scale.Events.RESIZE, this.layoutCardHitAreas, this);
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.layoutRunControls, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseRunInput, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseRunInput, this);
   }
@@ -143,8 +148,62 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
     this.layoutCardHitAreas();
   }
 
+  private installSkipControl(): void {
+    this.skipButton = this.add
+      .rectangle(0, 0, 1, 1, 0x1f2937, 1)
+      .setOrigin(0)
+      .setDepth(82)
+      .setStrokeStyle(1, 0x64748b, 1)
+      .setInteractive({ useHandCursor: true });
+    this.skipButton.on(Phaser.Input.Events.POINTER_DOWN, () => {
+      if (!this.transitionPointerGuard.acceptsPointerDown()) return;
+      this.skipReward();
+    });
+    this.skipButton.on(Phaser.Input.Events.POINTER_OVER, () => {
+      this.skipButton?.setFillStyle(0x334155, 1);
+    });
+    this.skipButton.on(Phaser.Input.Events.POINTER_OUT, () => {
+      this.skipButton?.setFillStyle(0x1f2937, 1);
+    });
+    this.skipText = this.add
+      .text(0, 0, "선택하지 않기", {
+        fontFamily: "Arial, sans-serif",
+        fontSize: "14px",
+        color: "#cbd5e1",
+      })
+      .setOrigin(0.5)
+      .setDepth(83);
+    this.layoutSkipControl();
+  }
+
   private releaseTransitionPointer(): void {
     this.transitionPointerGuard.release();
+  }
+
+  private layoutRunControls(): void {
+    this.layoutCardHitAreas();
+    this.layoutSkipControl();
+  }
+
+  private layoutSkipControl(): void {
+    if (this.skipButton === undefined || this.skipText === undefined) return;
+
+    const width = this.scale.gameSize.width;
+    const height = this.scale.gameSize.height;
+    const safeInset = clamp(Math.min(width, height) * 0.04, 16, 44);
+    const compact = width < 640;
+    const footerHeight = compact ? 70 : 78;
+    const footerY = height - safeInset - footerHeight;
+    const buttonWidth = compact ? 136 : 164;
+    const buttonHeight = compact ? 36 : 40;
+    const x = safeInset + 16;
+    const y = footerY + (footerHeight - buttonHeight) / 2;
+
+    this.skipButton.setPosition(x, y).setSize(buttonWidth, buttonHeight);
+    if (this.skipButton.input !== null) {
+      this.skipButton.input.hitArea.setSize(buttonWidth, buttonHeight);
+    }
+    this.skipText.setPosition(x + buttonWidth / 2, y + buttonHeight / 2);
   }
 
   private layoutCardHitAreas(): void {
@@ -179,6 +238,12 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
     const adapter = this.runAdapter;
     if (adapter === undefined || adapter.getViewState().status === "continued") return;
 
+    if (event.key === "Escape") {
+      event.preventDefault();
+      this.skipReward();
+      return;
+    }
+
     const candidates = adapter.getViewState().candidates;
     if (candidates.length === 0) return;
 
@@ -212,9 +277,19 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
     });
   }
 
+  private skipReward(): void {
+    const adapter = this.runAdapter;
+    if (adapter === undefined || adapter.getViewState().status === "continued") return;
+
+    adapter.skip();
+    if (this.routeData.nextSceneKey !== undefined) {
+      this.scene.start(this.routeData.nextSceneKey, { runState: adapter.getRunState() });
+    }
+  }
+
   private releaseRunInput(): void {
     this.input.off(Phaser.Input.Events.POINTER_UP, this.releaseTransitionPointer, this);
     this.input.keyboard?.off("keydown", this.handleRewardKeyDown, this);
-    this.scale.off(Phaser.Scale.Events.RESIZE, this.layoutCardHitAreas, this);
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.layoutRunControls, this);
   }
 }
