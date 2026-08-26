@@ -1,4 +1,5 @@
 import type Phaser from "phaser";
+import { RING_CONFIGS } from "@typing-roguelike/shared";
 import { MENU_SETTINGS_REGISTRY_KEYS, type CommandLanguage } from "../scenes/menu-settings";
 import type {
   CommandInputSnapshot,
@@ -30,6 +31,11 @@ export type CommandHudState = Readonly<{
 
 export type CommandHudCharacterState = "matched" | "incorrect" | "pending";
 export type CommandHudCharacter = Readonly<{ value: string; state: CommandHudCharacterState }>;
+export type CommandHudSegments = Readonly<{
+  prefix?: string;
+  baseCommand: string;
+  suffix?: string;
+}>;
 
 type CommandHudPresentation = Readonly<{ labelKo: string; labelEn: string; color: string; accent: number }>;
 
@@ -93,6 +99,55 @@ const clamp = (value: number, minimum: number, maximum: number): number => Math.
 
 export function formatAvailableCommands(commands: readonly string[]): string {
   return commands.join(", ");
+}
+
+/** Ring registry를 기준으로 표시용 접두사/기본 명령어/접미사를 분리한다. */
+export function splitRingCommand(command: string): CommandHudSegments {
+  let baseCommand = command;
+  let prefix: string | undefined;
+  let suffix: string | undefined;
+  const prefixes = RING_CONFIGS
+    .filter((ring) => ring.position === "prefix")
+    .toSorted((left, right) => right.commandAffix.length - left.commandAffix.length);
+  const suffixes = RING_CONFIGS
+    .filter((ring) => ring.position === "suffix")
+    .toSorted((left, right) => right.commandAffix.length - left.commandAffix.length);
+
+  for (const ring of prefixes) {
+    const token = `${ring.commandAffix} `;
+    if (baseCommand.startsWith(token)) {
+      prefix = ring.commandAffix;
+      baseCommand = baseCommand.slice(token.length);
+      break;
+    }
+  }
+  for (const ring of suffixes) {
+    const token = ` ${ring.commandAffix}`;
+    if (baseCommand.endsWith(token)) {
+      suffix = ring.commandAffix;
+      baseCommand = baseCommand.slice(0, -token.length);
+      break;
+    }
+  }
+
+  return {
+    ...(prefix === undefined ? {} : { prefix }),
+    baseCommand,
+    ...(suffix === undefined ? {} : { suffix }),
+  };
+}
+
+export function formatSegmentedCommand(command: string): string {
+  const segments = splitRingCommand(command);
+  return [
+    segments.prefix === undefined ? null : `접두사: ${segments.prefix}`,
+    `명령어: ${segments.baseCommand}`,
+    segments.suffix === undefined ? null : `접미사: ${segments.suffix}`,
+  ].filter((part): part is string => part !== null).join("  |  ");
+}
+
+export function formatSegmentedAvailableCommands(commands: readonly string[]): string {
+  return commands.map(formatSegmentedCommand).join("\n");
 }
 
 export function getEffectDarknessRatio(effect: Pick<CommandHudEffect, "durationMs" | "remainingMs">): number {
@@ -348,7 +403,7 @@ export class CommandHud {
       .setPosition(contentLeft, 30)
       .setFontSize(commandFontSize)
       .setWordWrapWidth(Math.max(120, this.panelWidth - contentLeft - 18), true)
-      .setText(formatAvailableCommands(this.state.commands))
+      .setText(formatSegmentedAvailableCommands(this.state.commands))
       .setColor("#f8fafc");
 
     const listBottom = 30 + this.commandText.height;
@@ -369,7 +424,7 @@ export class CommandHud {
     const statusLabel = language === "ko" ? presentation.labelKo : presentation.labelEn;
     this.statusText
       .setPosition(18, statusY)
-      .setText(`${activePrefix}: ${this.state.command} · ${statusLabel} ${matchedLength}/${commandLength}`)
+      .setText(`${activePrefix}: ${formatSegmentedCommand(this.state.command)} · ${statusLabel} ${matchedLength}/${commandLength}`)
       .setColor(presentation.color);
 
     this.progressTrack.setPosition(18, progressY).setSize(progressWidth, 8);
