@@ -5,6 +5,11 @@ import {
   type EnemyAttackType,
 } from "./enemy-attack-timeline";
 
+export const ENEMY_COMMAND_WINDUP_MULTIPLIER = 2 as const;
+
+export const applyEnemyCommandWindupMultiplier = (windupMs: number): number =>
+  windupMs * ENEMY_COMMAND_WINDUP_MULTIPLIER;
+
 export type EnemyCombatantState = Readonly<{
   enemy: Readonly<EnemyConfig>;
   currentHp: number;
@@ -91,7 +96,7 @@ export class EnemyAttackSelectionLoop {
       attackId: action.id,
       attackName: action.name,
       attackType: toAttackType(action),
-      windupMs: action.windupMs,
+      windupMs: applyEnemyCommandWindupMultiplier(action.windupMs),
       recoveryMs: action.recoveryMs,
     });
 
