@@ -29,7 +29,7 @@ const run = (overrides: Partial<RunState> = {}): RunState => ({
   ...overrides,
 });
 
-const offer: ShopOffer = { id: "offer", equipmentId: "ember-blade", price: 25 };
+const offer: ShopOffer = { id: "offer", kind: "equipment", itemId: "ember-blade", price: 25 };
 
 describe("core map/shop/rest rules", () => {
   test("map selection keeps competing nodes available until completion locks them and unlocks next exactly once", () => {

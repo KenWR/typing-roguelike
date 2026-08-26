@@ -61,6 +61,7 @@ export const RUNTIME_IMAGE_ASSETS: readonly {
   path: string;
 }[] = [
   ...RELIC_ICON_ASSETS,
+  ...EQUIPMENT_ICON_ASSETS,
   ...COMBAT_IMAGE_ASSETS,
   ...SCENE_BACKGROUND_ASSETS,
 ];
