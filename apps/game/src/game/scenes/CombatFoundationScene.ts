@@ -10,7 +10,10 @@ import { CombatApEffectController } from "../combat/combat-ap-effects";
 import { CombatState } from "../combat/combat-state";
 import { CombatTargetingController } from "../combat/combat-targeting";
 import { CombatPauseController, type PauseDocument, type PauseWindow } from "../combat/combat-pause-controller";
-import type { CombatEncounterInitialization } from "../combat/encounter-initializer";
+import type {
+  CombatEncounterInitialization,
+  CombatEnemyInitialization,
+} from "../combat/encounter-initializer";
 import { EnemyHealthBar } from "../combat/enemy-health-bar";
 import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
