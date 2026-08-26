@@ -21,11 +21,13 @@ const fetchWorker = (
 
 const json = async <T>(response: Response): Promise<T> => await response.json() as T;
 
-const cookieValue = (response: Response): string => {
+const setCookieHeader = (response: Response): string => {
   const setCookie = response.headers.get("set-cookie");
   expect(setCookie).toBeTruthy();
-  return setCookie!.split(";", 1)[0]!;
+  return setCookie!;
 };
+
+const cookieValue = (response: Response): string => setCookieHeader(response).split(";", 1)[0]!;
 
 const jsonHeaders = (cookie?: string): HeadersInit => ({
   ...(cookie ? { cookie } : {}),
@@ -58,6 +60,26 @@ describe("Cloudflare Worker API", () => {
     expect(denied.status).toBe(403);
     expect(denied.headers.get("access-control-allow-origin")).toBeNull();
     expect(await json(denied)).toEqual({ error: "cors_origin_not_allowed" });
+  });
+
+  test("uses a cross-site-compatible cookie on HTTPS and a local cookie policy on HTTP", async () => {
+    const httpsEnvironment = createEnvironment();
+    httpsEnvironment.COOKIE_SECURE = "true";
+    const httpsResponse = await fetchWorker(httpsEnvironment, "/runs", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ seed: 1 }),
+    });
+    expect(setCookieHeader(httpsResponse)).toMatch(/; HttpOnly; Secure; SameSite=None; Path=\/$/);
+
+    const httpEnvironment = createEnvironment();
+    httpEnvironment.COOKIE_SECURE = undefined;
+    const httpResponse = await worker.fetch(new Request("http://api.example.test/runs", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ seed: 2 }),
+    }), httpEnvironment);
+    expect(setCookieHeader(httpResponse)).toMatch(/; HttpOnly; SameSite=Lax; Path=\/$/);
   });
 
   test("runs the direct Fetch lifecycle with cookie ownership and D1 state transitions", async () => {
@@ -189,6 +211,27 @@ describe("Cloudflare Worker API", () => {
     });
     expect(invalidComplete.status).toBe(400);
     expect(await json(invalidComplete)).toEqual({ error: "invalid_request" });
+  });
+
+  test("rejects oversized JSON before parsing it", async () => {
+    const response = await fetchWorker(createEnvironment(), "/runs", {
+      method: "POST",
+      headers: {
+        ...jsonHeaders(),
+        "content-length": "1048577",
+      },
+      body: "{}",
+    });
+    expect(response.status).toBe(413);
+    expect(await json(response)).toEqual({ error: "payload_too_large" });
+
+    const streamedResponse = await fetchWorker(createEnvironment(), "/runs", {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: "x".repeat(1_048_577),
+    });
+    expect(streamedResponse.status).toBe(413);
+    expect(await json(streamedResponse)).toEqual({ error: "payload_too_large" });
   });
 
   test("serves OpenAPI with the configured API origin", async () => {

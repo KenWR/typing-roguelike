@@ -15,6 +15,8 @@ export interface WorkerEnv extends D1Environment {
   CORS_ORIGIN?: string;
 }
 
+const MAX_JSON_BODY_BYTES = 1_048_576;
+
 class WorkerRequestError extends Error {
   public constructor(
     public readonly status: number,
@@ -83,7 +85,42 @@ const openApiForRequest = (request: Request, env: WorkerEnv) => ({
 });
 
 const readJsonBody = async (request: Request): Promise<unknown> => {
-  const rawBody = await request.text();
+  const contentLength = request.headers.get("Content-Length");
+  const declaredLength = contentLength === null ? undefined : Number(contentLength);
+  if (declaredLength !== undefined && Number.isSafeInteger(declaredLength) && declaredLength > MAX_JSON_BODY_BYTES) {
+    throw new WorkerRequestError(413, "payload_too_large");
+  }
+
+  if (request.body === null) return undefined;
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value === undefined) continue;
+
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_JSON_BODY_BYTES) {
+        throw new WorkerRequestError(413, "payload_too_large");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bodyBytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bodyBytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  const rawBody = new TextDecoder().decode(bodyBytes);
   if (rawBody.trim() === "") return undefined;
 
   try {
@@ -125,10 +162,11 @@ const readAnonymousPlayerId = (request: Request): string | undefined => {
 };
 
 const cookieHeader = (playerId: string, request: Request, env: WorkerEnv): string => {
+  const requestUrl = new URL(request.url);
   const configuredSecure = env.COOKIE_SECURE?.trim().toLowerCase();
-  const secure = configuredSecure === "true" ||
-    (configuredSecure !== "false" && new URL(request.url).protocol === "https:");
-  return `anonymous_player_id=${playerId}; Max-Age=2592000; HttpOnly${secure ? "; Secure" : ""}; SameSite=Lax; Path=/`;
+  const secure = requestUrl.protocol === "https:" && configuredSecure !== "false";
+  const sameSite = secure ? "None" : "Lax";
+  return `anonymous_player_id=${playerId}; Max-Age=2592000; HttpOnly${secure ? "; Secure" : ""}; SameSite=${sameSite}; Path=/`;
 };
 
 const ensureAnonymousPlayer = async (

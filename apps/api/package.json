@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --watch src/server.ts",
+    "dev": "wrangler dev --local --port 8787",
     "dev:worker": "wrangler dev --local --port 8787",
+    "dev:express": "bun --watch src/server.ts",
     "start": "bun src/server.ts",
     "build": "bun build src/server.ts --outdir dist --target bun",
     "build:worker": "wrangler deploy --dry-run --outdir .wrangler/worker-dist",

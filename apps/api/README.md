@@ -2,9 +2,10 @@
 
 `apps/api/src/worker.ts` is the production entrypoint. It uses the Fetch API,
 injects the Cloudflare D1 `DB` binding into `D1RunRepository`, and creates the
-existing `RunService` contract for each request. `src/server.ts`, Express, and
-Swagger UI remain available for local adapter tests and are excluded from the
-Worker import graph.
+existing `RunService` contract for each request. The standard `bun run dev`
+and root `bun run dev:api` commands start Wrangler local mode. `src/server.ts`,
+Express, and Swagger UI remain available through `bun run dev:express` for
+local adapter tests and are excluded from the Worker import graph.
 
 ## Local Worker and D1
 
@@ -24,6 +25,10 @@ The Worker listens on `http://localhost:8787`. The default local CORS origin is
 `http://localhost:5173`; production and other environments should pass an
 explicit comma-separated `CORS_ORIGIN`. `API_ORIGIN` controls the `servers` URL
 returned by `/openapi.json` and defaults to the request origin.
+
+HTTPS deployments issue the anonymous player cookie with `SameSite=None; Secure`
+so credentialed requests from a separately hosted game origin retain ownership.
+HTTP local mode uses `SameSite=Lax` without `Secure`.
 
 The direct Worker/D1 lifecycle test uses the same repository contract with an
 in-memory D1-compatible test database:
@@ -58,7 +63,15 @@ checked-in zero UUID remains a local/dry-run placeholder; this task does not
 create a production database or commit a production ID. Configure the real
 binding through the approved deployment configuration before deploying.
 
-First run the dry-run with environment-specific, non-secret variables:
+Apply the checked-in migrations to the configured production database before the
+first Worker upload. Replace the placeholder database name with the name of the
+approved production D1 binding:
+
+```bash
+bunx wrangler@4.126.0 d1 migrations apply <production-database-name> --remote
+```
+
+Then run the dry-run with environment-specific, non-secret variables:
 
 ```bash
 bunx wrangler@4.126.0 deploy --dry-run \
