@@ -21,16 +21,14 @@ export type CombatApEffectControllerConfig = Readonly<{
   random?: () => number;
 }>;
 
-/**
- * AP와 관련된 장비/유물 규칙을 한 곳에서 실제 ActionPointResource에 연결합니다.
- * 조건을 판정할 수 없는 설명 문자열은 임의로 적용하지 않습니다.
- */
+/** 입력/행동 시간 보정 대신 AP 비용·회복으로 통일한 전투 효과 컨트롤러입니다. */
 export class CombatApEffectController {
   private readonly actionPoints: ActionPointResource;
   private readonly relicIds: ReadonlySet<string>;
   private readonly random: () => number;
   private meditationDiscountArmed = false;
   private metronomeTriggered = false;
+  private deleteKeyTriggered = false;
 
   constructor(config: CombatApEffectControllerConfig) {
     this.actionPoints = config.actionPoints;
@@ -43,6 +41,10 @@ export class CombatApEffectController {
     if (this.relicIds.has("relic_fire_scroll") && skill.category === "special") cost += 1;
     if (this.relicIds.has("relic_old_shield") && skill.category === "guard") cost += 1;
     if (this.relicIds.has("relic_heavy_greatsword") && skill.name === "휘두르기") cost += 1;
+    // 기존 '명령 제한 시간 -0.2초' 페널티는 모든 기술 AP 비용 +1로 치환합니다.
+    if (this.relicIds.has("relic_heavy_armor")) cost += 1;
+    // 기존 '방어 지속 시간 +0.2초' 보너스는 방어 기술 AP 비용 -1로 치환합니다.
+    if (this.relicIds.has("relic_time_wristband") && skill.category === "guard") cost -= 1;
     if (this.meditationDiscountArmed && skill.category === "special") cost -= 1;
 
     const isMagic = skill.tags?.some((tag) => tag === "wand" || tag === "staff" || tag === "magic") ?? false;
@@ -51,17 +53,9 @@ export class CombatApEffectController {
   }
 
   onSkillStarted(skill: SkillDefinition, comboCount: number): void {
-    if (this.meditationDiscountArmed && skill.category === "special") {
-      this.meditationDiscountArmed = false;
-    }
-    if (this.relicIds.has("relic_incense_of_meditation") && skill.name === "명상") {
-      this.meditationDiscountArmed = true;
-    }
-    if (
-      this.relicIds.has("relic_broken_metronome") &&
-      comboCount >= 3 &&
-      !this.metronomeTriggered
-    ) {
+    if (this.meditationDiscountArmed && skill.category === "special") this.meditationDiscountArmed = false;
+    if (this.relicIds.has("relic_incense_of_meditation") && skill.name === "명상") this.meditationDiscountArmed = true;
+    if (this.relicIds.has("relic_broken_metronome") && comboCount >= 3 && !this.metronomeTriggered) {
       this.metronomeTriggered = true;
       this.actionPoints.addTemporaryRegeneration(0.5, 3_000);
     }
@@ -69,10 +63,26 @@ export class CombatApEffectController {
 
   onSkillImpact(skill: SkillDefinition): number {
     let delta = parseImmediateApDelta(skill);
-    const isMelee = skill.tags?.some((tag) => MELEE_TAGS.has(tag)) ?? false;
-    if (this.relicIds.has("relic_hungry_grip") && isMelee && this.random() < 0.2) {
+    const tags = skill.tags ?? [];
+    const isMelee = tags.some((tag) => MELEE_TAGS.has(tag));
+    const isMagic = tags.some((tag) => tag === "wand" || tag === "staff" || tag === "magic");
+
+    if (this.relicIds.has("relic_hungry_grip") && isMelee && this.random() < 0.2) delta += 1;
+    // 시간 증가/적 행동 지연 계열 유물은 동일 트리거의 AP 회복으로 통일합니다.
+    if (skill.category === "basic") {
+      if (this.relicIds.has("relic_stenographer_quill")) delta += 1;
+      if (this.relicIds.has("relic_ticklish_gloves") && this.random() < 0.2) delta += 1;
+      if (this.relicIds.has("relic_delayed_blade") && this.random() < 0.2) delta += 1;
+    }
+    if (isMagic && this.relicIds.has("relic_frost_scroll")) delta += 1;
+    if (skill.category === "special" && this.relicIds.has("relic_silence_scroll")) delta += 1;
+    if (skill.category === "special" && this.relicIds.has("relic_delete_key") && !this.deleteKeyTriggered) {
+      this.deleteKeyTriggered = true;
       delta += 1;
     }
+    // 낡은 방패의 지속시간 보너스는 방어 성공 시 AP 회복으로 치환하되 기존 AP 비용 +1 페널티는 유지합니다.
+    if (skill.category === "guard" && this.relicIds.has("relic_old_shield")) delta += 1;
+
     if (delta !== 0) this.actionPoints.adjust(delta);
     return delta;
   }
