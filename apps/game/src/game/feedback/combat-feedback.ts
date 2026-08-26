@@ -29,7 +29,6 @@ export type ProceduralAudioSettings = Readonly<{
 const TONE_BY_KEY: Readonly<Record<string, Readonly<{ frequency: number; durationMs: number }>>> = Object.freeze({
   "sfx:command-success": { frequency: 660, durationMs: 55 },
   "sfx:command-failure": { frequency: 170, durationMs: 90 },
-  "sfx:player-hit": { frequency: 110, durationMs: 120 },
   "sfx:guard": { frequency: 420, durationMs: 85 },
   "sfx:victory": { frequency: 880, durationMs: 180 },
   "sfx:defeat": { frequency: 82, durationMs: 220 },

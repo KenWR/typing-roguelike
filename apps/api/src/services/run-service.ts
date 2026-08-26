@@ -150,13 +150,23 @@ export const createRunService = (repository: RunRepository): RunService => ({
       request.round,
       previousPath,
     ).find((node) => node.choice === request.choice);
+    const previousNode = request.round <= 1
+      ? undefined
+      : generateNodeChoices(
+        storedState.map.seed,
+        request.round - 1,
+        previousPath.slice(0, -1),
+      ).find((node) => node.key === storedRun.nodeId);
     const legacyParentKey = previousPath.length === 0
       ? START_NODE_KEY
       : `${request.round - 1}-${previousPath.at(-1)}`;
+    const isConnected = request.round === 1
+      ? storedRun.nodeId === START_NODE_KEY
+      : previousNode?.nextNodeKeys.includes(selectedNode?.key ?? "") === true;
 
     if (
       selectedNode === undefined ||
-      (selectedNode.parentKey !== storedRun.nodeId && storedRun.nodeId !== legacyParentKey)
+      (!isConnected && selectedNode.parentKey !== storedRun.nodeId && storedRun.nodeId !== legacyParentKey)
     ) {
       throw new RunServiceError("NODE_STATE_MISMATCH");
     }
