@@ -20,12 +20,12 @@ describe("map node routing", () => {
     expect(route.sceneKey).toBe(SCENE_KEYS.map);
   });
 
-  test("available node stays available while routing away from map", () => {
+  test("available node becomes in progress while routing away from map", () => {
     const { runState, nodeId } = createSelectableRun();
     const route = routeMapNodeSelection(runState, nodeId);
     expect(route.applied).toBe(true);
     expect(route.runState.map.currentNodeId).toBe(nodeId);
-    expect(route.runState.map.nodeStatuses[nodeId]).toBe("available");
+    expect(route.runState.map.nodeStatuses[nodeId]).toBe("in_progress");
     expect(route.sceneKey).not.toBe(SCENE_KEYS.map);
   });
 });

@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { CommandInputBuffer } from "../src/game/input/command-input-buffer";
-import { CommandInputRecoveryController } from "../src/game/input/command-input-recovery";
+import {
+  CommandInputRecoveryController,
+  updateCommandInputElement,
+} from "../src/game/input/command-input-recovery";
 
 describe("CommandInputRecoveryController", () => {
   test("keeps matching input without counting a mistake", () => {
@@ -58,6 +61,34 @@ describe("CommandInputRecoveryController", () => {
       failedSnapshot: null,
     });
     expect(recovered.snapshot.status).toBe("complete");
+  });
+
+  test("clears the DOM input value after a mistake so typing can resume", () => {
+    const controller = new CommandInputRecoveryController(
+      new CommandInputBuffer("휘두르기"),
+    );
+    const input = { value: "휘둘" };
+
+    const failed = updateCommandInputElement(controller, input);
+    expect(failed.outcome).toBe("incorrect");
+    expect(input.value).toBe("");
+
+    input.value = "휘두르기";
+    expect(updateCommandInputElement(controller, input).outcome).toBe("complete");
+  });
+
+  test("does not clear the DOM input while an IME composition is active", () => {
+    const controller = new CommandInputRecoveryController(
+      new CommandInputBuffer("가속"),
+    );
+    const input = { value: "갓" };
+
+    const composing = updateCommandInputElement(controller, input, {
+      isComposing: true,
+    });
+
+    expect(composing.outcome).toBe("composing");
+    expect(input.value).toBe("갓");
   });
 
   test("does not treat IME composition as an incorrect input", () => {

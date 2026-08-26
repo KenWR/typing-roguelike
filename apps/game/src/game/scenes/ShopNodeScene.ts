@@ -5,6 +5,10 @@ import { playCoinSound, playRuntimeBgm } from "../audio/runtime-audio";
 import { getEquippedEquipment, formatEquipmentInfo } from "../equipment/equipment-info";
 import { RUN_RESUME_CHECKPOINT_VERSION } from "../run/run-resume-checkpoint";
 import { runSession } from "../run/run-session";
+import {
+  createShopModalInputGuardLayout,
+  stopShopModalPointerPropagation,
+} from "../shop/shop-modal-input-guard";
 import { formatShopOfferLabel } from "../shop/shop-offer-label";
 import { completeShopNode, createShopNodeFlow, getShopRerollCost, purchaseShopOffer, rerollShopOffers, type ShopNodeFlowState } from "../shop/shop-node-flow";
 
@@ -57,6 +61,27 @@ export class ShopNodeScene extends Phaser.Scene {
     if (this.equipmentModal !== undefined) { this.equipmentModal.destroy(); this.equipmentModal = undefined; return; }
     const { width, height } = this.scale.gameSize;
     const panel = this.add.container(0, 0).setDepth(1000);
+    const blockerLayout = createShopModalInputGuardLayout(width, height);
+    const inputBlocker = this.add
+      .rectangle(
+        blockerLayout.x,
+        blockerLayout.y,
+        blockerLayout.width,
+        blockerLayout.height,
+        0x000000,
+        0.001,
+      )
+      .setInteractive();
+    inputBlocker.on(
+      Phaser.Input.Events.POINTER_DOWN,
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => stopShopModalPointerPropagation(() => event.stopPropagation()),
+    );
+    panel.add(inputBlocker);
     panel.add(this.add.rectangle(width / 2, height / 2, Math.min(width - 80, 760), Math.min(height - 80, 600), 0x111827, 0.98).setStrokeStyle(2, 0x6b7280));
     panel.add(this.add.text(width / 2, 80, "현재 장비", { fontFamily: "Galmuri9, monospace", fontSize: "28px", color: "#f9fafb" }).setOrigin(0.5));
     const equipped = getEquippedEquipment(this.flow.runState);

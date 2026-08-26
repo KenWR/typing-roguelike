@@ -57,7 +57,12 @@ export const applySettlementCurrency = (
 export const savePersistentWallet = (
   wallet: PersistentWalletSnapshot,
   storage?: Pick<Storage, "setItem">,
-): void => {
-  if (!storage) return;
-  storage.setItem(STORAGE_KEY, JSON.stringify(wallet));
+): boolean => {
+  if (!storage) return true;
+  try {
+    storage.setItem(STORAGE_KEY, JSON.stringify(wallet));
+    return true;
+  } catch {
+    return false;
+  }
 };

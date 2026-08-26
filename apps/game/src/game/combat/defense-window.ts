@@ -3,6 +3,7 @@ export type DefenseWindow = Readonly<{
   defenderId: string;
   startsAtMs: number;
   endsAtMs: number;
+  damageMultiplier: number;
 }>;
 
 export type DefenseImpactResult = Readonly<{
@@ -24,15 +25,36 @@ const requireTime = (name: string, value: number): number => {
   return value;
 };
 
+const requireDamageMultiplier = (value: number): number => {
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new RangeError(
+      "Defense window damage multiplier must be a finite number between 0 and 1.",
+    );
+  }
+  return value;
+};
+
 export class DefenseWindowTracker {
   private readonly windows = new Map<string, DefenseWindow>();
 
-  openWindow(id: string, defenderId: string, startsAtMs: number, durationMs: number): DefenseWindow {
+  openWindow(
+    id: string,
+    defenderId: string,
+    startsAtMs: number,
+    durationMs: number,
+    damageMultiplier = 1,
+  ): DefenseWindow {
     const windowId = requireIdentifier("Defense window id", id);
     if (this.windows.has(windowId)) throw new Error(`Defense window id already exists: ${windowId}`);
     const start = requireTime("Defense window start", startsAtMs);
     const duration = requireTime("Defense window duration", durationMs);
-    const window = { id: windowId, defenderId: requireIdentifier("Defender id", defenderId), startsAtMs: start, endsAtMs: start + duration } as const;
+    const window = {
+      id: windowId,
+      defenderId: requireIdentifier("Defender id", defenderId),
+      startsAtMs: start,
+      endsAtMs: start + duration,
+      damageMultiplier: requireDamageMultiplier(damageMultiplier),
+    } as const;
     this.windows.set(window.id, window);
     return window;
   }
@@ -62,9 +84,24 @@ export class DefenseWindowTracker {
   private findMatchingWindow(defenderId: string, impactAtMs: number): DefenseWindow | null {
     const defender = requireIdentifier("Defender id", defenderId);
     const impact = requireTime("Impact time", impactAtMs);
+    let selected: DefenseWindow | null = null;
     for (const window of this.windows.values()) {
-      if (window.defenderId === defender && impact >= window.startsAtMs && impact <= window.endsAtMs) return window;
+      if (
+        window.defenderId !== defender ||
+        impact < window.startsAtMs ||
+        impact > window.endsAtMs
+      ) {
+        continue;
+      }
+      if (
+        selected === null ||
+        window.damageMultiplier < selected.damageMultiplier ||
+        (window.damageMultiplier === selected.damageMultiplier &&
+          window.startsAtMs >= selected.startsAtMs)
+      ) {
+        selected = window;
+      }
     }
-    return null;
+    return selected;
   }
 }

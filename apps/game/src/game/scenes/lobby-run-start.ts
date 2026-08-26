@@ -36,9 +36,6 @@ export class LobbyRunStarter {
 
     try {
       return this.initializeRun(this.createSeed());
-    } catch (error) {
-      this.starting = false;
-      throw error;
     } finally {
       this.starting = false;
     }
@@ -56,8 +53,6 @@ export class LobbyRunStarter {
         return runSession.replace(serverRun);
       }
       return this.initializeRun(seed);
-    } catch (error) {
-      throw error;
     } finally {
       this.starting = false;
     }

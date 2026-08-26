@@ -32,7 +32,12 @@ import { CommandHud } from "../hud/command-hud";
 import { EnemyAttackGauge } from "../hud/enemy-attack-gauge";
 import { RelicHud } from "../hud/relic-hud";
 import { CommandInputBuffer } from "../input/command-input-buffer";
+import {
+  CommandInputRecoveryController,
+  updateCommandInputElement,
+} from "../input/command-input-recovery";
 import { createCombatLayout } from "../layout/combat-layout";
+import { persistCombatRunTransition } from "../run/persist-terminal-run";
 import { MENU_SETTINGS_REGISTRY_KEYS } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
 
@@ -52,6 +57,7 @@ const MAGIC_SHIELD = defineSkill({
 export type CombatFoundationSceneData = Readonly<{
   combat?: CombatEncounterInitialization;
   runState?: Readonly<RunState>;
+  node?: GeneratedMapNode;
   nextNodeIds?: readonly string[];
   bossNode?: GeneratedMapNode;
 }>;
@@ -82,11 +88,13 @@ export class CombatFoundationScene extends Phaser.Scene {
   private pauseOverlay?: Phaser.GameObjects.Text;
   private commandHud!: CommandHud;
   private commandInputBuffer!: CommandInputBuffer;
+  private commandInputRecovery!: CommandInputRecoveryController;
   private commandInputCleanup?: () => void;
   private commandCompletionCleanup?: () => void;
   private commandStatusCleanup?: () => void;
   private combatInitialization?: CombatEncounterInitialization;
   private runState?: Readonly<RunState>;
+  private mapNode?: GeneratedMapNode;
   private nextNodeIds: readonly string[] = [];
   private bossNode?: GeneratedMapNode;
   private transitionStarted = false;
@@ -99,6 +107,7 @@ export class CombatFoundationScene extends Phaser.Scene {
   init(data: CombatFoundationSceneData = {}): void {
     this.combatInitialization = data.combat;
     this.runState = data.runState;
+    this.mapNode = data.node;
     this.nextNodeIds = data.nextNodeIds ?? [];
     this.bossNode = data.bossNode;
     this.playerCombatRuntime = undefined;
@@ -243,6 +252,9 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandInputBuffer = new CommandInputBuffer(
       availableSkills.map((skill) => skill.command),
     );
+    this.commandInputRecovery = new CommandInputRecoveryController(
+      this.commandInputBuffer,
+    );
     this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
     this.uiLayer.add(this.commandHud.container);
     this.commandStatusCleanup = this.commandInputBuffer.onStatusChanged(({ snapshot }) => {
@@ -341,6 +353,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     }
 
     if (playerUpdate.route !== null) {
+      persistCombatRunTransition(playerUpdate.route, {
+        ...(this.mapNode === undefined ? {} : { node: this.mapNode }),
+        nextNodeIds: this.nextNodeIds,
+      });
       const outcome = this.combat.snapshot.status;
       this.feedback?.trigger(outcome === "victory" ? "victory" : "defeat");
       this.startCombatRoute(
@@ -537,10 +553,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     });
 
     const updateFromElement = (): void => {
-      this.commandInputBuffer.updateInput(input.value, {
+      const result = updateCommandInputElement(this.commandInputRecovery, input, {
         isComposing: this.isComposing,
       });
-      this.commandHud.update(this.commandInputBuffer.snapshot);
+      this.commandHud.update(result.snapshot);
     };
     const handleCompositionStart = (): void => {
       this.isComposing = true;

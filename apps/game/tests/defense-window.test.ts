@@ -50,6 +50,32 @@ describe("DefenseWindowTracker", () => {
     expect(tracker.isDefendedAt("player", 500)).toBe(false);
   });
 
+  test("prefers the strongest reduction while guard windows overlap", () => {
+    const tracker = new DefenseWindowTracker();
+    tracker.openWindow("long-tome", "player", 100, 4_000, 0.8);
+    tracker.openWindow("perfect-guard", "player", 500, 500, 0);
+
+    expect(tracker.resolveImpact("player", 750).window).toMatchObject({
+      id: "perfect-guard",
+      damageMultiplier: 0,
+    });
+    expect(tracker.resolveImpact("player", 1_250).window).toMatchObject({
+      id: "long-tome",
+      damageMultiplier: 0.8,
+    });
+  });
+
+  test("prefers the latest window when overlapping reductions are equal", () => {
+    const tracker = new DefenseWindowTracker();
+    tracker.openWindow("older", "player", 100, 2_000, 0.5);
+    tracker.openWindow("latest", "player", 500, 1_000, 0.5);
+
+    expect(tracker.resolveImpact("player", 750).window).toMatchObject({
+      id: "latest",
+      damageMultiplier: 0.5,
+    });
+  });
+
   test("rejects duplicate ids and invalid timing values", () => {
     const tracker = new DefenseWindowTracker();
     tracker.openWindow("guard-1", "player", 0, 100);
@@ -57,6 +83,7 @@ describe("DefenseWindowTracker", () => {
     expect(() => tracker.openWindow("guard-1", "player", 200, 100)).toThrow();
     expect(() => tracker.openWindow("guard-2", "player", -1, 100)).toThrow(RangeError);
     expect(() => tracker.openWindow("guard-3", "player", 0, Number.NaN)).toThrow(RangeError);
+    expect(() => tracker.openWindow("guard-4", "player", 0, 100, 1.1)).toThrow(RangeError);
     expect(() => tracker.resolveImpact("", 50)).toThrow(RangeError);
   });
 });

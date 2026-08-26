@@ -1,12 +1,12 @@
 import Phaser from "phaser";
 import type { RunState } from "@typing-roguelike/shared";
 import type { RewardSelectionAdapter } from "../rewards/reward-selection-adapter";
+import { persistCompletedRunReward } from "../rewards/run-reward-persistence";
 import { createRunRewardSceneEntry } from "../rewards/run-reward-scene-entry";
 import {
   createRewardTransitionPointerGuard,
   type RewardTransitionPointerGuard,
 } from "../rewards/reward-transition-pointer-guard";
-import { runSession } from "../run/run-session";
 import {
   RewardSelectionScene,
   type RewardSelectionSceneData,
@@ -38,9 +38,7 @@ const withRunPersistence = (
     continue: () => {
       const state = adapter.continue();
       const completedRun = adapter.getRunState() as RunState;
-      if (runSession.get()?.status === "active") {
-        runSession.update(() => completedRun);
-      }
+      persistCompletedRunReward(completedRun);
       return state;
     },
   };
@@ -85,11 +83,7 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
       runState: data.runState,
       nodeId: data.nodeId,
       nextNodeIds: data.nextNodeIds,
-      onContinue: (completedRun) => {
-        if (runSession.get()?.status === "active") {
-          runSession.update(() => completedRun);
-        }
-      },
+      onContinue: persistCompletedRunReward,
     });
     this.runAdapter = entry.adapter;
     this.routeData = {

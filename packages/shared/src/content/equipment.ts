@@ -19,6 +19,12 @@ type EquipmentSkillOverride = SkillValues & {
   effect: string;
 };
 
+type GuardEffectDefinition = Readonly<{
+  type: "guard";
+  damageMultiplier: number;
+  durationMs: number;
+}>;
+
 const EQUIPMENT_SKILL_OVERRIDES: Readonly<Record<string, readonly EquipmentSkillOverride[]>> = {
   equipment_blood_sword: [
     { name: "베기", command: "베기", category: "basic", damageCoefficient: 0.9, damage: "90%", effect: "90% + 출혈 2", apCost: 1, windupMs: 150, recoveryMs: 150 },
@@ -371,6 +377,64 @@ const EQUIPMENT_SKILL_OVERRIDES: Readonly<Record<string, readonly EquipmentSkill
   ],
 };
 
+/**
+ * 방패의 생략된 유효 시간은 공통 방패 규칙(기본 0.8초, 받아치기 0.35초)을
+ * 따릅니다. 보호막 전용 런타임이 아직 없으므로 마법서의 보호막 수치는 같은
+ * 비율의 피해 감소로 표현하고, 기본 보호막 지속 시간인 4초를 사용합니다.
+ */
+const EQUIPMENT_GUARD_EFFECTS: Readonly<
+  Record<string, readonly GuardEffectDefinition[]>
+> = {
+  equipment_guard_round_shield: [
+    { type: "guard", damageMultiplier: 0.4, durationMs: 900 },
+    { type: "guard", damageMultiplier: 0.5, durationMs: 1_200 },
+  ],
+  equipment_thorn_shield: [
+    { type: "guard", damageMultiplier: 0.45, durationMs: 800 },
+    { type: "guard", damageMultiplier: 0, durationMs: 350 },
+  ],
+  equipment_mirror_steel_shield: [
+    { type: "guard", damageMultiplier: 0.5, durationMs: 800 },
+    { type: "guard", damageMultiplier: 0, durationMs: 350 },
+  ],
+  equipment_fortress_shield: [
+    { type: "guard", damageMultiplier: 0.3, durationMs: 1_200 },
+    { type: "guard", damageMultiplier: 0.2, durationMs: 2_000 },
+  ],
+  equipment_mobile_wall: [
+    { type: "guard", damageMultiplier: 0.35, durationMs: 1_000 },
+    { type: "guard", damageMultiplier: 0.35, durationMs: 1_000 },
+  ],
+  equipment_reversal_crest_shield: [
+    { type: "guard", damageMultiplier: 0.4, durationMs: 800 },
+    { type: "guard", damageMultiplier: 0, durationMs: 350 },
+  ],
+  equipment_bronze_repair_tome: [
+    { type: "guard", damageMultiplier: 0.78, durationMs: 4_000 },
+    { type: "guard", damageMultiplier: 0.78, durationMs: 2_000 },
+  ],
+  equipment_flame_guard_tome: [
+    { type: "guard", damageMultiplier: 0.82, durationMs: 4_000 },
+    { type: "guard", damageMultiplier: 0, durationMs: 600 },
+  ],
+  equipment_frost_veil_tome: [
+    { type: "guard", damageMultiplier: 0.8, durationMs: 4_000 },
+    { type: "guard", damageMultiplier: 0, durationMs: 800 },
+  ],
+  equipment_reflection_grammar: [
+    { type: "guard", damageMultiplier: 0.8, durationMs: 4_000 },
+    { type: "guard", damageMultiplier: 0, durationMs: 500 },
+  ],
+  equipment_infinite_pages: [
+    { type: "guard", damageMultiplier: 0.85, durationMs: 4_000 },
+    { type: "guard", damageMultiplier: 0.85, durationMs: 4_000 },
+  ],
+  equipment_final_chapter: [
+    { type: "guard", damageMultiplier: 0.75, durationMs: 4_000 },
+    { type: "guard", damageMultiplier: 0, durationMs: 1_000 },
+  ],
+};
+
 const BASE_ATTACK: Readonly<Partial<Record<EquipmentKind, number>>> = {
   sword: 10,
   greatsword: 14,
@@ -467,6 +531,7 @@ const createSkill = (
   index: number,
   effect: string,
   tags: readonly string[],
+  effects?: readonly GuardEffectDefinition[],
 ): SkillConfig => ({
   id: `${equipment.id}-skill-${index}`,
   type: category === "basic" ? "basic" : "special",
@@ -483,6 +548,7 @@ const createSkill = (
   description,
   effect,
   tags,
+  ...(effects === undefined ? {} : { effects }),
 });
 
 const createSkills = (equipment: EquipmentDefinition): readonly SkillConfig[] => {
@@ -490,21 +556,23 @@ const createSkills = (equipment: EquipmentDefinition): readonly SkillConfig[] =>
   if (overrides !== undefined) {
     return overrides.map((skill, index) => {
       const isBasic = index === 0 || (equipment.kind === "crossbow" && index === 1);
+      const guardEffect = EQUIPMENT_GUARD_EFFECTS[equipment.id]?.[index];
       return {
         ...createSkill(
-        equipment,
-        skill.name,
-        skill.category,
-        {
-          apCost: skill.apCost,
-          windupMs: skill.windupMs,
-          recoveryMs: skill.recoveryMs,
-          damageCoefficient: skill.damageCoefficient,
-        },
-        skill.effect,
-        index + 1,
-        skill.effect,
+          equipment,
+          skill.name,
+          skill.category,
+          {
+            apCost: skill.apCost,
+            windupMs: skill.windupMs,
+            recoveryMs: skill.recoveryMs,
+            damageCoefficient: skill.damageCoefficient,
+          },
+          skill.effect,
+          index + 1,
+          skill.effect,
           [equipment.kind, isBasic ? "basic" : "signature"],
+          guardEffect === undefined ? undefined : [guardEffect],
         ),
         type: isBasic ? "basic" : "special",
         command: skill.command,

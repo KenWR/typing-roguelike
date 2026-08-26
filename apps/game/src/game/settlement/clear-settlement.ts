@@ -1,11 +1,12 @@
-import {
-  getEquipmentDataModel,
-  type RunState,
-} from "@typing-roguelike/shared";
+import type { RunState } from "@typing-roguelike/shared";
 import {
   applySettlementCurrency,
   type PersistentWalletSnapshot,
 } from "./persistent-wallet";
+import {
+  calculateRunEquipmentExchangeValue,
+  getRunEquipmentForExchange,
+} from "./equipment-exchange";
 
 export type ClearSettlementItem = Readonly<{
   equipmentId: string;
@@ -36,19 +37,12 @@ const validateClearBonus = (clearBonus: number): number => {
 };
 
 const createItemSettlement = (
-  equipmentId: string,
-): ClearSettlementItem => {
-  const equipment = getEquipmentDataModel(equipmentId);
-  if (equipment === undefined) {
-    throw new Error(`Unknown equipment id in clear settlement: ${equipmentId}`);
-  }
-
-  return {
-    equipmentId,
+  equipment: ReturnType<typeof getRunEquipmentForExchange>[number],
+): ClearSettlementItem => ({
+    equipmentId: equipment.id,
     equipmentName: equipment.name,
     value: equipment.sellValue,
-  };
-};
+  });
 
 const clearSettledEquipment = (
   runState: Readonly<RunState>,
@@ -77,8 +71,8 @@ export const settleClearedRun = (
   }
 
   const validatedClearBonus = validateClearBonus(clearBonus);
-  const items = runState.inventory.itemInstances.map(createItemSettlement);
-  const itemValue = items.reduce((sum, item) => sum + item.value, 0);
+  const items = getRunEquipmentForExchange(runState).map(createItemSettlement);
+  const itemValue = calculateRunEquipmentExchangeValue(runState);
   const totalPayout = itemValue + validatedClearBonus;
 
   if (!Number.isSafeInteger(totalPayout)) {

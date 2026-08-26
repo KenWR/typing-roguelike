@@ -42,12 +42,25 @@ export class CombatApEffectController {
     if (this.relicIds.has("relic_old_shield") && skill.category === "guard") cost += 1;
     if (this.relicIds.has("relic_heavy_greatsword") && skill.name === "휘두르기") cost += 1;
     if (this.relicIds.has("relic_heavy_armor")) cost += 1;
-    if (this.relicIds.has("relic_time_wristband") && skill.category === "guard") cost -= 1;
     if (this.meditationDiscountArmed && skill.category === "special") cost -= 1;
+
+    const minimumDiscountedCost = skill.apCost > 0 ? 1 : 0;
+    cost = Math.max(minimumDiscountedCost, cost);
 
     const isMagic = skill.tags?.some((tag) => tag === "wand" || tag === "staff" || tag === "magic") ?? false;
     if (this.relicIds.has("relic_book_of_wisdom") && isMagic && this.random() < 0.2) cost = 0;
-    return Math.max(0, cost);
+    return cost;
+  }
+
+  resolveGuardDuration(durationMs: number): number {
+    if (!Number.isFinite(durationMs) || durationMs < 0) {
+      throw new RangeError("Guard duration must be a finite non-negative number.");
+    }
+
+    let adjustedDurationMs = durationMs;
+    if (this.relicIds.has("relic_time_wristband")) adjustedDurationMs += 200;
+    if (this.relicIds.has("relic_old_shield")) adjustedDurationMs += 300;
+    return adjustedDurationMs;
   }
 
   onSkillStarted(skill: SkillDefinition, comboCount: number): void {
@@ -77,8 +90,6 @@ export class CombatApEffectController {
       this.deleteKeyTriggered = true;
       delta += 1;
     }
-    if (skill.category === "guard" && this.relicIds.has("relic_old_shield")) delta += 1;
-
     if (delta !== 0) this.actionPoints.adjust(delta);
     return delta;
   }

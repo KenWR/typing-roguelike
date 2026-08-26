@@ -8,7 +8,13 @@ export const getMapNodeStatus = (map: Readonly<RunMapState>, nodeId: string): Ma
 
 export const beginMapNode = (map: Readonly<RunMapState>, nodeId: string): RunMapState => {
 	if (getMapNodeStatus(map, nodeId) !== "available") throw new Error(`Map node ${nodeId} is not available.`);
-	return { ...map, currentNodeId: nodeId };
+	const nodeStatuses: Record<string, MapNodeStatus> = {};
+	for (const [id, status] of Object.entries(map.nodeStatuses)) {
+		nodeStatuses[id] = id === nodeId
+			? "in_progress"
+			: status === "available" ? "locked" : status;
+	}
+	return { ...map, currentNodeId: nodeId, nodeStatuses };
 };
 
 export const completeMapNode = (
