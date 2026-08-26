@@ -19,6 +19,7 @@ export type RunResumeCheckpoint = Readonly<{
   rewardEquipmentIds?: readonly string[];
   shopOffers?: readonly ShopOffer[];
   purchasedOfferIds?: readonly string[];
+  shopRerollCount?: number;
 }>;
 
 export type RunResumeCheckpointStorage = Pick<
@@ -81,6 +82,12 @@ const isRunResumeCheckpoint = (value: unknown): value is RunResumeCheckpoint => 
   if (
     value.purchasedOfferIds !== undefined &&
     !isStringArray(value.purchasedOfferIds)
+  ) {
+    return false;
+  }
+  if (
+    value.shopRerollCount !== undefined &&
+    (!Number.isSafeInteger(value.shopRerollCount) || value.shopRerollCount < 0)
   ) {
     return false;
   }
