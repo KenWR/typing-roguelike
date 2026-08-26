@@ -308,8 +308,11 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.enemyAttackGauge.update(enemyUpdate.snapshot);
   }
 
-  private updateEnemyHealth(currentHp: number): void {
+  private updateEnemyHealth(enemyHp: Readonly<Record<string, number>>): void {
     const targetEnemy = this.combatInitialization?.enemies[0];
+    const currentHp = targetEnemy === undefined
+      ? undefined
+      : enemyHp[targetEnemy.instanceId];
     const view = createEnemyHealthView(
       targetEnemy?.name,
       currentHp,
