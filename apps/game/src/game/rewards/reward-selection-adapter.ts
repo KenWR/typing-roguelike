@@ -14,17 +14,24 @@ export type RewardSelectionRunState = Readonly<{
   nextStep: string | null;
 }>;
 
+export type RingReplacementOption = Readonly<{
+  id: string;
+  name: string;
+}>;
+
 export type RewardSelectionAdapter<TRunState = RewardSelectionRunState> = Readonly<{
   getViewState: () => RewardSelectionViewState;
   getRunState: () => TRunState;
   selectReward: (rewardId: string) => RewardSelectionViewState;
-  continue: () => RewardSelectionViewState;
+  continue: (replacementRingId?: string | null) => RewardSelectionViewState;
+  getRingReplacementOptions: () => readonly RingReplacementOption[];
 }>;
 
 export type CreateRewardSelectionAdapterOptions<TRunState> = Readonly<{
   initialViewState: RewardSelectionViewState;
   initialRunState: TRunState;
-  applySelection: (runState: TRunState, reward: RewardCandidate) => TRunState;
+  applySelection: (runState: TRunState, reward: RewardCandidate, replacementRingId?: string | null) => TRunState;
+  getRingReplacementOptions?: (runState: TRunState, reward: RewardCandidate) => readonly RingReplacementOption[];
   onContinue?: (runState: TRunState, reward: RewardCandidate) => void;
 }>;
 
@@ -49,6 +56,15 @@ export function createRewardSelectionAdapter<TRunState>(
   return {
     getViewState: () => viewState,
     getRunState: () => runState,
+    getRingReplacementOptions: () => {
+      const selectedReward =
+        viewState.selectedRewardId === null
+          ? undefined
+          : viewState.candidates.find((candidate) => candidate.id === viewState.selectedRewardId);
+      return selectedReward === undefined || options.getRingReplacementOptions === undefined
+        ? []
+        : options.getRingReplacementOptions(runState, selectedReward);
+    },
     selectReward: (rewardId) => {
       const previousRewardId = viewState.selectedRewardId;
       viewState = selectReward(viewState, rewardId);
@@ -63,10 +79,14 @@ export function createRewardSelectionAdapter<TRunState>(
       }
       return viewState;
     },
-    continue: () => {
+    continue: (replacementRingId) => {
       const reward = getSelectedReward();
+      const replacementOptions = options.getRingReplacementOptions?.(runState, reward) ?? [];
+      if (replacementOptions.length > 0 && replacementRingId === undefined) {
+        throw new Error("Choose a ring to discard before continuing.");
+      }
       viewState = continueRewardSelection(viewState);
-      runState = options.applySelection(runState, reward);
+      runState = options.applySelection(runState, reward, replacementRingId);
       options.onContinue?.(runState, reward);
       return viewState;
     },

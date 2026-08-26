@@ -1,6 +1,6 @@
 import type Phaser from "phaser";
 import { resolveEffectTextureKey } from "../assets/effect-visual-assets";
-import { RING_CONFIGS } from "@typing-roguelike/shared";
+import { RING_CONFIGS, type RingSkillModifier } from "@typing-roguelike/shared";
 import { MENU_SETTINGS_REGISTRY_KEYS, type CommandLanguage } from "../scenes/menu-settings";
 import type { CommandInputSnapshot, CommandInputStatus } from "../input/command-input-buffer";
 import {
@@ -64,6 +64,7 @@ type SkillPreviewInput = Readonly<{
   name: string;
   category: "basic" | "special" | "guard";
   apCost: number;
+  command?: string;
 }>;
 type SkillPreviewSkill = SkillLike & SkillPreviewInput;
 
@@ -181,20 +182,57 @@ export function formatAvailableSkillPreviews(
   resolveApCost: (skill: SkillPreviewInput) => number = (skill) => skill.apCost,
   resolveDamage: (skill: SkillPreviewInput) => number | null = () => null,
 ): string {
-  const sortedSkills = [...skills].sort((left, right) => {
-    const leftRank = left.category === "special" ? 1 : 0;
-    const rightRank = right.category === "special" ? 1 : 0;
-    return leftRank - rightRank;
+  const sortedSkills = [...skills]
+    .filter((skill) => {
+      if (skill.command === undefined) return true;
+      const segments = splitRingCommand(skill.command);
+      return segments.prefix === undefined && segments.suffix === undefined;
+    })
+    .sort((left, right) => {
+      const leftRank = left.category === "special" ? 1 : 0;
+      const rightRank = right.category === "special" ? 1 : 0;
+      return leftRank - rightRank;
+    });
+  const skillRows = sortedSkills.map((skill) => {
+    const label = skill.category === "special" ? "특수기술" : "기본기술";
+    const ap = Math.max(0, Math.round(resolveApCost(skill)));
+    const damage = resolveDamage(skill);
+    return `${label} : ${skill.name} : ${ap} : ${damage === null ? "-" : Math.max(0, Math.round(damage))}`;
   });
-  return [
-    "TYPE // COMMAND // COST // DAMAGE",
-    ...sortedSkills.map((skill) => {
-      const label = skill.category === "special" ? "특수기술" : "기본기술";
-      const ap = Math.max(0, Math.round(resolveApCost(skill)));
-      const damage = resolveDamage(skill);
-      return `${label} : ${skill.name} : ${ap} : ${damage === null ? "-" : Math.max(0, Math.round(damage))}`;
-    }),
-  ].join("\n");
+  const ringRows = skills.flatMap((skill) => {
+    if (skill.command === undefined) return [];
+    const segments = splitRingCommand(skill.command);
+    if (
+      (segments.prefix === undefined && segments.suffix === undefined) ||
+      (segments.prefix !== undefined && segments.suffix !== undefined)
+    ) {
+      return [];
+    }
+    const affix = segments.prefix ?? segments.suffix;
+    const ring = RING_CONFIGS.find((candidate) => candidate.commandAffix === affix);
+    if (ring === undefined) return [];
+    const modifiers = (ring.modifiers as readonly RingSkillModifier[]).filter(
+      (modifier) => modifier.skillCategories === undefined || modifier.skillCategories.includes(skill.category),
+    );
+    const effects = modifiers.flatMap((modifier) => [
+      ...(modifier.damageMultiplier === undefined
+        ? []
+        : [`${modifier.damageMultiplier >= 1 ? "+" : ""}${Math.round((modifier.damageMultiplier - 1) * 100)}% 데미지`]),
+      ...(modifier.apCostDelta === undefined
+        ? []
+        : [`${modifier.apCostDelta >= 0 ? "+" : ""}${modifier.apCostDelta} AP`]),
+      ...(modifier.windupMultiplier === undefined
+        ? []
+        : [`선딜 ${Math.round((modifier.windupMultiplier - 1) * 100)}%`]),
+      ...(modifier.onHitStatus === undefined ? [] : [`${modifier.onHitStatus.statusId} 부여`]),
+    ]);
+    if (effects.length === 0) return [];
+    const displayName = [segments.prefix, skill.name, segments.suffix]
+      .filter((part): part is string => part !== undefined)
+      .join(" ");
+    return [`${segments.prefix === undefined ? "접미사" : "접두사"} : ${displayName} : ${effects.join(", ")}`];
+  });
+  return ["TYPE // COMMAND // COST // DAMAGE", ...skillRows, ...ringRows].join("\n");
 }
 
 export function createSkillCommandEffects(skill: SkillLike | undefined): CommandHudEffect[] {

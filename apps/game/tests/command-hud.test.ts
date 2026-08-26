@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { RING_CONFIGS } from "@typing-roguelike/shared";
 import { CommandInputBuffer } from "../src/game/input/command-input-buffer";
 import {
   createCommandHudState,
@@ -27,6 +28,19 @@ describe("command HUD state", () => {
     ).toBe(
       "TYPE // COMMAND // COST // DAMAGE\n기본기술 : 방어 : 1 : -\n기본기술 : 베기 : 1 : 9\n특수기술 : 이중 베기 : 2 : 17",
     );
+  });
+
+  test("shows ring effects as descriptive rows instead of duplicate commands", () => {
+    const prefix = RING_CONFIGS.find((ring) => ring.position === "prefix" && ring.id === "ring_fury_prefix");
+    expect(prefix).toBeDefined();
+    if (prefix === undefined) return;
+    const base = { name: "베기", command: "베기", category: "basic" as const, apCost: 1 };
+    const prefixed = { ...base, command: `${prefix.commandAffix} ${base.command}`, apCost: 1 };
+
+    const output = formatAvailableSkillPreviews([base, prefixed]);
+    expect(output).toContain("기본기술 : 베기 : 1 : -");
+    expect(output).toContain(`접두사 : ${prefix.commandAffix} 베기 : +30% 데미지`);
+    expect(output).not.toContain(`${prefix.commandAffix} 베기 : 1 :`);
   });
 
   test("always keeps the current command visible and exposes matching progress", () => {
