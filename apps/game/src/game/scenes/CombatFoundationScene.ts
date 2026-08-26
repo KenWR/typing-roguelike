@@ -17,11 +17,16 @@ import {
 import type { CombatEncounterInitialization } from "../combat/encounter-initializer";
 import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
+import {
+  CombatFeedbackController,
+  playProceduralCombatSound,
+} from "../feedback/combat-feedback";
 import { CombatHud } from "../hud/combat-hud";
 import { CommandHud } from "../hud/command-hud";
 import { EnemyAttackGauge } from "../hud/enemy-attack-gauge";
 import { CommandInputBuffer } from "../input/command-input-buffer";
 import { createCombatLayout } from "../layout/combat-layout";
+import { MENU_SETTINGS_REGISTRY_KEYS } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
 
 const BACKGROUND_WIDTH = 1600;
@@ -61,12 +66,14 @@ export class CombatFoundationScene extends Phaser.Scene {
   private combat!: CombatState;
   private playerCombatRuntime?: PlayerCombatRuntime;
   private enemyCombatRuntime?: EnemyCombatRuntime;
+  private feedback?: CombatFeedbackController;
   private pauseController?: CombatPauseController;
   private pauseOverlay?: Phaser.GameObjects.Text;
   private commandHud!: CommandHud;
   private commandInputBuffer!: CommandInputBuffer;
   private commandInputCleanup?: () => void;
   private commandCompletionCleanup?: () => void;
+  private commandStatusCleanup?: () => void;
   private combatInitialization?: CombatEncounterInitialization;
   private runState?: Readonly<RunState>;
   private nextNodeIds: readonly string[] = [];
@@ -85,6 +92,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.bossNode = data.bossNode;
     this.playerCombatRuntime = undefined;
     this.enemyCombatRuntime = undefined;
+    this.feedback = undefined;
     this.transitionStarted = false;
   }
 
@@ -98,6 +106,16 @@ export class CombatFoundationScene extends Phaser.Scene {
       this.scene.start(transition.key, transition.payload);
       return;
     }
+
+    this.feedback = new CombatFeedbackController({
+      playSound: (key) => playProceduralCombatSound(key, {
+        muted: this.sound.mute,
+        volume: this.sound.volume,
+      }),
+      shakeCamera: () => this.cameras.main.shake(110, 0.006),
+      isScreenShakeEnabled: () =>
+        this.registry.get(MENU_SETTINGS_REGISTRY_KEYS.screenShakeEnabled) !== false,
+    });
 
     this.backgroundLayer = this.add.container(0, 0).setDepth(0);
     this.worldLayer = this.add.container(0, 0).setDepth(100);
@@ -176,6 +194,13 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandInputBuffer = new CommandInputBuffer(initialSkill.command);
     this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
     this.uiLayer.add(this.commandHud.container);
+    this.commandStatusCleanup = this.commandInputBuffer.onStatusChanged(({ snapshot }) => {
+      if (snapshot.status === "complete") {
+        this.feedback?.trigger("command-success");
+      } else if (snapshot.status === "incorrect") {
+        this.feedback?.trigger("command-failure");
+      }
+    });
 
     if (this.runState !== undefined) {
       this.playerCombatRuntime = new PlayerCombatRuntime({
@@ -204,6 +229,9 @@ export class CombatFoundationScene extends Phaser.Scene {
         this.combatHud.update({ ap: result.ap.currentAp });
         if (result.started) {
           this.playerCombatRuntime?.registerAction(result.actionId, result.skill);
+          if (result.skill.kind === "defense") {
+            this.feedback?.trigger("guard");
+          }
           this.commandHud.showSkillStarted();
         }
       },
@@ -230,6 +258,7 @@ export class CombatFoundationScene extends Phaser.Scene {
 
     const playerUpdate = this.playerCombatRuntime?.advance(safeDelta);
     if (playerUpdate?.route !== null && playerUpdate?.route !== undefined) {
+      this.feedback?.trigger("victory");
       this.startCombatRoute(playerUpdate.route.sceneKey, playerUpdate.route.payload);
       return;
     }
@@ -239,12 +268,17 @@ export class CombatFoundationScene extends Phaser.Scene {
     }
 
     if (this.enemyCombatRuntime !== undefined) {
+      const playerHpBefore = this.enemyCombatRuntime.playerHp;
       const enemyUpdate = this.enemyCombatRuntime.advance(safeDelta);
       this.enemyAttackGauge.update(enemyUpdate.timeline);
       this.combatHud.update({ hp: enemyUpdate.playerHp });
       this.playerCombatRuntime?.setRunState(enemyUpdate.runState);
 
+      if (enemyUpdate.playerHp < playerHpBefore) {
+        this.feedback?.trigger("player-hit");
+      }
       if (enemyUpdate.route !== null) {
+        this.feedback?.trigger("defeat");
         this.startCombatRoute(enemyUpdate.route.sceneKey, enemyUpdate.route.payload);
       }
       return;
@@ -393,6 +427,8 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandInputCleanup?.();
     this.commandCompletionCleanup?.();
     this.commandCompletionCleanup = undefined;
+    this.commandStatusCleanup?.();
+    this.commandStatusCleanup = undefined;
     this.isComposing = false;
   }
 
