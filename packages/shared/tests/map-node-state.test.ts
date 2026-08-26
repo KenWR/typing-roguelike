@@ -37,13 +37,13 @@ describe("map node state", () => {
 		expect(getMapNodeStatus(createMap(), "unknown")).toBe("locked");
 	});
 
-	test("selecting a node does not create an in-progress state", () => {
+	test("selecting a node keeps it available and locks sibling choices", () => {
 		const next = beginMapNode(createMap(), "1-1");
 
 		expect(next.currentNodeId).toBe("1-1");
 		expect(next.nodeStatuses["1-1"]).toBe("available");
-		expect(next.nodeStatuses["1-2"]).toBe("available");
-		expect(next.nodeStatuses["1-3"]).toBe("available");
+		expect(next.nodeStatuses["1-2"]).toBe("locked");
+		expect(next.nodeStatuses["1-3"]).toBe("locked");
 	});
 
 	test("rejects starting locked nodes", () => {
