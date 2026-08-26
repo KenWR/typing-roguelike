@@ -97,6 +97,8 @@ export class CombatFoundationScene extends Phaser.Scene {
   private pauseOverlay?: Phaser.GameObjects.Text;
   private commandHud!: CommandHud;
   private comboText!: Phaser.GameObjects.Text;
+  private comboPulseTween?: Phaser.Tweens.Tween;
+  private lastComboCount = 0;
   private skillStarter?: SkillCommandStarter;
   private commandInputBuffer!: CommandInputBuffer;
   private commandInputRecovery!: CommandInputRecoveryController;
@@ -131,6 +133,8 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.playerRestTextureKey = undefined;
     this.playerAttackReset = undefined;
     this.playerAttackTween = undefined;
+    this.comboPulseTween = undefined;
+    this.lastComboCount = 0;
     this.enemyActorImages.clear();
     this.enemyTargetMarkers.clear();
     this.enemyHealthBars.clear();
@@ -274,7 +278,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       .text(0, 0, "x0 +0%", {
         color: "#fcd34d",
         fontFamily: "Galmuri9, monospace",
-        fontSize: "18px",
+        fontSize: "36px",
         fontStyle: "bold",
         stroke: "#101827",
         strokeThickness: 4,
@@ -581,8 +585,11 @@ export class CombatFoundationScene extends Phaser.Scene {
       .setVisible(width >= 720);
     this.combatHud.setPosition(layout.hudReservation.x, layout.hudReservation.y);
     this.combatHud.setSize(layout.hudReservation.width, layout.hudReservation.height);
-    this.commandHud.setPosition(layout.commandHudReservation.x, layout.commandHudReservation.y);
     this.commandHud.setSize(layout.commandHudReservation.width, layout.commandHudReservation.height);
+    this.commandHud.setPosition(
+      layout.commandHudReservation.x,
+      height - layout.safeInset - this.commandHud.getHeight(),
+    );
     this.comboText.setPosition(width - 24, height - 24).setVisible(this.skillStarter !== undefined);
     this.pauseOverlay?.setPosition(width / 2, height / 2);
   }
@@ -590,7 +597,27 @@ export class CombatFoundationScene extends Phaser.Scene {
   private updateComboDisplay(snapshot: ComboSnapshot | undefined): void {
     if (snapshot === undefined) return;
     const bonusPercent = Math.round((snapshot.multiplier - 1) * 100);
+    const minimumScale = 1 + Math.min(0.45, snapshot.count * 0.03);
     this.comboText.setText(`x${snapshot.count} +${bonusPercent}%`).setColor(snapshot.count > 0 ? "#fcd34d" : "#94a3b8");
+    if (snapshot.count === 0) {
+      this.comboPulseTween?.stop();
+      this.comboPulseTween = undefined;
+      this.comboText.setScale(1);
+    } else if (snapshot.count > this.lastComboCount) {
+      this.comboPulseTween?.stop();
+      this.comboText.setScale(minimumScale);
+      this.comboPulseTween = this.tweens.add({
+        targets: this.comboText,
+        scaleX: minimumScale * 1.12,
+        scaleY: minimumScale * 1.12,
+        duration: 120,
+        yoyo: true,
+        ease: "Sine.Out",
+      });
+    } else {
+      this.comboText.setScale(minimumScale);
+    }
+    this.lastComboCount = snapshot.count;
   }
 
   private createCommandInputElement(): void {

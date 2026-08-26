@@ -174,14 +174,20 @@ export function formatAvailableSkillPreviews(
   resolveApCost: (skill: SkillPreviewInput) => number = (skill) => skill.apCost,
   resolveDamage: (skill: SkillPreviewInput) => number | null = () => null,
 ): string {
-  return skills
-    .map((skill) => {
-      const label = skill.category === "special" ? "특수기술" : "기본 기술";
+  const sortedSkills = [...skills].sort((left, right) => {
+    const leftRank = left.category === "special" ? 1 : 0;
+    const rightRank = right.category === "special" ? 1 : 0;
+    return leftRank - rightRank;
+  });
+  return [
+    "TYPE // COMMAND // COST // DAMAGE",
+    ...sortedSkills.map((skill) => {
+      const label = skill.category === "special" ? "특수기술" : "기본기술";
       const ap = Math.max(0, Math.round(resolveApCost(skill)));
       const damage = resolveDamage(skill);
-      return `${label} : ${skill.name}${damage === null ? ` : ${ap}` : ` : ${ap} : ${Math.max(0, Math.round(damage))}`}`;
-    })
-    .join("\n");
+      return `${label} : ${skill.name} : ${ap} : ${damage === null ? "-" : Math.max(0, Math.round(damage))}`;
+    }),
+  ].join("\n");
 }
 
 export function getEffectDarknessRatio(effect: Pick<CommandHudEffect, "durationMs" | "remainingMs">): number {
@@ -389,10 +395,13 @@ export class CommandHud {
   }
   setSize(width: number, height: number): void {
     this.panelWidth = Math.max(260, width);
-    this.panelHeight = Math.max(132, height);
+    this.panelHeight = Math.max(132, height, this.getRequiredHeight());
     this.panel.setSize(this.panelWidth, this.panelHeight);
     this.container.setSize(this.panelWidth, this.panelHeight);
     this.refresh();
+  }
+  getHeight(): number {
+    return this.panelHeight;
   }
   update(snapshot: CommandInputSnapshot): void {
     this.state = updateCommandHudState(this.state, snapshot);
@@ -581,5 +590,10 @@ export class CommandHud {
       .setFillStyle(presentation.accent, 1);
     this.feedbackText.setVisible(false).setText("");
     this.refreshEffects();
+  }
+
+  private getRequiredHeight(): number {
+    const rowHeight = this.panelWidth < 380 ? 18 : this.panelWidth < 620 ? 20 : 24;
+    return 70 + Math.max(1, this.skills.length + 1) * rowHeight;
   }
 }

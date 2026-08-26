@@ -17,14 +17,16 @@ describe("command HUD state", () => {
     expect(
       formatAvailableSkillPreviews(
         [
-          { name: "베기", category: "basic", apCost: 1 },
-          { name: "방어", category: "guard", apCost: 1 },
           { name: "이중 베기", category: "special", apCost: 2 },
+          { name: "방어", category: "guard", apCost: 1 },
+          { name: "베기", category: "basic", apCost: 1 },
         ],
         (skill) => skill.apCost,
-        (skill) => (skill.category === "special" ? 17 : null),
+        (skill) => (skill.name === "베기" ? 9 : skill.category === "special" ? 17 : null),
       ),
-    ).toBe("기본 기술 : 베기 : 1\n기본 기술 : 방어 : 1\n특수기술 : 이중 베기 : 2 : 17");
+    ).toBe(
+      "TYPE // COMMAND // COST // DAMAGE\n기본기술 : 방어 : 1 : -\n기본기술 : 베기 : 1 : 9\n특수기술 : 이중 베기 : 2 : 17",
+    );
   });
 
   test("always keeps the current command visible and exposes matching progress", () => {
