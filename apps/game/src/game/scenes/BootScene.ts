@@ -3,6 +3,7 @@ import {
   RUNTIME_IMAGE_ASSETS,
   TEXTURE_KEYS,
 } from "../assets/asset-catalog";
+import { applyMenuSettings, loadMenuSettings } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
 
 export class BootScene extends Phaser.Scene {
@@ -55,6 +56,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    const storage = typeof localStorage === "undefined" ? undefined : localStorage;
+    applyMenuSettings(this, loadMenuSettings(storage));
     this.createFoundationTextures();
 
     for (const key of this.failedAssetKeys) {
