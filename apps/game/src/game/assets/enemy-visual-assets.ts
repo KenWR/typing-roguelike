@@ -21,10 +21,9 @@ const ENEMY_NAMES_BY_ID = {
   "ap-devourer": "행동력 포식자",
   "red-corrector": "붉은_교정관",
   "inverted-knight": "뒤집힌 기사",
-  "chorus-conductor": "갈고리 촉수",
   "palimpsest": "붉은 편집장 팔림프세스트",
-  "thousand-beat-chorus": "붉은 편집장 팔림프세스트",
-  "beat-tentacle": "갈고리 촉수",
+  "chorus-conductor": "합창의 지휘 촉수",
+  "thousand-beat-chorus": "천 개의 박자 합창체"
 } as const;
 
 export type EnemyVisualState =
