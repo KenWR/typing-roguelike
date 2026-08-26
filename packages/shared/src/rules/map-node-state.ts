@@ -59,10 +59,18 @@ export const completeMapNode = (
 		map.choicePath,
 	).find((node) => node.key === nodeId);
 
-	const nodeStatuses: Record<string, MapNodeStatus> = {
-		...map.nodeStatuses,
-		[nodeId]: "cleared",
-	};
+	const currentRoundNodes = generateNodeChoices(
+		map.seed,
+		map.currentRound,
+		map.choicePath,
+	);
+	const nodeStatuses: Record<string, MapNodeStatus> = { ...map.nodeStatuses };
+	for (const node of currentRoundNodes) {
+		if (node.key !== nodeId && nodeStatuses[node.key] === "available") {
+			nodeStatuses[node.key] = "locked";
+		}
+	}
+	nodeStatuses[nodeId] = "cleared";
 
 	for (const nextNodeId of nextNodeIds) {
 		const nextStatus = nodeStatuses[nextNodeId];
