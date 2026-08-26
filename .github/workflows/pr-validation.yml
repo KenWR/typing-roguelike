@@ -6,8 +6,7 @@ on:
 
 # Stable required check/job name: PR validation (job id: pr-validation).
 # Keep this workflow path-unfiltered so shared-package changes run every consumer check.
-# The root test command discovers the complete game/shared suite and any future API tests.
-# The API package currently has no test files; workspace typecheck and build cover its paths.
+# The root test command discovers the complete game/API/shared suite.
 # The whitespace check uses the merge-base-to-head three-dot range to exclude base-only changes.
 # The dry-run below verifies non-zero command propagation without failing this validation job.
 # Runtime evidence still requires external PR activity for superseded-run cancellation and a
