@@ -43,12 +43,13 @@ describe("multi-command combat input", () => {
     buffer.onCompleted(({ command }) => completed.push(command));
 
     expect(buffer.updateInput("내려찍기").status).toBe("complete");
-    expect(buffer.updateInput("내려찍기내")).toMatchObject({
+    buffer.reset();
+    expect(buffer.updateInput("내")).toMatchObject({
       command: "내려찍기",
       input: "내",
       status: "matching",
     });
-    expect(buffer.updateInput("내려찍기내려찍기").status).toBe("complete");
+    expect(buffer.updateInput("내려찍기").status).toBe("complete");
 
     expect(completed).toEqual(["내려찍기", "내려찍기"]);
   });

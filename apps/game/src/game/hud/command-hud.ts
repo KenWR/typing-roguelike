@@ -1,4 +1,4 @@
-import Phaser from "phaser";
+import type Phaser from "phaser";
 import { MENU_SETTINGS_REGISTRY_KEYS, type CommandLanguage } from "../scenes/menu-settings";
 import type {
   CommandInputSnapshot,
@@ -84,6 +84,10 @@ const EFFECT_TOP = 8;
 const EFFECT_LEFT = 8;
 const EFFECT_RADIUS = 7;
 const PLACEHOLDER_TEXTURE_KEY = "command-effect-placeholder" as const;
+const SCENE_UPDATE_EVENT = "update";
+const SCENE_SHUTDOWN_EVENT = "shutdown";
+const SCENE_DESTROY_EVENT = "destroy";
+const POINTER_OVER_EVENT = "pointerover";
 
 const clamp = (value: number, minimum: number, maximum: number): number => Math.min(Math.max(value, minimum), maximum);
 
@@ -211,9 +215,9 @@ export class CommandHud {
     this.tooltipText = scene.add.text(0, 0, "", { color: "#f8fafc", fontFamily: "Galmuri9, monospace", fontSize: "11px", lineSpacing: 4, wordWrap: { width: 196, useAdvancedWrap: true } }).setVisible(false);
     this.container.add([this.panel, this.title, this.commandText, this.inputText, this.statusText, this.progressTrack, this.progressFill, this.feedbackText, this.tooltipBackground, this.tooltipText]);
     this.container.setSize(this.panelWidth, this.panelHeight);
-    scene.events.on(Phaser.Scenes.Events.UPDATE, this.refreshEffects, this);
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.release, this);
-    scene.events.once(Phaser.Scenes.Events.DESTROY, this.release, this);
+    scene.events.on(SCENE_UPDATE_EVENT, this.refreshEffects, this);
+    scene.events.once(SCENE_SHUTDOWN_EVENT, this.release, this);
+    scene.events.once(SCENE_DESTROY_EVENT, this.release, this);
     this.refresh();
   }
 
@@ -284,7 +288,7 @@ export class CommandHud {
     const darknessMask = maskShape.createGeometryMask();
     const darkness = this.scene.add.rectangle(0, EFFECT_SIZE, EFFECT_SIZE, 0, 0x000000, 0.68).setOrigin(0).setMask(darknessMask);
     const hitArea = this.scene.add.zone(0, 0, EFFECT_SIZE, EFFECT_SIZE).setOrigin(0).setInteractive({ useHandCursor: true });
-    hitArea.on("pointerover", () => {
+    hitArea.on(POINTER_OVER_EVENT, () => {
       const effect = hitArea.getData("effect") as CommandHudEffect | undefined;
       if (effect === undefined) return;
       this.hoveredEffectId = effect.id;
@@ -321,7 +325,7 @@ export class CommandHud {
   }
 
   private release(): void {
-    this.scene.events.off(Phaser.Scenes.Events.UPDATE, this.refreshEffects, this);
+    this.scene.events.off(SCENE_UPDATE_EVENT, this.refreshEffects, this);
     for (const visual of this.effectVisuals) visual.darknessMask.destroy();
   }
 
