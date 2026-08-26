@@ -54,6 +54,7 @@ export type RewardSelectionSceneData = Readonly<{
 type RewardCardView = Readonly<{
   candidate: RewardCandidate;
   container: Phaser.GameObjects.Container;
+  hitArea: Phaser.GameObjects.Rectangle;
   panel: Phaser.GameObjects.Rectangle;
   accentBar: Phaser.GameObjects.Rectangle;
   rarityText: Phaser.GameObjects.Text;
@@ -85,6 +86,8 @@ export class RewardSelectionScene extends Phaser.Scene {
   private continueButton!: Phaser.GameObjects.Rectangle;
   private continueText!: Phaser.GameObjects.Text;
   private feedbackText!: Phaser.GameObjects.Text;
+  private rewardTooltip?: Phaser.GameObjects.Container;
+  private rewardTooltipCandidateId?: string;
   private cards: RewardCardView[] = [];
 
   constructor() {
@@ -147,6 +150,8 @@ export class RewardSelectionScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseResizeListener, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseResizeListener, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.hideRewardTooltip, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.hideRewardTooltip, this);
     this.applyLayout(this.scale.gameSize.width, this.scale.gameSize.height);
     this.refresh(state);
   }
@@ -156,16 +161,31 @@ export class RewardSelectionScene extends Phaser.Scene {
     const panel = this.add
       .rectangle(0, 0, 1, 1, COLORS.panelRaised, 1)
       .setOrigin(0);
-    container.on(Phaser.Input.Events.POINTER_DOWN, () => {
+    const hitArea = this.add
+      .rectangle(0, 0, 1, 1, 0xffffff, 0)
+      .setOrigin(0)
+      .setDepth(30)
+      .setInteractive(
+        new Phaser.Geom.Rectangle(0, 0, 1, 1),
+        Phaser.Geom.Rectangle.Contains,
+      );
+    hitArea.on(Phaser.Input.Events.POINTER_DOWN, () => {
       this.handleRewardSelection(candidate.id);
     });
-    container.on(Phaser.Input.Events.POINTER_OVER, () => {
+    hitArea.on(Phaser.Input.Events.POINTER_OVER, (pointer: Phaser.Input.Pointer) => {
       if (this.adapter.getViewState().status !== "continued") {
         panel.setFillStyle(0x20334b, 1);
+        this.showRewardTooltip(candidate, pointer);
       }
     });
-    container.on(Phaser.Input.Events.POINTER_OUT, () => {
+    hitArea.on(Phaser.Input.Events.POINTER_MOVE, (pointer: Phaser.Input.Pointer) => {
+      if (this.adapter.getViewState().status !== "continued") {
+        this.showRewardTooltip(candidate, pointer);
+      }
+    });
+    hitArea.on(Phaser.Input.Events.POINTER_OUT, () => {
       this.refreshCard(candidate.id, this.adapter.getViewState());
+      this.hideRewardTooltip();
     });
 
     const accentBar = this.add.rectangle(0, 0, 4, 1, COLORS.border, 1).setOrigin(0);
@@ -197,6 +217,7 @@ export class RewardSelectionScene extends Phaser.Scene {
     return {
       candidate,
       container,
+      hitArea,
       panel,
       accentBar,
       rarityText,
@@ -210,7 +231,7 @@ export class RewardSelectionScene extends Phaser.Scene {
     };
   }
 
-  private handleRewardSelection(rewardId: string): void {
+  protected handleRewardSelection(rewardId: string): void {
     const state = this.adapter.getViewState();
     if (state.status === "continued") {
       return;
@@ -233,6 +254,7 @@ export class RewardSelectionScene extends Phaser.Scene {
   }
 
   private refresh(state: RewardSelectionViewState): void {
+    this.hideRewardTooltip();
     const presentation = getRewardSourcePresentation(this.rewardSource, state.title);
     this.headerTitle.setText(presentation.title.toUpperCase());
     this.headerMeta.setText(
@@ -279,6 +301,7 @@ export class RewardSelectionScene extends Phaser.Scene {
       .setText(isSelected ? (isComplete ? "획득 완료" : "선택됨") : "선택하기")
       .setColor(isSelected ? "#fcd34d" : COLORS.muted);
     card.container.setAlpha(isComplete && !isSelected ? 0.58 : 1);
+    card.hitArea.setAlpha(isComplete && !isSelected ? 0.58 : 1);
   }
 
   private refreshContinueButton(state: RewardSelectionViewState): void {
@@ -371,13 +394,10 @@ export class RewardSelectionScene extends Phaser.Scene {
     const rarity = RARITY_PRESENTATION[card.candidate.rarity];
     card.container.setPosition(x, y);
     card.container.setSize(width, height);
-    if (card.container.input === null) {
-      card.container.setInteractive(
-        new Phaser.Geom.Rectangle(0, 0, width, height),
-        Phaser.Geom.Rectangle.Contains,
-      );
-    } else {
-      card.container.input.hitArea.setSize(width, height);
+    card.hitArea.setPosition(x, y).setSize(width, height);
+    if (card.hitArea.input !== null) {
+      const hitArea = card.hitArea.input.hitArea as Phaser.Geom.Rectangle;
+      hitArea.setTo(0, 0, width, height);
     }
     card.panel.setSize(width, height);
     card.accentBar.setPosition(0, 0).setSize(4, height).setFillStyle(rarity.accent, 1);
@@ -418,6 +438,100 @@ export class RewardSelectionScene extends Phaser.Scene {
 
   private releaseResizeListener(): void {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
+  }
+
+  private showRewardTooltip(
+    candidate: RewardCandidate,
+    pointer: Phaser.Input.Pointer,
+  ): void {
+    if (
+      this.rewardTooltip !== undefined &&
+      this.rewardTooltipCandidateId === candidate.id
+    ) {
+      this.positionRewardTooltip(this.rewardTooltip, pointer);
+      return;
+    }
+
+    this.hideRewardTooltip();
+
+    const tooltipWidth = 360;
+    const tooltipHeight = 184;
+    const { width, height } = this.scale.gameSize;
+    const tooltip = this.add.container(0, 0).setDepth(900);
+    tooltip.add(
+      this.add
+        .rectangle(0, 0, tooltipWidth, tooltipHeight, 0x0f172a, 0.98)
+        .setOrigin(0)
+        .setStrokeStyle(2, RARITY_PRESENTATION[candidate.rarity].accent),
+    );
+
+    if (candidate.imageKey !== undefined && this.textures.exists(candidate.imageKey)) {
+      const image = this.add.image(58, 76, candidate.imageKey).setOrigin(0.5);
+      const scale = Math.min(82 / image.width, 82 / image.height, 1.4);
+      image.setScale(scale);
+      tooltip.add(image);
+    } else {
+      tooltip.add(
+        this.add
+          .text(58, 76, candidate.icon ?? "◇", this.iconStyle())
+          .setOrigin(0.5)
+          .setFontSize(36),
+      );
+    }
+
+    tooltip.add(
+      this.add.text(112, 18, candidate.name, {
+        ...this.cardNameStyle(),
+        fontSize: "18px",
+        wordWrap: { width: 228 },
+      }),
+    );
+    tooltip.add(
+      this.add.text(
+        112,
+        48,
+        `${KIND_LABELS[candidate.kind]} · ${RARITY_PRESENTATION[candidate.rarity].label}`,
+        this.cardMetaStyle(),
+      ),
+    );
+    tooltip.add(
+      this.add.text(112, 72, candidate.description, {
+        ...this.cardDescriptionStyle(),
+        fontSize: "12px",
+        wordWrap: { width: 228 },
+        lineSpacing: 3,
+      }),
+    );
+    tooltip.add(
+      this.add.text(18, 142, candidate.effect, {
+        ...this.cardEffectStyle(),
+        fontSize: "13px",
+        wordWrap: { width: tooltipWidth - 36 },
+      }),
+    );
+    this.rewardTooltip = tooltip;
+    this.rewardTooltipCandidateId = candidate.id;
+    this.positionRewardTooltip(tooltip, pointer, width, height, tooltipWidth, tooltipHeight);
+  }
+
+  private positionRewardTooltip(
+    tooltip: Phaser.GameObjects.Container,
+    pointer: Phaser.Input.Pointer,
+    width = this.scale.gameSize.width,
+    height = this.scale.gameSize.height,
+    tooltipWidth = 360,
+    tooltipHeight = 184,
+  ): void {
+    tooltip.setPosition(
+      Math.min(pointer.x + 18, Math.max(12, width - tooltipWidth - 12)),
+      Math.min(pointer.y + 18, Math.max(12, height - tooltipHeight - 12)),
+    );
+  }
+
+  private hideRewardTooltip(): void {
+    this.rewardTooltip?.destroy();
+    this.rewardTooltip = undefined;
+    this.rewardTooltipCandidateId = undefined;
   }
 
   private headerTitleStyle(): Phaser.Types.GameObjects.Text.TextStyle {
