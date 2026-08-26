@@ -359,6 +359,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     }
 
     this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);
+    this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
     this.combatHud.update({
       hp: playerUpdate.playerHp,
       ap: playerUpdate.playerAp,
@@ -474,6 +475,7 @@ export class CombatFoundationScene extends Phaser.Scene {
 
   private refreshTargetPresentation(): void {
     const targetId = this.targeting?.targetId;
+    this.enemyAttackGauge?.setTargetedEnemy(targetId);
     for (const [enemyId, marker] of this.enemyTargetMarkers) {
       const alive = (this.displayedEnemyHp.get(enemyId) ?? 0) > 0;
       marker.setVisible(alive && enemyId === targetId);

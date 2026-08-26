@@ -67,6 +67,7 @@ export type EnemyAttackGaugeAttackState = Readonly<{
   typeLabel: string;
   color: string;
   accent: number;
+  targeted: boolean;
 }>;
 
 export type EnemyAttackGaugeState = Readonly<{
@@ -89,6 +90,7 @@ export function getEnemyAttackTypePresentation(
 
 export function createEnemyAttackGaugeState(
   snapshot: EnemyAttackTimelineSnapshot,
+  targetedEnemyId?: string,
 ): EnemyAttackGaugeState {
   return {
     status: snapshot.status,
@@ -115,6 +117,7 @@ export function createEnemyAttackGaugeState(
           typeLabel: presentation.label,
           color: presentation.color,
           accent: presentation.accent,
+          targeted: targetedEnemyId !== undefined && attack.enemyId === targetedEnemyId,
         };
       }),
   };
@@ -141,6 +144,8 @@ export class EnemyAttackGauge {
   private readonly emptyText: Phaser.GameObjects.Text;
   private readonly rows = new Map<string, EnemyAttackGaugeRow>();
   private state: EnemyAttackGaugeState;
+  private lastSnapshot: EnemyAttackTimelineSnapshot;
+  private targetedEnemyId?: string;
   private panelWidth = 420;
   private panelHeight = 132;
 
@@ -148,6 +153,7 @@ export class EnemyAttackGauge {
     scene: Phaser.Scene,
     initialSnapshot: EnemyAttackTimelineSnapshot,
   ) {
+    this.lastSnapshot = initialSnapshot;
     this.state = createEnemyAttackGaugeState(initialSnapshot);
     this.container = scene.add.container(0, 0);
 
@@ -194,7 +200,14 @@ export class EnemyAttackGauge {
   }
 
   update(snapshot: EnemyAttackTimelineSnapshot): void {
-    this.state = createEnemyAttackGaugeState(snapshot);
+    this.lastSnapshot = snapshot;
+    this.state = createEnemyAttackGaugeState(snapshot, this.targetedEnemyId);
+    this.refresh();
+  }
+
+  setTargetedEnemy(enemyId: string | undefined): void {
+    this.targetedEnemyId = enemyId;
+    this.state = createEnemyAttackGaugeState(this.lastSnapshot, enemyId);
     this.refresh();
   }
 
@@ -331,8 +344,13 @@ export class EnemyAttackGauge {
 
     row.panel
       .setSize(this.panelWidth, bodyHeight)
-      .setFillStyle(0x111c2d, 0.9)
-      .setStrokeStyle(1, attack.accent, 0.9);
+      .setFillStyle(attack.targeted ? 0x3b2f12 : 0x111c2d, 0.9)
+      .setStrokeStyle(
+        attack.targeted ? 2 : 1,
+        attack.targeted ? 0xffd166 : attack.accent,
+        0.9,
+      );
+    row.container.setAlpha(attack.targeted ? 1 : 0.78);
     row.icon.setPosition(8, labelY).setText(attack.icon).setColor(attack.color);
     row.attackName
       .setPosition(34, labelY)
