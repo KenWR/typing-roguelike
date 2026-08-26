@@ -78,9 +78,9 @@ export class SkillCombatantState {
       attackPower: this.attackPower,
       defense: this.defense,
       health: this.health.snapshot,
-      statuses: this.statuses.map(({ statusId, remainingMs, stacks }) => ({
+      statuses: this.statuses.map(({ statusId, durationMs, stacks }) => ({
         statusId,
-        durationMs: remainingMs,
+        durationMs,
         stacks,
       })),
     };
