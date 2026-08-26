@@ -35,6 +35,7 @@ export type SkillCommandStarterConfig = Readonly<{
   resolveApCost?: (skill: SkillDefinition) => number;
   /** 커맨드를 완성할 때마다 대상을 다시 계산합니다. Tab 타게팅에 사용합니다. */
   resolveTargetId?: (skill: SkillDefinition) => string;
+  preserveComboOnFailure?: () => boolean;
 }>;
 
 const normalizeCommand = (command: string): string => command.normalize("NFC");
@@ -60,6 +61,7 @@ export class SkillCommandStarter {
   private readonly targetId: string;
   private readonly resolveApCost: (skill: SkillDefinition) => number;
   private readonly resolveTargetId: (skill: SkillDefinition) => string;
+  private readonly preserveComboOnFailure: () => boolean;
   private nextActionSequence = 1;
 
   constructor(config: SkillCommandStarterConfig) {
@@ -70,6 +72,7 @@ export class SkillCommandStarter {
     this.targetId = requireIdentifier("Target id", config.targetId);
     this.resolveApCost = config.resolveApCost ?? ((skill) => skill.apCost);
     this.resolveTargetId = config.resolveTargetId ?? (() => this.targetId);
+    this.preserveComboOnFailure = config.preserveComboOnFailure ?? (() => false);
 
     for (const skill of config.skills) {
       const command = normalizeCommand(skill.command);
@@ -97,7 +100,7 @@ export class SkillCommandStarter {
       // A typo should not break the combo while the player is still editing.
       // The Enter submission ends the cycle; only a cycle that never started
       // a skill is considered a failed command.
-      if (snapshot.input.length > 0 && !commandStarted) {
+      if (snapshot.input.length > 0 && !commandStarted && !this.preserveComboOnFailure()) {
         this.combo.breakCombo("incorrect-input");
       }
       commandStarted = false;

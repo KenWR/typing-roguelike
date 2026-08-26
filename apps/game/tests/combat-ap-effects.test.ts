@@ -3,16 +3,31 @@ import { defineSkill } from "@typing-roguelike/shared";
 import { ActionPointResource } from "../src/game/combat/action-point-resource";
 import { CombatApEffectController } from "../src/game/combat/combat-ap-effects";
 
-const skill = (overrides: Partial<Parameters<typeof defineSkill>[0]> = {}) => defineSkill({
-  id: "skill.test", name: "테스트", command: "테스트", kind: "attack", category: "basic",
-  apCost: 2, windupMs: 0, recoveryMs: 0, description: "테스트", ...overrides,
-});
+const skill = (overrides: Partial<Parameters<typeof defineSkill>[0]> = {}) =>
+  defineSkill({
+    id: "skill.test",
+    name: "테스트",
+    command: "테스트",
+    kind: "attack",
+    category: "basic",
+    apCost: 2,
+    windupMs: 0,
+    recoveryMs: 0,
+    description: "테스트",
+    ...overrides,
+  });
 
 describe("CombatApEffectController", () => {
   test("applies immediate equipment AP recovery descriptions", () => {
     const actionPoints = new ActionPointResource({ initialAp: 1 });
     const effects = new CombatApEffectController({ actionPoints });
-    const recovered = skill({ id: "orb-meditate", name: "명상", command: "명상", kind: "utility", effect: "AP 2 회복, 선딜 0.75초" });
+    const recovered = skill({
+      id: "orb-meditate",
+      name: "명상",
+      command: "명상",
+      kind: "utility",
+      effect: "AP 2 회복, 선딜 0.75초",
+    });
     expect(effects.onSkillImpact(recovered)).toBe(2);
     expect(actionPoints.snapshot.currentAp).toBe(3);
   });
@@ -26,7 +41,10 @@ describe("CombatApEffectController", () => {
 
   test("applies relic AP cost increases", () => {
     const actionPoints = new ActionPointResource();
-    const effects = new CombatApEffectController({ actionPoints, relicIds: ["relic_fire_scroll", "relic_old_shield", "relic_heavy_greatsword"] });
+    const effects = new CombatApEffectController({
+      actionPoints,
+      relicIds: ["relic_fire_scroll", "relic_old_shield", "relic_heavy_greatsword"],
+    });
     expect(effects.resolveSkillCost(skill({ category: "special" }))).toBe(3);
     expect(effects.resolveSkillCost(skill({ category: "guard", kind: "defense" }))).toBe(3);
     expect(effects.resolveSkillCost(skill({ name: "휘두르기", command: "휘두르기" }))).toBe(3);
@@ -63,20 +81,15 @@ describe("CombatApEffectController", () => {
 
   test("raises and lowers shield amount with flat and ratio relics", () => {
     const actionPoints = new ActionPointResource();
+    expect(new CombatApEffectController({ actionPoints }).resolveShieldAmount(24)).toBe(24);
     expect(
-      new CombatApEffectController({ actionPoints }).resolveShieldAmount(24),
-    ).toBe(24);
-    expect(
-      new CombatApEffectController({ actionPoints, relicIds: ["relic_steel_fragment"] })
-        .resolveShieldAmount(24),
+      new CombatApEffectController({ actionPoints, relicIds: ["relic_steel_fragment"] }).resolveShieldAmount(24),
     ).toBe(32);
     expect(
-      new CombatApEffectController({ actionPoints, relicIds: ["relic_heavy_armor"] })
-        .resolveShieldAmount(24),
+      new CombatApEffectController({ actionPoints, relicIds: ["relic_heavy_armor"] }).resolveShieldAmount(24),
     ).toBe(31);
     expect(
-      new CombatApEffectController({ actionPoints, relicIds: ["relic_berserker_gloves"] })
-        .resolveShieldAmount(24),
+      new CombatApEffectController({ actionPoints, relicIds: ["relic_berserker_gloves"] }).resolveShieldAmount(24),
     ).toBe(19);
     expect(
       new CombatApEffectController({
@@ -84,9 +97,7 @@ describe("CombatApEffectController", () => {
         relicIds: ["relic_steel_fragment", "relic_berserker_gloves"],
       }).resolveShieldAmount(24),
     ).toBe(25);
-    expect(() =>
-      new CombatApEffectController({ actionPoints }).resolveShieldAmount(-1),
-    ).toThrow(RangeError);
+    expect(() => new CombatApEffectController({ actionPoints }).resolveShieldAmount(-1)).toThrow(RangeError);
   });
 
   test("the typo correction charm boosts the next shield twice per combat", () => {
@@ -149,10 +160,37 @@ describe("CombatApEffectController", () => {
 
   test("magic/special delay relics restore AP and delete key triggers once", () => {
     const actionPoints = new ActionPointResource({ initialAp: 0 });
-    const effects = new CombatApEffectController({ actionPoints, relicIds: ["relic_frost_scroll", "relic_silence_scroll", "relic_delete_key"] });
+    const effects = new CombatApEffectController({
+      actionPoints,
+      relicIds: ["relic_frost_scroll", "relic_silence_scroll", "relic_delete_key"],
+    });
     const specialMagic = skill({ category: "special", tags: ["magic", "special"] });
     expect(effects.onSkillImpact(specialMagic)).toBe(3);
     expect(effects.onSkillImpact(specialMagic)).toBe(2);
     expect(actionPoints.snapshot.currentAp).toBe(5);
+  });
+
+  test("implements one-shot typo protection and follow-up damage relics", () => {
+    const actionPoints = new ActionPointResource();
+    const effects = new CombatApEffectController({
+      actionPoints,
+      relicIds: ["relic_blank_space", "relic_editor_seal", "relic_whetstone"],
+    });
+    expect(effects.onCommandFailed()).toBe(true);
+    expect(effects.onCommandFailed()).toBe(false);
+    expect(effects.resolveSkillDamageMultiplier(skill())).toBeCloseTo(1.2);
+    effects.onSkillStarted(skill(), 1);
+    expect(effects.resolveSkillDamageMultiplier(skill())).toBeCloseTo(1.416);
+  });
+
+  test("implements shield absorption AP, reflection, and incoming protection", () => {
+    const actionPoints = new ActionPointResource({ initialAp: 0 });
+    const effects = new CombatApEffectController({
+      actionPoints,
+      relicIds: ["relic_veteran_shield", "relic_mirror_shield", "relic_prophets_eye"],
+    });
+    expect(effects.resolveIncomingDamageMultiplier(100, 100)).toBe(0.75);
+    expect(effects.onShieldAbsorbed(10, true)).toBe(3);
+    expect(actionPoints.snapshot.currentAp).toBe(1);
   });
 });

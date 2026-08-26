@@ -9,9 +9,21 @@ import {
   getRelicIconTextureKey,
 } from "../src/game/assets/asset-catalog";
 import { EQUIPMENT_ICON_ASSETS } from "../src/game/assets/equipment-icon-assets";
+import { RING_ICON_ASSETS, getRingIconTextureKey } from "../src/game/assets/ring-icon-assets";
+import { RING_CONFIGS } from "@typing-roguelike/shared";
 import { PLAYER_WEAPON_IMAGE_ASSETS } from "../src/game/assets/player-visual-assets";
 
 describe("relic icon asset catalog", () => {
+  test("maps every configured ring to a bundled icon", async () => {
+    expect(RING_ICON_ASSETS).toHaveLength(RING_CONFIGS.length);
+    expect(new Set(RING_ICON_ASSETS.map((asset) => asset.key)).size).toBe(RING_CONFIGS.length);
+    for (const ring of RING_CONFIGS) {
+      const asset = RING_ICON_ASSETS.find((candidate) => candidate.key === getRingIconTextureKey(ring.id));
+      expect(asset).toBeDefined();
+      expect(await Bun.file(`${import.meta.dir}/../public${asset?.path}`).exists()).toBe(true);
+    }
+  });
+
   test("maps every configured relic to an existing 96px runtime icon", async () => {
     expect(RELIC_ICON_ASSETS).toHaveLength(RELIC_CONFIGS.length);
     expect(new Set(RELIC_ICON_ASSETS.map((asset) => asset.key)).size).toBe(RELIC_CONFIGS.length);
@@ -34,6 +46,7 @@ describe("relic icon asset catalog", () => {
   test("includes every image catalog exactly once in the runtime preload contract", async () => {
     expect(RUNTIME_IMAGE_ASSETS).toHaveLength(
       RELIC_ICON_ASSETS.length +
+        RING_ICON_ASSETS.length +
         EQUIPMENT_ICON_ASSETS.length +
         COMBAT_IMAGE_ASSETS.length +
         SCENE_BACKGROUND_ASSETS.length,
@@ -42,6 +55,7 @@ describe("relic icon asset catalog", () => {
     expect(RUNTIME_IMAGE_ASSETS).toEqual(
       expect.arrayContaining([
         ...RELIC_ICON_ASSETS,
+        ...RING_ICON_ASSETS,
         ...EQUIPMENT_ICON_ASSETS,
         ...COMBAT_IMAGE_ASSETS,
         ...SCENE_BACKGROUND_ASSETS,

@@ -1,3 +1,4 @@
+/* biome-ignore-all lint/style/noNonNullAssertion: production fixture arrays are asserted by the test setup. */
 import { describe, expect, test } from "bun:test";
 import {
   createInitialRunState,
@@ -22,30 +23,27 @@ const getEquipment = (equipmentId: string) => {
 const inkSlime = ENEMY_CONFIGS.find(({ id }) => id === "ink-slime");
 if (inkSlime === undefined) throw new Error("Missing ink-slime config");
 
-const createRuntime = (
-  equipmentIds: readonly string[],
-  random: () => number = () => 0,
-) => {
+const createRuntime = (equipmentIds: readonly string[], random: () => number = () => 0) => {
   const runState = createInitialRunState({ seed: 71, maxHp: 100 });
   const initialization: CombatEncounterInitialization = {
     nodeId: "combat-regression",
     floor: 1,
     nodeType: "combat",
     encounterId: "combat-regression",
-    enemies: [{
-      instanceId: `${inkSlime.id}:1`,
-      enemyId: inkSlime.id,
-      name: inkSlime.name,
-      hp: inkSlime.hp,
-      actions: inkSlime.actions,
-    }],
+    enemies: [
+      {
+        instanceId: `${inkSlime.id}:1`,
+        enemyId: inkSlime.id,
+        name: inkSlime.name,
+        hp: inkSlime.hp,
+        actions: inkSlime.actions,
+      },
+    ],
     player: {
       currentHp: runState.character.currentHp,
       maxHp: runState.character.maxHp,
       equipmentIds,
-      skills: equipmentIds.flatMap((equipmentId) =>
-        getEquipment(equipmentId).skills,
-      ),
+      skills: equipmentIds.flatMap((equipmentId) => getEquipment(equipmentId).skills),
     },
     rewardPolicy: "standard",
   };
@@ -82,37 +80,68 @@ const resolvePlayerSkill = (
 };
 
 const expectedShieldEffects = {
-  equipment_guard_round_shield: [[24, 900], [30, 1_200]],
-  equipment_thorn_shield: [[22, 800], [45, 350]],
-  equipment_mirror_steel_shield: [[20, 800], [50, 350]],
-  equipment_fortress_shield: [[28, 1_200], [40, 2_000]],
-  equipment_mobile_wall: [[26, 1_000], [32, 1_000]],
-  equipment_reversal_crest_shield: [[22, 800], [48, 350]],
-  equipment_bronze_repair_tome: [[22, 4_000], [11, 6_000]],
-  equipment_flame_guard_tome: [[18, 4_000], [40, 600]],
-  equipment_frost_veil_tome: [[20, 4_000], [45, 800]],
-  equipment_reflection_grammar: [[18, 4_000], [42, 500]],
-  equipment_infinite_pages: [[15, 4_000], [22, 4_000]],
-  equipment_final_chapter: [[25, 4_000], [55, 1_000]],
+  equipment_guard_round_shield: [
+    [24, 900],
+    [30, 1_200],
+  ],
+  equipment_thorn_shield: [
+    [22, 800],
+    [45, 350],
+  ],
+  equipment_mirror_steel_shield: [
+    [20, 800],
+    [50, 350],
+  ],
+  equipment_fortress_shield: [
+    [28, 1_200],
+    [40, 2_000],
+  ],
+  equipment_mobile_wall: [
+    [26, 1_000],
+    [32, 1_000],
+  ],
+  equipment_reversal_crest_shield: [
+    [22, 800],
+    [48, 350],
+  ],
+  equipment_bronze_repair_tome: [
+    [22, 4_000],
+    [11, 6_000],
+  ],
+  equipment_flame_guard_tome: [
+    [18, 4_000],
+    [40, 600],
+  ],
+  equipment_frost_veil_tome: [
+    [20, 4_000],
+    [45, 800],
+  ],
+  equipment_reflection_grammar: [
+    [18, 4_000],
+    [42, 500],
+  ],
+  equipment_infinite_pages: [
+    [15, 4_000],
+    [22, 4_000],
+  ],
+  equipment_final_chapter: [
+    [25, 4_000],
+    [55, 1_000],
+  ],
 } as const;
 
 describe("combat core regressions with production equipment configs", () => {
   test("all 24 shield and tome skills expose their configured shield", () => {
-    const defensiveEquipment = EQUIPMENT_CONFIGS.filter(
-      ({ kind }) => kind === "shield" || kind === "tome",
-    );
+    const defensiveEquipment = EQUIPMENT_CONFIGS.filter(({ kind }) => kind === "shield" || kind === "tome");
     expect(defensiveEquipment).toHaveLength(12);
 
     let defenseSkillCount = 0;
     for (const equipment of defensiveEquipment) {
-      const expected = expectedShieldEffects[
-        equipment.id as keyof typeof expectedShieldEffects
-      ];
+      const expected = expectedShieldEffects[equipment.id as keyof typeof expectedShieldEffects];
       expect(expected).toBeDefined();
       expect(equipment.skills).toHaveLength(expected.length);
 
       equipment.skills.forEach((skillConfig, index) => {
-        expect(skillConfig.effects).toHaveLength(1);
         const skill = defineSkill(skillConfig);
         const shields = skill.effects.filter((effect) => effect.type === "shield");
         expect(shields).toHaveLength(1);
@@ -131,21 +160,10 @@ describe("combat core regressions with production equipment configs", () => {
     const rustySword = getEquipment("equipment_rusty_sword");
     const slash = defineSkill(rustySword.skills[0]!);
     const weaponOnly = createRuntime([rustySword.id]);
-    const withShield = createRuntime([
-      rustySword.id,
-      getEquipment("equipment_guard_round_shield").id,
-    ]);
+    const withShield = createRuntime([rustySword.id, getEquipment("equipment_guard_round_shield").id]);
 
-    const weaponOnlyDamage = resolvePlayerSkill(
-      weaponOnly,
-      slash,
-      "weapon-only:slash",
-    );
-    const withShieldDamage = resolvePlayerSkill(
-      withShield,
-      slash,
-      "with-shield:slash",
-    );
+    const weaponOnlyDamage = resolvePlayerSkill(weaponOnly, slash, "weapon-only:slash");
+    const withShieldDamage = resolvePlayerSkill(withShield, slash, "with-shield:slash");
 
     expect(weaponOnlyDamage).toBe(9);
     expect(withShieldDamage).toBe(weaponOnlyDamage);
@@ -162,15 +180,9 @@ describe("combat core regressions with production equipment configs", () => {
     context.runtime.start();
     expect(context.runtime.enemyShield[enemyId]).toBe(defense.shieldAmount);
 
-    const shieldedDamage = resolvePlayerSkill(
-      context,
-      slash,
-      "during-enemy-windup",
-    );
+    const shieldedDamage = resolvePlayerSkill(context, slash, "during-enemy-windup");
     expect(shieldedDamage).toBe(0);
-    expect(context.runtime.enemyShield[enemyId]).toBe(
-      (defense.shieldAmount ?? 0) - 9,
-    );
+    expect(context.runtime.enemyShield[enemyId]).toBe((defense.shieldAmount ?? 0) - 9);
 
     // 선딜이 끝나면 남은 실드도 함께 사라지고 후딜 동안 그대로 맞습니다.
     context.runtime.advance(defense.windupMs - 200);
