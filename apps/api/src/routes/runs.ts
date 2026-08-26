@@ -1,12 +1,17 @@
 import { Router } from "express";
-import type { CheckpointRequest, CompleteRunRequest } from "@typing-roguelike/shared";
+import type {
+  CheckpointRequest,
+  CompleteRunRequest,
+  CreateRunRequest,
+} from "@typing-roguelike/shared";
 import { completeRun, createRun, getActiveRun, saveCheckpoint } from "../services/run-service.ts";
 
 export const runsRouter: Router = Router();
 
-runsRouter.post("/", (_request, response) => {
+runsRouter.post("/", (request, response) => {
   try {
-    response.status(201).json(createRun(response.locals.anonymousPlayerId));
+    const body = request.body as CreateRunRequest | undefined;
+    response.status(201).json(createRun(response.locals.anonymousPlayerId, body?.seed));
   } catch (error) {
     if (error instanceof Error && error.message === "ACTIVE_RUN_EXISTS") {
       response.status(409).json({ error: "active_run_exists" });
