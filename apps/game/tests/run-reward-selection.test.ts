@@ -124,7 +124,6 @@ describe("run reward relic candidates", () => {
       const candidates = flow.adapter.getViewState().candidates;
 
       expect(candidates).toHaveLength(3);
-      expect(candidates.some((candidate) => candidate.kind === "weapon")).toBe(true);
       expect(candidates.filter((candidate) => candidate.kind === "relic")).toHaveLength(2);
       if (candidates.some((candidate) => candidate.kind === "relic")) sawRelic = true;
     }

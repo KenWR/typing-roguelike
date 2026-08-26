@@ -333,11 +333,16 @@ export class CombatFoundationScene extends Phaser.Scene {
       (result) => {
         if (result.started) {
           this.apEffects.onSkillStarted(result.skill, result.combo.count);
-          this.playerCombatRuntime?.registerAction(result.actionId, result.skill);
+          this.playerCombatRuntime?.registerAction(
+            result.actionId,
+            result.skill,
+            result.combo.multiplier,
+          );
           this.playPlayerAttackVisual(primaryWeaponId, result.skill);
           if (result.skill.kind === "defense") {
             this.feedback?.trigger("guard");
           }
+          this.updateComboDisplay(result.combo);
           this.commandHud.showSkillStarted();
         }
         this.combatHud.update({ ap: this.actionPoints.snapshot.currentAp });
@@ -380,6 +385,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     if (playerUpdate === undefined) {
       const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
       this.enemyAttackGauge.update(enemyUpdate.snapshot);
+      this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
       this.updateEnemyVisuals(
         Object.fromEntries(this.displayedEnemyHp),
         safeDelta,
@@ -389,6 +395,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     }
 
     this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);
+    this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
     this.combatHud.update({
       hp: playerUpdate.playerHp,
       ap: playerUpdate.playerAp,
@@ -498,6 +505,7 @@ export class CombatFoundationScene extends Phaser.Scene {
   /** 지정한 적에게만 조준 테두리를 보여 주고 나머지는 살짝 흐리게 둡니다. */
   private refreshTargetPresentation(): void {
     const targetId = this.targeting?.targetId;
+    this.enemyAttackGauge?.setTargetedEnemy(targetId);
     for (const [enemyId, marker] of this.enemyTargetMarkers) {
       const alive = (this.displayedEnemyHp.get(enemyId) ?? 0) > 0;
       marker.setVisible(alive && enemyId === targetId);

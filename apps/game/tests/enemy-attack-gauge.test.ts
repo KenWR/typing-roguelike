@@ -71,6 +71,23 @@ describe("enemy attack gauge state", () => {
     expect(state.attacks).toHaveLength(2);
   });
 
+  test("marks the telegraph belonging to the selected enemy", () => {
+    const timeline = new EnemyAttackTimeline();
+    timeline.startAttack(createAttack());
+    timeline.startAttack({
+      ...createAttack(),
+      timelineId: "bat-cry-1",
+      enemyId: "reverse-bat",
+    });
+
+    const state = createEnemyAttackGaugeState(
+      timeline.advance(100).snapshot,
+      "reverse-bat",
+    );
+
+    expect(state.attacks.map(({ targeted }) => targeted)).toEqual([false, true]);
+  });
+
   test("keeps recovery visible but removes resolved attacks immediately", () => {
     const timeline = new EnemyAttackTimeline();
     timeline.startAttack({
