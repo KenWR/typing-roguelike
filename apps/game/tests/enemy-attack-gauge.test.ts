@@ -4,6 +4,7 @@ import { ENEMY_HEALTH_BAR_TRACK_WIDTH } from "../src/game/combat/enemy-health-ba
 import {
   createEnemyAttackGaugeState,
   ENEMY_ATTACK_GAUGE_TRACK_WIDTH,
+  ENEMY_ATTACK_GAUGE_VISIBLE,
   getEnemyAttackTypePresentation,
 } from "../src/game/hud/enemy-attack-gauge";
 
@@ -19,6 +20,10 @@ const createAttack = () => ({
 });
 
 describe("enemy attack gauge state", () => {
+  test("keeps the legacy global telegraph overlay hidden", () => {
+    expect(ENEMY_ATTACK_GAUGE_VISIBLE).toBe(false);
+  });
+
   test("uses the enemy health bar track width", () => {
     expect(ENEMY_ATTACK_GAUGE_TRACK_WIDTH).toBe(ENEMY_HEALTH_BAR_TRACK_WIDTH);
   });
@@ -58,9 +63,7 @@ describe("enemy attack gauge state", () => {
       recoveryMs: 100,
     });
 
-    const state = createEnemyAttackGaugeState(
-      timeline.advance(100).snapshot,
-    );
+    const state = createEnemyAttackGaugeState(timeline.advance(100).snapshot);
 
     expect(state.attacks).toMatchObject([
       {
@@ -86,10 +89,7 @@ describe("enemy attack gauge state", () => {
       enemyId: "reverse-bat",
     });
 
-    const state = createEnemyAttackGaugeState(
-      timeline.advance(100).snapshot,
-      "reverse-bat",
-    );
+    const state = createEnemyAttackGaugeState(timeline.advance(100).snapshot, "reverse-bat");
 
     expect(state.attacks.map(({ targeted }) => targeted)).toEqual([false, true]);
   });
@@ -103,9 +103,7 @@ describe("enemy attack gauge state", () => {
       recoveryMs: 200,
     });
 
-    const recoveryState = createEnemyAttackGaugeState(
-      timeline.advance(100).snapshot,
-    );
+    const recoveryState = createEnemyAttackGaugeState(timeline.advance(100).snapshot);
     const resolvedTimelineSnapshot = timeline.advance(200).snapshot;
     const resolvedState = createEnemyAttackGaugeState(resolvedTimelineSnapshot);
 
