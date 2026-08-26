@@ -42,7 +42,6 @@ export class CommandInputBuffer {
   private committedInput = "";
   private status: CommandInputStatus = "idle";
   private completionEmitted = false;
-  private completedRawInput: string | null = null;
   private boundEnterResetElement: HTMLInputElement | null = null;
   private readonly completedListeners = new Set<CommandCompletedListener>();
   private readonly statusChangedListeners = new Set<CommandStatusChangedListener>();
@@ -98,7 +97,6 @@ export class CommandInputBuffer {
 
     if (this.status === "complete" && !this.completionEmitted) {
       this.completionEmitted = true;
-      this.completedRawInput = rawInput;
       this.emitCompleted();
     }
 
@@ -110,7 +108,6 @@ export class CommandInputBuffer {
     this.committedInput = "";
     this.command = this.commands[0]!;
     this.completionEmitted = false;
-    this.completedRawInput = null;
     this.updateStatus("idle");
     return this.snapshot;
   }
@@ -150,27 +147,8 @@ export class CommandInputBuffer {
   }
 
   private prepareInputForNextCycle(rawInput: string): string {
-    if (this.completedRawInput === null) {
-      return rawInput;
-    }
-
-    if (this.completionEmitted && rawInput === this.completedRawInput) {
-      return this.input;
-    }
-
-    if (rawInput.startsWith(this.completedRawInput)) {
-      if (this.completionEmitted) {
-        this.input = "";
-        this.committedInput = "";
-        this.completionEmitted = false;
-      }
-      return rawInput.slice(this.completedRawInput.length);
-    }
-
-    this.input = "";
-    this.committedInput = "";
-    this.completionEmitted = false;
-    this.completedRawInput = null;
+    // A command cycle ends only when the user presses Enter. Keep the raw DOM
+    // value intact so long input (including spaces) is never silently dropped.
     return rawInput;
   }
 

@@ -25,7 +25,7 @@ describe("CommandInputRecoveryController", () => {
     });
   });
 
-  test("distinguishes incorrect input and resets the active buffer", () => {
+  test("keeps incorrect input in the buffer until it is explicitly reset", () => {
     const controller = new CommandInputRecoveryController(
       new CommandInputBuffer("방패들기"),
     );
@@ -40,10 +40,10 @@ describe("CommandInputRecoveryController", () => {
       matchedLength: 2,
     });
     expect(result.snapshot).toMatchObject({
-      input: "",
-      committedInput: "",
-      status: "idle",
-      matchedLength: 0,
+      input: "방패돌",
+      committedInput: "방패돌",
+      status: "incorrect",
+      matchedLength: 2,
     });
   });
 
@@ -53,6 +53,7 @@ describe("CommandInputRecoveryController", () => {
     );
 
     expect(controller.updateInput("휘둘").outcome).toBe("incorrect");
+    controller.reset();
 
     const recovered = controller.updateInput("휘두르기");
     expect(recovered).toMatchObject({
@@ -63,7 +64,7 @@ describe("CommandInputRecoveryController", () => {
     expect(recovered.snapshot.status).toBe("complete");
   });
 
-  test("clears the DOM input value after a mistake so typing can resume", () => {
+  test("keeps the DOM input value after a mistake until it is reset", () => {
     const controller = new CommandInputRecoveryController(
       new CommandInputBuffer("휘두르기"),
     );
@@ -71,8 +72,10 @@ describe("CommandInputRecoveryController", () => {
 
     const failed = updateCommandInputElement(controller, input);
     expect(failed.outcome).toBe("incorrect");
-    expect(input.value).toBe("");
+    expect(input.value).toBe("휘둘");
 
+    input.value = "";
+    controller.reset();
     input.value = "휘두르기";
     expect(updateCommandInputElement(controller, input).outcome).toBe("complete");
   });

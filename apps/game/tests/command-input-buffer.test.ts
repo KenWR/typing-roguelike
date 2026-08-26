@@ -69,23 +69,27 @@ describe("CommandInputBuffer", () => {
     expect(completed).toEqual(["휘두르기", "휘두르기"]);
   });
 
-  test("starts a fresh cycle when the hidden input appends another command", () => {
+  test("keeps appended input until the user explicitly resets the buffer", () => {
     const buffer = new CommandInputBuffer("베기");
     const completed: string[] = [];
     buffer.onCompleted(({ input }) => completed.push(input));
 
     expect(buffer.updateInput("베기").status).toBe("complete");
     expect(buffer.updateInput("베기베")).toMatchObject({
-      input: "베",
-      committedInput: "베",
-      status: "matching",
+      input: "베기베",
+      committedInput: "베기베",
+      status: "incorrect",
     });
-    expect(buffer.updateInput("베기베기").status).toBe("complete");
+    expect(buffer.updateInput("베기베기").status).toBe("incorrect");
 
+    expect(completed).toEqual(["베기"]);
+
+    buffer.reset();
+    expect(buffer.updateInput("베기").status).toBe("complete");
     expect(completed).toEqual(["베기", "베기"]);
   });
 
-  test("allows clearing the DOM value and typing the same command again", () => {
+  test("requires an explicit reset before typing the same command again", () => {
     const buffer = new CommandInputBuffer("찌르기");
     let completionCount = 0;
     buffer.onCompleted(() => {
@@ -93,7 +97,7 @@ describe("CommandInputBuffer", () => {
     });
 
     buffer.updateInput("찌르기");
-    expect(buffer.updateInput("").status).toBe("idle");
+    expect(buffer.reset().status).toBe("idle");
     expect(buffer.updateInput("찌르기").status).toBe("complete");
     expect(completionCount).toBe(2);
   });
