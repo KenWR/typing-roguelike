@@ -34,8 +34,26 @@ const importMetaEnv = (import.meta as ImportMeta & {
   env?: Readonly<Record<string, string | undefined>>;
 }).env;
 
-export const DEFAULT_GAME_API_BASE_URL =
-  importMetaEnv?.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "http://localhost:3000";
+const normalizeApiBaseUrl = (value: string | undefined): string | undefined => {
+  const normalized = value?.trim().replace(/\/+$/, "");
+  return normalized === "" ? undefined : normalized;
+};
+
+export const resolveGameApiBaseUrl = (
+  configuredApiBaseUrl: string | undefined,
+  mode: string | undefined,
+): string => {
+  const configured = normalizeApiBaseUrl(configuredApiBaseUrl);
+  if (configured !== undefined) return configured;
+
+  // Bun tests do not provide import.meta.env.MODE, so undefined keeps their local default.
+  return mode === undefined || mode === "development" ? "http://localhost:3000" : "";
+};
+
+export const DEFAULT_GAME_API_BASE_URL = resolveGameApiBaseUrl(
+  importMetaEnv?.VITE_API_BASE_URL,
+  importMetaEnv?.MODE,
+);
 
 export class RunApiError extends Error {
   constructor(

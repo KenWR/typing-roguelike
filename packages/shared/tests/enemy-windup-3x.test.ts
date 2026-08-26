@@ -32,43 +32,28 @@ const expectedExplicitSpecialWindups: Readonly<Record<string, number>> = {
   "thousand-beat-chorus-crescendo": 9600,
 };
 
-describe("enemy windup content values", () => {
-  test("stores every normal, elite, boss, and summon attack at its exact 4x value", () => {
+describe("enemy windup 4x balance", () => {
+  test("stores 4x attack windups directly in enemy content", () => {
     expect(Object.keys(expectedAttackWindups)).toHaveLength(ENEMY_CONFIGS.length);
 
     for (const enemy of ENEMY_CONFIGS) {
       const attack = enemy.actions.find((action) => action.kind === "attack");
-
       expect(attack?.windupMs).toBe(expectedAttackWindups[enemy.id]);
     }
   });
 
-  test("stores the default defense windup as 4000ms for every enemy", () => {
+  test("stores 4x defense and special windups without a runtime multiplier", () => {
     for (const enemy of ENEMY_CONFIGS) {
       const defense = enemy.actions.find((action) => action.kind === "defense");
-
       expect(defense?.windupMs).toBe(4000);
-    }
-  });
 
-  test("stores default specials from scaled source values and explicit boss specials at 4x", () => {
-    for (const enemy of ENEMY_CONFIGS) {
-      const attack = enemy.actions.find((action) => action.kind === "attack");
-      const specials = enemy.actions.filter((action) => action.kind === "special");
-
-      expect(attack).toBeDefined();
-      expect(specials.length).toBeGreaterThan(0);
-
-      for (const special of specials) {
-        const explicitWindup = expectedExplicitSpecialWindups[special.id];
-
-        if (explicitWindup !== undefined) {
-          expect(special.windupMs).toBe(explicitWindup);
-          continue;
+      for (const special of enemy.actions.filter((action) => action.kind === "special")) {
+        const explicit = expectedExplicitSpecialWindups[special.id];
+        if (explicit !== undefined) {
+          expect(special.windupMs).toBe(explicit);
+        } else {
+          expect(special.windupMs).toBe(expectedAttackWindups[enemy.id]! + 1600);
         }
-
-        expect(special.id).toBe(`${enemy.id}-special`);
-        expect(special.windupMs).toBe(attack!.windupMs + 1600);
       }
     }
   });

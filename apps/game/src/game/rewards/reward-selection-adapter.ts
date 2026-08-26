@@ -1,3 +1,5 @@
+import { playRewardPickupSound } from "../audio/runtime-audio";
+import { getRelicIconTextureKey } from "../assets/asset-catalog";
 import {
   continueRewardSelection,
   createRewardSelectionViewState,
@@ -26,24 +28,15 @@ export type CreateRewardSelectionAdapterOptions<TRunState> = Readonly<{
   onContinue?: (runState: TRunState, reward: RewardCandidate) => void;
 }>;
 
-export function createRewardSelectionAdapter<TRunState>(
-  options: CreateRewardSelectionAdapterOptions<TRunState>,
-): RewardSelectionAdapter<TRunState> {
+export function createRewardSelectionAdapter<TRunState>(options: CreateRewardSelectionAdapterOptions<TRunState>): RewardSelectionAdapter<TRunState> {
   let viewState = options.initialViewState;
   let runState = options.initialRunState;
 
   const getSelectedReward = (): RewardCandidate => {
     const selectedRewardId = viewState.selectedRewardId;
-    if (selectedRewardId === null) {
-      throw new Error("Select a reward before continuing.");
-    }
-
-    const reward = viewState.candidates.find(
-      (candidate) => candidate.id === selectedRewardId,
-    );
-    if (reward === undefined) {
-      throw new Error(`Reward candidate not found: ${selectedRewardId}`);
-    }
+    if (selectedRewardId === null) throw new Error("Select a reward before continuing.");
+    const reward = viewState.candidates.find((candidate) => candidate.id === selectedRewardId);
+    if (reward === undefined) throw new Error(`Reward candidate not found: ${selectedRewardId}`);
     return reward;
   };
 
@@ -51,7 +44,9 @@ export function createRewardSelectionAdapter<TRunState>(
     getViewState: () => viewState,
     getRunState: () => runState,
     selectReward: (rewardId) => {
+      const previousRewardId = viewState.selectedRewardId;
       viewState = selectReward(viewState, rewardId);
+      if (viewState.selectedRewardId === rewardId && previousRewardId !== rewardId) playRewardPickupSound();
       return viewState;
     },
     continue: () => {
@@ -65,48 +60,15 @@ export function createRewardSelectionAdapter<TRunState>(
 }
 
 export const REWARD_SELECTION_FIXTURE_CANDIDATES: readonly RewardCandidate[] = [
-  {
-    id: "ember-blade",
-    kind: "weapon",
-    name: "잿불 칼날",
-    rarity: "rare",
-    description: "불씨를 품은 칼날이 다음 공격을 가볍게 만듭니다.",
-    effect: "공격력 +14 · 화상 확률 +8%",
-    icon: "✦",
-  },
-  {
-    id: "echo-charm",
-    kind: "relic",
-    name: "메아리 부적",
-    rarity: "uncommon",
-    description: "정확한 입력이 이어질수록 작은 메아리가 쌓입니다.",
-    effect: "콤보 보너스 +12%",
-    icon: "◈",
-  },
-  {
-    id: "quiet-focus",
-    kind: "skill",
-    name: "고요한 집중",
-    rarity: "epic",
-    description: "호흡을 고르고 다음 커맨드에 시간을 더합니다.",
-    effect: "AP 회복 +6 · 입력 시간 +1초",
-    icon: "◎",
-  },
+  { id: "ember-blade", kind: "weapon", name: "잿불 칼날", rarity: "rare", description: "불씨를 품은 칼날이 다음 공격을 가볍게 만듭니다.", effect: "공격력 +14 · 화상 확률 +8%", icon: "✦" },
+  { id: "relic_echo_charm", kind: "relic", name: "메아리의 부적", rarity: "rare", description: "기술 성공 시 일정 확률로 AP를 회복합니다.", effect: "AP +1 · 전투당 최대 2회", icon: "◈", imageKey: getRelicIconTextureKey("relic_echo_charm") },
+  { id: "quiet-focus", kind: "skill", name: "고요한 집중", rarity: "epic", description: "호흡을 고르고 다음 커맨드에 시간을 더합니다.", effect: "AP 회복 +6 · 입력 시간 +1초", icon: "◎" },
 ];
 
 export function createRewardSelectionFixtureAdapter(): RewardSelectionAdapter {
-  const initialRunState: RewardSelectionRunState = {
-    inventory: [],
-    selectedRewardIds: [],
-    nextStep: null,
-  };
-
+  const initialRunState: RewardSelectionRunState = { inventory: [], selectedRewardIds: [], nextStep: null };
   return createRewardSelectionAdapter<RewardSelectionRunState>({
-    initialViewState: createRewardSelectionViewState({
-      candidates: REWARD_SELECTION_FIXTURE_CANDIDATES,
-      round: 3,
-      currency: 120,
-    }),
+    initialViewState: createRewardSelectionViewState({ candidates: REWARD_SELECTION_FIXTURE_CANDIDATES, round: 3, currency: 120 }),
     initialRunState,
     applySelection: (runState, reward) => ({
       ...runState,

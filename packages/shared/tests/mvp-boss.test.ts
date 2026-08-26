@@ -18,7 +18,7 @@ describe("MVP boss content contract", () => {
     }
   });
 
-  test("reuses the correction lesson taught by the red corrector elite", () => {
+  test("reuses the correction lesson while expressing the boss effect as AP drain", () => {
     const elite = ENEMY_BY_ID.get(MVP_BOSS_SPEC.learnedFromEliteId);
     const redEdit = MVP_BOSS_SPEC.enemy.actions.find(
       (action) => action.id === "palimpsest-red-edit",
@@ -30,7 +30,8 @@ describe("MVP boss content contract", () => {
       elite?.actions.some((action) => action.description.includes("교정")),
     ).toBe(true);
     expect(redEdit?.kind).toBe("special");
-    expect(redEdit?.description.includes("교정")).toBe(true);
+    expect(redEdit?.description).toBe("플레이어 AP를 1 감소시킵니다.");
+    expect(redEdit?.apDelta).toBe(-1);
     expect(MVP_BOSS_SPEC.learnedMechanic).toContain("교정");
   });
 

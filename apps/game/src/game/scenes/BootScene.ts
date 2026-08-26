@@ -3,6 +3,7 @@ import {
   RUNTIME_IMAGE_ASSETS,
   TEXTURE_KEYS,
 } from "../assets/asset-catalog";
+import { setRuntimeAudioMuted } from "../audio/runtime-audio";
 import { runRemotePersistence } from "../run/run-remote-persistence";
 import { resolveRunResumeRoute } from "../run/run-resume-routing";
 import { runSession } from "../run/run-session";
@@ -60,7 +61,9 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     const storage = typeof localStorage === "undefined" ? undefined : localStorage;
-    applyMenuSettings(this, loadMenuSettings(storage));
+    const settings = loadMenuSettings(storage);
+    applyMenuSettings(this, settings);
+    setRuntimeAudioMuted(!settings.soundEnabled);
     this.createFoundationTextures();
 
     for (const key of this.failedAssetKeys) {

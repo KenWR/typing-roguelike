@@ -23,7 +23,7 @@ export const unlockFinalBoss = (
 	if (completedNode.round !== MAP_ROUND_COUNT - 1 || completedNode.type !== "rest") {
 		throw new Error("The final boss can only be unlocked after the required rest node.");
 	}
-	if (bossNode.parentKey !== completedNode.key || !completedNode.nextNodeKeys.includes(bossNode.key)) {
+	if (!completedNode.nextNodeKeys.includes(bossNode.key)) {
 		throw new Error("The final boss is not connected to the completed map path.");
 	}
 
@@ -43,8 +43,11 @@ export const completeFinalBossVictory = (
 	if (runState.status !== "active") {
 		throw new Error("Only an active run can be cleared by a boss victory.");
 	}
-	if (runState.map.currentNodeId !== bossNode.key || bossStatus !== "in_progress") {
-		throw new Error("The final boss must be the current in-progress map node.");
+	if (
+		runState.map.currentNodeId !== bossNode.key ||
+		(bossStatus !== "available" && bossStatus !== "in_progress")
+	) {
+		throw new Error("The final boss must be the current in-progress or available map node.");
 	}
 
 	return {
