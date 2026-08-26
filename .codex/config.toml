@@ -1,4 +1,10 @@
 sandbox_mode = "read-only"
+approval_policy = "on-request"
+web_search = "cached"
+
+[features]
+hooks = true
+
 [agents]
 enabled = true
 max_concurrent_threads_per_session = 20
