@@ -226,7 +226,7 @@ export class PlayerCombatRuntime {
       combat: this.route === null ? combatUpdate : this.combat.advance(0),
       enemyTimeline:
         this.route === null
-          ? enemyTimelineUpdate
+          ? { ...enemyTimelineUpdate, snapshot: this.enemyTimeline.snapshot }
           : this.enemyTimeline.advance(0),
       playerHp: this.playerHp,
       playerAp: this.actionPoints.snapshot.currentAp,
@@ -333,8 +333,24 @@ export class PlayerCombatRuntime {
       playWeaponImpactSound(this.initialization.player.equipmentIds);
     }
 
+    if (target.id !== this.player.id && target.snapshot.health.isDead) {
+      this.cancelEnemyAttacks(target.id);
+    }
+
     for (const shieldId of result.brokenShieldIds) {
       this.cancelAttackOnBrokenShield(shieldId);
+    }
+  }
+
+  /** 사망한 적의 진행 중인 행동과 해당 행동의 실드를 즉시 정리합니다. */
+  private cancelEnemyAttacks(enemyId: string): void {
+    const attacks = this.enemyTimeline.snapshot.attacks.filter(
+      (attack) => attack.enemyId === enemyId,
+    );
+
+    for (const attack of attacks) {
+      this.releaseEnemyShield(attack.timelineId);
+      this.enemyTimeline.cancelAttack(attack.timelineId);
     }
   }
 
