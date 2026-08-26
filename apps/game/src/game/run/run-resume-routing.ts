@@ -3,9 +3,7 @@ import {
   type GeneratedMapNode,
   type RunState,
 } from "@typing-roguelike/shared";
-import { initializeCombatEncounter } from "../combat/encounter-initializer";
 import { SCENE_KEYS } from "../scenes/scene-contract";
-import type { RunResumeCheckpoint } from "./run-resume-checkpoint";
 
 export type RunResumeRoute = Readonly<{
   sceneKey:
@@ -18,110 +16,40 @@ export type RunResumeRoute = Readonly<{
   recovered: boolean;
 }>;
 
-const findCurrentNode = (
-  runState: Readonly<RunState>,
-): GeneratedMapNode | undefined => {
-  try {
-    return generateNodeChoices(
-      runState.map.seed,
-      runState.map.currentRound,
-      runState.map.choicePath,
-    ).find((node) => node.key === runState.map.currentNodeId);
-  } catch {
-    return undefined;
-  }
-};
-
-const checkpointMatches = (
-  runState: Readonly<RunState>,
-  node: GeneratedMapNode,
-  checkpoint: RunResumeCheckpoint | null,
-): checkpoint is RunResumeCheckpoint =>
-  checkpoint !== null &&
-  checkpoint.node.key === node.key &&
-  checkpoint.node.round === node.round &&
-  runState.map.nodeStatuses[node.key] === "in_progress";
-
-export const resolveRunResumeRoute = (
-  runState: Readonly<RunState>,
-  checkpoint: RunResumeCheckpoint | null,
-): RunResumeRoute => {
-  const node = findCurrentNode(runState);
-  if (
-    node === undefined ||
-    runState.map.nodeStatuses[runState.map.currentNodeId] !== "in_progress"
-  ) {
-    return {
-      sceneKey: SCENE_KEYS.map,
-      payload: { runState, recoveryAvailable: true },
-      recovered: false,
-    };
-  }
-
-  const matchingCheckpoint = checkpointMatches(runState, node, checkpoint)
-    ? checkpoint
-    : null;
-  const nextNodeIds = matchingCheckpoint?.nextNodeIds ?? node.nextNodeKeys;
-  const commonPayload = {
-    runState,
-    nodeId: node.key,
-    node,
-    nextNodeIds,
-    resumed: true,
-  };
-
-  if (node.type === "shop") {
-    return {
-      sceneKey: SCENE_KEYS.shop,
-      payload: {
-        ...commonPayload,
-        ...(matchingCheckpoint?.shopOffers === undefined
-          ? {}
-          : { offers: matchingCheckpoint.shopOffers }),
-        ...(matchingCheckpoint?.purchasedOfferIds === undefined
-          ? {}
-          : { purchasedOfferIds: matchingCheckpoint.purchasedOfferIds }),
-        ...(matchingCheckpoint?.shopRerollCount === undefined
-          ? {}
-          : { rerollCount: matchingCheckpoint.shopRerollCount }),
-      },
-      recovered: true,
-    };
-  }
-
-  if (node.type === "rest") {
-    return { sceneKey: SCENE_KEYS.rest, payload: commonPayload, recovered: true };
-  }
-
-  if (node.type === "reward") {
-    return {
-      sceneKey: SCENE_KEYS.reward,
-      payload: {
-        ...commonPayload,
-        ...(matchingCheckpoint?.rewardEquipmentIds === undefined
-          ? {}
-          : { equipmentIds: matchingCheckpoint.rewardEquipmentIds }),
-      },
-      recovered: true,
-    };
-  }
-
-  const encounter = initializeCombatEncounter(runState, node);
-  if (!encounter.ok) {
-    return {
-      sceneKey: SCENE_KEYS.map,
-      payload: { runState, recoveryAvailable: true },
-      recovered: false,
-    };
+/**
+ * A node flow is intentionally not resumable. If the browser/process is
+ * closed while a node is active, the run returns to map selection and the
+ * selected node is made available again.
+ */
+const normalizeInterruptedRun = (runState: Readonly<RunState>): RunState => {
+  const currentNodeId = runState.map.currentNodeId;
+  if (runState.map.nodeStatuses[currentNodeId] !== "in_progress") {
+    return runState as RunState;
   }
 
   return {
-    sceneKey: SCENE_KEYS.combat,
-    payload: {
-      ...commonPayload,
-      combat: encounter.combat,
-      ...(node.type === "boss" ? { bossNode: node } : {}),
+    ...runState,
+    map: {
+      ...runState.map,
+      nodeStatuses: {
+        ...runState.map.nodeStatuses,
+        [currentNodeId]: "available",
+      },
     },
-    recovered: true,
+  };
+};
+
+export const resolveRunResumeRoute = (
+  runState: Readonly<RunState>,
+  _checkpoint: unknown,
+): RunResumeRoute => {
+  const normalizedRun = normalizeInterruptedRun(runState);
+  return {
+    sceneKey: SCENE_KEYS.map,
+    payload: {
+      runState: normalizedRun,
+      recoveryAvailable: true,
+    },
+    recovered: normalizedRun !== runState,
   };
 };
