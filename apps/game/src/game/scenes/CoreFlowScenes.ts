@@ -1,6 +1,7 @@
 import Phaser from "phaser";
-import type { RunState } from "@typing-roguelike/shared";
-import { getAvailableNodeIds } from "../run/run-start-map";
+import type { MapNodeStatus, RunState } from "@typing-roguelike/shared";
+import { createMapHudView } from "../run/map-hud-view";
+import { runSession } from "../run/run-session";
 import { LobbyRunStarter } from "./lobby-run-start";
 import {
   DEFAULT_MENU_SETTINGS,
@@ -161,6 +162,13 @@ export class LobbyScene extends EmptyCoreScene {
   }
 }
 
+const NODE_STYLE: Record<MapNodeStatus, { fill: number; label: string }> = {
+  locked: { fill: 0x374151, label: "LOCKED" },
+  available: { fill: 0x2563eb, label: "AVAILABLE" },
+  in_progress: { fill: 0xd97706, label: "IN PROGRESS" },
+  cleared: { fill: 0x15803d, label: "CLEARED" },
+};
+
 export class MapScene extends EmptyCoreScene {
   private runState?: Readonly<RunState>;
 
@@ -174,30 +182,105 @@ export class MapScene extends EmptyCoreScene {
 
   create(): void {
     const { width, height } = this.scale.gameSize;
+    const activeRun = this.runState ?? runSession.get();
     this.add.rectangle(0, 0, width, height, 0x111827).setOrigin(0);
+
+    if (activeRun === null || activeRun === undefined) {
+      this.add
+        .text(width / 2, height / 2, "런 상태를 찾을 수 없습니다.", {
+          fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
+          fontSize: "28px",
+          color: "#fca5a5",
+        })
+        .setOrigin(0.5);
+      return;
+    }
+
+    const view = createMapHudView(activeRun);
+    const fontFamily = 'Galmuri9, "Apple SD Gothic Neo", monospace';
+
     this.add
-      .text(width / 2, height * 0.32, "맵", {
-        fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
-        fontSize: "48px",
+      .text(width / 2, 42, `MAP · ${view.floor}F`, {
+        fontFamily,
+        fontSize: "36px",
         color: "#f9fafb",
       })
       .setOrigin(0.5);
 
-    const availableNodes = this.runState === undefined ? [] : getAvailableNodeIds(this.runState);
+    this.add.rectangle(28, 92, 300, 190, 0x1f2937).setOrigin(0);
+    this.add.text(50, 110, "RUN HUD", { fontFamily, fontSize: "22px", color: "#f9fafb" });
+    this.add.text(50, 150, `HP  ${view.hpText}`, { fontFamily, fontSize: "20px", color: "#f9fafb" });
+    this.add.text(50, 184, `재화  ${view.currencyText}`, { fontFamily, fontSize: "20px", color: "#f9fafb" });
+    this.add.text(50, 218, `장비  ${view.equipmentText}`, {
+      fontFamily,
+      fontSize: "18px",
+      color: "#d1d5db",
+      wordWrap: { width: 250 },
+    });
+
+    this.add.rectangle(width - 328, 92, 300, 190, 0x1f2937).setOrigin(0);
+    this.add.text(width - 306, 110, "NODE STATUS", {
+      fontFamily,
+      fontSize: "22px",
+      color: "#f9fafb",
+    });
+    (Object.keys(NODE_STYLE) as MapNodeStatus[]).forEach((status, index) => {
+      const style = NODE_STYLE[status];
+      const y = 150 + index * 30;
+      this.add.rectangle(width - 296, y + 9, 18, 18, style.fill).setOrigin(0.5);
+      this.add.text(width - 272, y, style.label, {
+        fontFamily,
+        fontSize: "16px",
+        color: "#d1d5db",
+      });
+    });
+
     this.add
-      .text(
-        width / 2,
-        height * 0.5,
-        this.runState === undefined
-          ? "런 상태를 찾을 수 없습니다."
-          : `1층 시작 · 선택 가능한 노드 ${availableNodes.length}개`,
-        {
-          fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
-          fontSize: "24px",
-          color: "#9ca3af",
-        },
-      )
+      .text(width / 2, 118, `현재 위치 · ${view.currentLocation}`, {
+        fontFamily,
+        fontSize: "22px",
+        color: "#f9fafb",
+      })
       .setOrigin(0.5);
+    this.add
+      .text(width / 2, 172, `경로  ${view.pathText}`, {
+        fontFamily,
+        fontSize: "18px",
+        color: "#9ca3af",
+        align: "center",
+        wordWrap: { width: 540 },
+      })
+      .setOrigin(0.5);
+
+    this.add.line(width / 2, 0, 0, 320, 0, 390, 0x6b7280).setOrigin(0.5, 0);
+    const nodeXs = [width / 2 - 240, width / 2, width / 2 + 240];
+    view.nodes.forEach((node, index) => {
+      const x = nodeXs[index] ?? width / 2;
+      const style = NODE_STYLE[node.status];
+      this.add.line(0, 0, width / 2, 390, x, 450, 0x4b5563).setOrigin(0);
+      this.add.rectangle(x, 500, 190, 116, style.fill).setOrigin(0.5);
+      this.add
+        .text(x, 474, node.type.toUpperCase(), {
+          fontFamily,
+          fontSize: "22px",
+          color: "#ffffff",
+        })
+        .setOrigin(0.5);
+      this.add
+        .text(x, 512, style.label, {
+          fontFamily,
+          fontSize: "15px",
+          color: "#e5e7eb",
+        })
+        .setOrigin(0.5);
+      this.add
+        .text(x, 540, node.id, {
+          fontFamily,
+          fontSize: "14px",
+          color: "#d1d5db",
+        })
+        .setOrigin(0.5);
+    });
   }
 }
 
