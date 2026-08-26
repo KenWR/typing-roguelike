@@ -14,10 +14,14 @@ export const createEnemyHealthView = (
   maxHp: number | undefined,
 ): EnemyHealthView => {
   const safeName = name?.trim() ? name : "알 수 없는 적";
-  const safeMaxHp = Number.isFinite(maxHp) ? Math.max(0, maxHp ?? 0) : 0;
-  const safeCurrentHp = Number.isFinite(currentHp)
-    ? clampHp(currentHp ?? 0, safeMaxHp)
-    : 0;
+  const safeMaxHp =
+    typeof maxHp === "number" && Number.isFinite(maxHp)
+      ? Math.max(0, maxHp)
+      : 0;
+  const safeCurrentHp =
+    typeof currentHp === "number" && Number.isFinite(currentHp)
+      ? clampHp(currentHp, safeMaxHp)
+      : 0;
 
   return {
     name: safeName,
