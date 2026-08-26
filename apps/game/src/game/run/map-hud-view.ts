@@ -1,4 +1,5 @@
 import {
+  EQUIPMENT_CONFIGS,
   START_NODE_KEY,
   generateNodeChoices,
   getMapNodeKey,
@@ -22,6 +23,10 @@ export type MapHudView = Readonly<{
   nodes: readonly MapHudNodeView[];
 }>;
 
+const equipmentNameById = new Map(
+  EQUIPMENT_CONFIGS.map((equipment) => [equipment.id, equipment.name] as const),
+);
+
 const equipmentSummary = (runState: Readonly<RunState>): string => {
   const equipped = [
     runState.loadout.weaponId,
@@ -30,7 +35,13 @@ const equipmentSummary = (runState: Readonly<RunState>): string => {
     runState.loadout.ring2Id,
   ].filter((id): id is string => id !== null);
 
-  return equipped.length === 0 ? "장비 없음" : equipped.join(" · ");
+  if (equipped.length === 0) {
+    return "장비 없음";
+  }
+
+  return equipped
+    .map((id) => equipmentNameById.get(id) ?? "알 수 없는 장비")
+    .join(" · ");
 };
 
 const buildPath = (runState: Readonly<RunState>): string[] => {
