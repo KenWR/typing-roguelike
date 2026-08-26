@@ -15,7 +15,7 @@ describe("settlement completion", () => {
     expect(session.get()).not.toBeNull();
   });
 
-  test("confirmation clears temporary run state and returns to lobby once", () => {
+  test("confirmation clears temporary run state and returns to the main screen once", () => {
     const session = new RunSession();
     const run = session.create({ seed: 2 });
     session.end("cleared");
@@ -23,12 +23,12 @@ describe("settlement completion", () => {
 
     const first = controller.confirm();
     expect(first.applied).toBe(true);
-    expect(first.sceneKey).toBe("LobbyScene");
+    expect(first.sceneKey).toBe("StartScene");
     expect(session.get()).toBeNull();
 
     const second = controller.confirm();
     expect(second.applied).toBe(false);
-    expect(second.sceneKey).toBe("LobbyScene");
+    expect(second.sceneKey).toBe("StartScene");
   });
 
   test("a new run can start after settlement confirmation", () => {
