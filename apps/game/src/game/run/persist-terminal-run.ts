@@ -34,12 +34,19 @@ export const persistCombatRunTransition = (
 
   session.replace(route.runState);
   const rewardEquipmentIds = route.payload.rewardEquipmentIds;
+  const rewardRelicIds = route.payload.rewardRelicIds;
+  const validRewardRelicIds = Array.isArray(rewardRelicIds) &&
+    rewardRelicIds.every((id): id is string => typeof id === "string")
+    ? rewardRelicIds
+    : undefined;
   if (
     route.sceneKey === SCENE_KEYS.reward &&
     options.node !== undefined &&
     Array.isArray(rewardEquipmentIds) &&
-    rewardEquipmentIds.length > 0 &&
-    rewardEquipmentIds.every((id) => typeof id === "string")
+    rewardEquipmentIds.length +
+      (validRewardRelicIds?.length ?? 0) > 0 &&
+    rewardEquipmentIds.every((id) => typeof id === "string") &&
+    (validRewardRelicIds === undefined || validRewardRelicIds.length > 0)
   ) {
     session.setCheckpoint({
       version: RUN_RESUME_CHECKPOINT_VERSION,
@@ -47,6 +54,7 @@ export const persistCombatRunTransition = (
       node: options.node,
       nextNodeIds: options.nextNodeIds ?? [],
       rewardEquipmentIds,
+      ...(validRewardRelicIds === undefined ? {} : { rewardRelicIds: validRewardRelicIds }),
     });
   } else {
     session.clearCheckpoint();

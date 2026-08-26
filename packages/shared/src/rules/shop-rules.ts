@@ -284,15 +284,10 @@ export const applyShopPurchase = ({
 		offer,
 		beforeCurrency,
 		afterCurrency,
-		runState: {
-			...runState,
-			runCurrency: afterCurrency,
-			loadout,
-			inventory: {
-				...runState.inventory,
-				itemInstances: [...runState.inventory.itemInstances, offer.itemId],
-			},
-		},
+    runState: {
+      ...acquired,
+      runCurrency: afterCurrency,
+    },
 		purchasedOfferIds: nextPurchasedOfferIds,
 	};
 };

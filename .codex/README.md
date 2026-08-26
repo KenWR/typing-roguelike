@@ -8,6 +8,14 @@
 
 Codex는 저장소 루트의 `.agents/skills`를 자동으로 탐색합니다. 새 스킬이 목록에 보이지 않으면 Codex를 다시 시작합니다.
 
+## Quality and safety
+
+- `hooks.json`은 저장소 상태가 변경된 세션의 `Stop` 시점에 `bun run validate`를 실행합니다.
+- Hook이 실패하면 Codex는 검증 오류를 해결하도록 작업을 이어갑니다.
+- 새 Hook 또는 변경된 Hook은 Codex CLI의 `/hooks`에서 내용을 검토하고 신뢰해야 실행됩니다.
+- `rules/safety.rules`는 파괴적인 Git·파일 삭제를 차단하고 배포와 D1 변경에 승인을 요구합니다.
+- 저장소 기본 권한은 `read-only`, 외부 검색은 `cached`로 유지합니다.
+
 ## Agents
 
 모든 프로젝트 에이전트는 `gpt-5.6-luna`와 `max` reasoning으로 고정합니다.

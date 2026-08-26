@@ -24,3 +24,4 @@ export * from "./content/mvp-elite.ts";
 export * from "./content/encounters.ts";
 export * from "./rules/relic-damage.ts";
 export * from "./rules/equipment-drops.ts";
+export * from "./rules/equipment-loadout.ts";
