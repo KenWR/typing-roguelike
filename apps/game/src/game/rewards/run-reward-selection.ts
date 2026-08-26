@@ -5,6 +5,8 @@ import {
   completeMapNode,
   generateEquipmentRewardCandidates,
   generateRelicRewardCandidates,
+  applyEquipmentAcquisition,
+  type EquipmentRewardTier,
   type EquipmentConfig,
   type RelicConfig,
   type RunState,
@@ -26,7 +28,7 @@ import {
 /** 보상 후보 칸 수. 이 중 일부가 유물로 바뀐다. */
 const REWARD_CANDIDATE_COUNT = 3;
 /** 칸별 유물 등장 확률. 최소 한 칸은 장비로 남긴다. */
-const RELIC_REWARD_CHANCE = 1 / 3;
+const MIN_RELIC_REWARD_COUNT = 2;
 
 const findEquipment = (equipmentId: string): EquipmentConfig => {
   const equipment = EQUIPMENT_CONFIGS.find((candidate) => candidate.id === equipmentId);
@@ -99,24 +101,26 @@ const createSeededRandom = (seed: number): (() => number) => {
 const getRewardCandidates = (
   runState: Readonly<RunState>,
   nodeId: string | undefined,
+  randomOverride?: () => number,
+  equipmentTier: EquipmentRewardTier = "normal",
+  rewardCount = REWARD_CANDIDATE_COUNT,
 ): readonly RewardCandidate[] => {
-  const random = createSeededRandom(
+  if (!Number.isSafeInteger(rewardCount) || rewardCount < 0) {
+    throw new RangeError(`Reward candidate count must be a non-negative integer: ${rewardCount}`);
+  }
+  const candidateCount = Math.max(MIN_RELIC_REWARD_COUNT, rewardCount);
+  const random = randomOverride ?? createSeededRandom(
     runState.map.seed ^ hashString(nodeId ?? runState.map.currentNodeId),
   );
 
-  let relicCount = 0;
-  for (let slot = 0; slot < REWARD_CANDIDATE_COUNT - 1; slot += 1) {
-    if (random() < RELIC_REWARD_CHANCE) relicCount += 1;
-  }
-
   const relics = generateRelicRewardCandidates({
-    count: relicCount,
+    count: MIN_RELIC_REWARD_COUNT,
     random,
     excludedRelicIds: runState.inventory.relicInstances,
   });
   const equipment = generateEquipmentRewardCandidates({
-    tier: "normal",
-    count: REWARD_CANDIDATE_COUNT - relics.length,
+    tier: equipmentTier,
+    count: candidateCount - relics.length,
     random,
     excludedEquipmentIds: runState.inventory.itemInstances,
   });
@@ -146,23 +150,7 @@ export const applyEquipmentReward = (
   equipmentId: string,
 ): RunState => {
   const equipment = findEquipment(equipmentId);
-  const alreadyOwned = runState.inventory.itemInstances.includes(equipment.id);
-
-  return {
-    ...runState,
-    inventory: {
-      ...runState.inventory,
-      itemInstances: alreadyOwned
-        ? [...runState.inventory.itemInstances]
-        : [...runState.inventory.itemInstances, equipment.id],
-    },
-    loadout: {
-      ...runState.loadout,
-      ...(equipment.slot === "weapon"
-        ? { weaponId: equipment.id }
-        : { subweaponId: equipment.id }),
-    },
-  };
+  return applyEquipmentAcquisition(runState, equipment);
 };
 
 export type RunRewardSelectionFlow = Readonly<{
@@ -177,6 +165,9 @@ export type CreateRunRewardSelectionFlowOptions = Readonly<{
   nextNodeIds?: readonly string[];
   equipmentIds?: readonly string[];
   relicIds?: readonly string[];
+  equipmentTier?: EquipmentRewardTier;
+  rewardCount?: number;
+  random?: () => number;
   mapCompletion?: Readonly<{
     nodeId: string;
     nextNodeIds: readonly string[];
@@ -190,6 +181,9 @@ export const createRunRewardSelectionFlow = ({
   nextNodeIds = [],
   equipmentIds,
   relicIds,
+  equipmentTier = "normal",
+  rewardCount = REWARD_CANDIDATE_COUNT,
+  random,
   mapCompletion,
   onContinue,
 }: CreateRunRewardSelectionFlowOptions): RunRewardSelectionFlow => {
@@ -199,7 +193,13 @@ export const createRunRewardSelectionFlow = ({
     ...(relicIds ?? []).map((id) => toRelicRewardCandidate(findRelic(id))),
   ];
   const rewards = equipmentIds === undefined && relicIds === undefined
-    ? getRewardCandidates(runState, completionTarget?.nodeId ?? nodeId)
+    ? getRewardCandidates(
+        runState,
+        completionTarget?.nodeId ?? nodeId,
+        random,
+        equipmentTier,
+        rewardCount,
+      )
     : overrides;
   if (rewards.length === 0) {
     throw new RangeError("At least one reward candidate is required.");

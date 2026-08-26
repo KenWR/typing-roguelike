@@ -28,6 +28,7 @@ describe("runtime audio assets", () => {
     expect(RUNTIME_AUDIO_PATHS.relicPickup).toBe("/assets/audio/유물 줍는 소리.mp3");
     expect(RUNTIME_AUDIO_PATHS.coin).toBe("/assets/audio/동전.mp3");
     expect(RUNTIME_AUDIO_PATHS.walk).toBe("/assets/audio/걷는소리.mp3");
+    expect(RUNTIME_AUDIO_PATHS.comboBreak).toBe("/assets/audio/콤보 깨질때.mp3");
   });
 
   test("applies menu mute and volume to HTMLAudio BGM and SFX", async () => {

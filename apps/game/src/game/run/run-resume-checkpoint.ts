@@ -17,6 +17,7 @@ export type RunResumeCheckpoint = Readonly<{
   node: GeneratedMapNode;
   nextNodeIds: readonly string[];
   rewardEquipmentIds?: readonly string[];
+  rewardRelicIds?: readonly string[];
   shopOffers?: readonly ShopOffer[];
   purchasedOfferIds?: readonly string[];
   shopRerollCount?: number;
@@ -77,6 +78,9 @@ const isRunResumeCheckpoint = (value: unknown): value is RunResumeCheckpoint => 
     value.rewardEquipmentIds !== undefined &&
     !isStringArray(value.rewardEquipmentIds)
   ) {
+    return false;
+  }
+  if (value.rewardRelicIds !== undefined && !isStringArray(value.rewardRelicIds)) {
     return false;
   }
   if (value.shopOffers !== undefined && !isShopOfferArray(value.shopOffers)) {

@@ -74,8 +74,12 @@ describe("combat outcome routing", () => {
     const candidates = adapter.getViewState().candidates;
     expect(candidates).toHaveLength(3);
     expect(result.payload.rewardEquipmentIds).toEqual(
-      candidates.map(({ id }) => id),
+      candidates.filter(({ kind }) => kind === "weapon").map(({ id }) => id),
     );
+    expect(result.payload.rewardRelicIds).toEqual(
+      candidates.filter(({ kind }) => kind === "relic").map(({ id }) => id),
+    );
+    expect(candidates.filter(({ kind }) => kind === "relic")).toHaveLength(2);
     expect(candidates.some(({ id }) => id === ownedEquipmentId)).toBe(false);
 
     const selectedEquipmentId = candidates[0]!.id;
@@ -102,7 +106,7 @@ describe("combat outcome routing", () => {
     expect(result.payload.goldReward).toBe(80);
   });
 
-  test("victory still grants gold when every equipment reward is already owned", () => {
+  test("victory still offers relics when every equipment reward is already owned", () => {
     const runState = createInProgressRun(2);
     const result = finalizeCombatOutcome({
       combat: new CombatState(),
@@ -122,11 +126,13 @@ describe("combat outcome routing", () => {
     });
 
     expect(result.applied).toBe(true);
-    expect(result.sceneKey).toBe("MapScene");
+    expect(result.sceneKey).toBe("RewardSelectionScene");
     expect(result.runState.runCurrency).toBe(20);
     expect(result.payload.goldReward).toBe(20);
     expect(result.runState.map.nodeStatuses["node-1"]).toBe("cleared");
     expect(result.runState.map.nodeStatuses["node-2"]).toBe("available");
+    const adapter = result.payload.adapter as RewardSelectionAdapter<RunState>;
+    expect(adapter.getViewState().candidates.filter(({ kind }) => kind === "relic")).toHaveLength(2);
   });
 
   test("defeat stops combat, ends the run and grants no gold", () => {

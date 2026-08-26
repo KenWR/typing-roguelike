@@ -8,6 +8,7 @@ import {
 	getRelicPrice,
 	ownsRelic,
 } from "./relic-drops.ts";
+import { applyEquipmentAcquisition } from "./equipment-loadout.ts";
 
 export type ShopOfferKind = "equipment" | "relic";
 
@@ -225,29 +226,28 @@ export const applyShopPurchase = ({
 		};
 	}
 
-	const equipment = EQUIPMENT_CONFIGS.find(
-		(candidate) => candidate.id === offer.itemId,
-	);
-	const loadout = equipment === undefined
-		? runState.loadout
-		: equipment.slot === "weapon"
-			? { ...runState.loadout, weaponId: equipment.id }
-			: { ...runState.loadout, subweaponId: equipment.id };
-	return {
+  const equipment = EQUIPMENT_CONFIGS.find(
+    (candidate) => candidate.id === offer.itemId,
+  );
+  const acquired = equipment === undefined
+    ? {
+        ...runState,
+        inventory: {
+          ...runState.inventory,
+          itemInstances: [...runState.inventory.itemInstances, offer.itemId],
+        },
+      }
+    : applyEquipmentAcquisition(runState, equipment);
+  return {
 		applied: true,
 		reason: "purchased",
 		offer,
 		beforeCurrency,
 		afterCurrency,
-		runState: {
-			...runState,
-			runCurrency: afterCurrency,
-			loadout,
-			inventory: {
-				...runState.inventory,
-				itemInstances: [...runState.inventory.itemInstances, offer.itemId],
-			},
-		},
+    runState: {
+      ...acquired,
+      runCurrency: afterCurrency,
+    },
 		purchasedOfferIds: nextPurchasedOfferIds,
 	};
 };

@@ -92,6 +92,10 @@ export class SkillCommandStarter {
 
   get comboSnapshot(): ComboSnapshot { return this.combo.snapshot; }
 
+  breakCombo(reason: Parameters<ComboTracker["breakCombo"]>[0]): ComboSnapshot {
+    return this.combo.breakCombo(reason);
+  }
+
   connect(inputBuffer: CommandInputBuffer, listener: SkillStartListener): () => void {
     const disconnectCompleted = inputBuffer.onCompleted((event) => listener(this.tryStart(event)));
     const disconnectStatus = inputBuffer.onStatusChanged((event) => {
