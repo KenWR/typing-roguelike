@@ -112,13 +112,14 @@ The summary is written with `if: always()` and records each stage as
   automatic rollback. Inspect the URLs and stage outcomes before retrying.
 
 The workflow uses one concurrency group with `cancel-in-progress: false`, so
-an in-progress deployment is not cancelled. GitHub Actions keeps at most one
-pending run per concurrency group: if another validation completes while a run
-is pending, the newer run replaces the older pending run. Production
-deployments therefore intentionally coalesce to the newest validated `main`
-commit rather than forming a lossless queue, and a superseded pending run does
-not get its own deployment summary. The main-SHA check prevents a stale pending
-run from mutating production if `main` advances before that run starts.
+an in-progress deployment is not cancelled. GitHub Actions' default
+`queue: single` behavior keeps at most one pending run per concurrency group: if
+another validation completes while a run is pending, the newer run replaces the
+older pending run. Production deployments therefore intentionally coalesce to
+the newest validated `main` commit rather than forming a lossless queue, and a
+superseded pending run does not get its own deployment summary. The main-SHA
+check prevents a stale pending run from mutating production if `main` advances
+before that run starts.
 
 ## Rollback
 
