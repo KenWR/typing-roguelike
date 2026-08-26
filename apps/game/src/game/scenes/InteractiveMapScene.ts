@@ -1,8 +1,10 @@
-import type { RunState } from "@typing-roguelike/shared";
+import type { GeneratedMapNode, RunState } from "@typing-roguelike/shared";
 import { createMapHudView } from "../run/map-hud-view";
 import { routeMapNodeSelection } from "../run/map-node-routing";
+import { RUN_RESUME_CHECKPOINT_VERSION } from "../run/run-resume-checkpoint";
 import { runSession } from "../run/run-session";
 import { MapScene } from "./CoreFlowScenes";
+import { SCENE_KEYS } from "./scene-contract";
 
 export class InteractiveMapScene extends MapScene {
   private routeRunState?: Readonly<RunState>;
@@ -46,6 +48,20 @@ export class InteractiveMapScene extends MapScene {
         this.input.enabled = false;
         if (runSession.get()?.status === "active") {
           runSession.update(() => route.runState);
+        }
+
+        const selectedNode = route.payload.node as GeneratedMapNode | undefined;
+        if (
+          selectedNode !== undefined &&
+          route.sceneKey !== SCENE_KEYS.map
+        ) {
+          runSession.setCheckpoint({
+            version: RUN_RESUME_CHECKPOINT_VERSION,
+            sceneKey: route.sceneKey,
+            node: selectedNode,
+            nextNodeIds:
+              (route.payload.nextNodeIds as readonly string[] | undefined) ?? [],
+          });
         }
         this.scene.start(route.sceneKey, route.payload);
       });

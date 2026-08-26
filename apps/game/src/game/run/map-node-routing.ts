@@ -52,6 +52,7 @@ export const routeMapNodeSelection = (
       payload: {
         runState: entry.runState,
         nodeId: node.key,
+        node,
         nextNodeIds: [],
         bossNode: node,
         combat: entry.combat,
@@ -60,7 +61,12 @@ export const routeMapNodeSelection = (
   }
 
   const selectedRun: RunState = { ...runState, map: beginMapNode(runState.map, node.key) };
-  const commonPayload = { runState: selectedRun, nodeId: node.key, nextNodeIds: node.nextNodeKeys };
+  const commonPayload = {
+    runState: selectedRun,
+    nodeId: node.key,
+    node,
+    nextNodeIds: node.nextNodeKeys,
+  };
 
   if (node.type === "shop") return { applied: true, runState: selectedRun, sceneKey: SCENE_KEYS.shop, payload: commonPayload };
   if (node.type === "rest") return { applied: true, runState: selectedRun, sceneKey: SCENE_KEYS.rest, payload: commonPayload };

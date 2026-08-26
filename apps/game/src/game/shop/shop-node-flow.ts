@@ -21,12 +21,13 @@ export const createShopNodeFlow = (
   nodeId: string,
   nextNodeIds: readonly string[],
   offers: readonly ShopOffer[] = createShopOffers(),
+  purchasedOfferIds: readonly string[] = [],
 ): ShopNodeFlowState => ({
   runState,
   nodeId,
   nextNodeIds: [...nextNodeIds],
   offers: [...offers],
-  purchasedOfferIds: new Set<string>(),
+  purchasedOfferIds: new Set(purchasedOfferIds),
   completed: false,
 });
 
