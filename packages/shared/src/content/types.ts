@@ -27,7 +27,23 @@ export interface RelicDamageModifier {
   skillCategories?: readonly SkillCategory[];
   condition?: "targetHpHalf" | "enemyCountThree" | "fastInput" | "targetGuarding" | "enemyWindingUp" | "bothHpLow" | "twoHandedWeapon" | "recoveryLong" | "repeatedCharacter" | "floor";
 }
+export type EnemyTier = "normal" | "elite" | "boss" | "summon";
+export type EnemyRole = "pressure" | "defense" | "support" | "disruption" | "execution";
 export type EnemyActionKind = "attack" | "defense" | "special";
+export interface EnemyAnimationRefs {
+  /** 공격 준비 구간에 재생할 애니메이션/모션 키 */
+  windup: string;
+  /** 실제 타격 시점에 재생할 애니메이션/모션 키 */
+  impact?: string;
+  /** 후딜 또는 기본 상태 복귀에 사용할 애니메이션/모션 키 */
+  recovery?: string;
+}
+export interface EnemyRewardConfig {
+  /** 처치 시 보상 선택/드롭 계산에 사용할 가중치 */
+  weight: number;
+  /** 콘텐츠 확장 시 사용할 최소 보상 등급 */
+  minimumRarity?: Rarity;
+}
 export interface EnemyActionConfig {
   id: string;
   kind: EnemyActionKind;
@@ -37,6 +53,17 @@ export interface EnemyActionConfig {
   recoveryMs: number;
   defenseAmount?: number;
   description: string;
+  animation: EnemyAnimationRefs;
 }
-export interface EnemyConfig { id: string; name: string; tier: "normal" | "elite" | "boss" | "summon"; role: "pressure" | "defense" | "support" | "disruption" | "execution"; hp: number; allowedFloors: readonly number[]; actions: readonly EnemyActionConfig[]; }
+export interface EnemyConfig {
+  id: string;
+  name: string;
+  tier: EnemyTier;
+  role: EnemyRole;
+  hp: number;
+  allowedFloors: readonly number[];
+  actions: readonly EnemyActionConfig[];
+  reward: EnemyRewardConfig;
+  assetKey: string;
+}
 export interface EncounterConfig { id: string; floor: number; nodeType: "combat" | "elite" | "boss"; weight: number; members: readonly { enemyId: string; count: number }[]; }
