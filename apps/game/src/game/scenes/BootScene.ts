@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import {
   RUNTIME_IMAGE_ASSETS,
+  RUNTIME_SPRITESHEET_ASSETS,
   TEXTURE_KEYS,
 } from "../assets/asset-catalog";
 import { setRuntimeAudioSettings } from "../audio/runtime-audio";
@@ -56,6 +57,12 @@ export class BootScene extends Phaser.Scene {
 
     for (const asset of RUNTIME_IMAGE_ASSETS) {
       this.load.image(asset.key, asset.path);
+    }
+    for (const asset of RUNTIME_SPRITESHEET_ASSETS) {
+      this.load.spritesheet(asset.key, asset.path, {
+        frameWidth: asset.frameWidth,
+        frameHeight: asset.frameHeight,
+      });
     }
   }
 
