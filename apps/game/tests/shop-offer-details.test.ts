@@ -26,7 +26,7 @@ describe("shop offer hover details", () => {
     expect(details.textureKey).toBe("equipment-icon:equipment_rusty_sword");
   });
 
-  test("keeps equipment without an icon usable", () => {
+  test("returns subweapon image and skill description", () => {
     const details = getShopOfferHoverDetails({
       kind: "equipment",
       itemId: "equipment_clear_crystal_orb",
@@ -34,7 +34,7 @@ describe("shop offer hover details", () => {
 
     expect(details.kindLabel).toBe("장비");
     expect(details.description.length).toBeGreaterThan(0);
-    expect(details.textureKey).toBeUndefined();
+    expect(details.textureKey).toBe("equipment-icon:equipment_clear_crystal_orb");
   });
 
   test("falls back safely for an unknown item", () => {
