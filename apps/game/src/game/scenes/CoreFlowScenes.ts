@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { LobbyRunStarter } from "./lobby-run-start";
 import {
   DEFAULT_MENU_SETTINGS,
   loadMenuSettings,
@@ -112,6 +113,8 @@ export class SettingsScene extends EmptyCoreScene {
 }
 
 export class LobbyScene extends EmptyCoreScene {
+  private readonly runStarter = new LobbyRunStarter();
+
   constructor() {
     super(SCENE_KEYS.lobby);
   }
@@ -120,19 +123,39 @@ export class LobbyScene extends EmptyCoreScene {
     const { width, height } = this.scale.gameSize;
     this.add.rectangle(0, 0, width, height, 0x111827).setOrigin(0);
     this.add
-      .text(width / 2, height * 0.38, "로비", {
+      .text(width / 2, height * 0.3, "로비", {
         fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
         fontSize: "48px",
         color: "#f9fafb",
       })
       .setOrigin(0.5);
     this.add
-      .text(width / 2, height * 0.52, "게임 시작 흐름 연결 완료", {
+      .text(width / 2, height * 0.43, "새 런을 시작할 수 있습니다.", {
         fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
         fontSize: "24px",
         color: "#9ca3af",
       })
       .setOrigin(0.5);
+
+    const startRunButton = createMenuButton(
+      this,
+      width / 2,
+      height * 0.62,
+      "새 런 시작",
+      () => {
+        const runState = this.runStarter.start();
+        if (runState === null) {
+          return;
+        }
+
+        startRunButton.disableInteractive();
+        startRunButton.setText("런 시작 중...");
+        startRunButton.setStyle({ backgroundColor: "#4b5563" });
+
+        const transition = resolveSceneTransition(SCENE_KEYS.map, { runState });
+        this.scene.start(transition.key, transition.payload);
+      },
+    );
   }
 }
 
