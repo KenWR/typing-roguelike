@@ -482,9 +482,10 @@ export class RewardSelectionScene extends Phaser.Scene {
 
     this.hideRewardTooltip();
 
-    const tooltipWidth = 360;
-    const initialTooltipHeight = 184;
     const { width, height } = this.scale.gameSize;
+    const tooltipWidth = Math.min(360, Math.max(220, width - 24));
+    const maxTooltipHeight = Math.max(96, height - 24);
+    const initialTooltipHeight = Math.min(184, maxTooltipHeight);
     const tooltip = this.add.container(0, 0).setDepth(900);
     tooltip.add(
       this.add
@@ -511,7 +512,7 @@ export class RewardSelectionScene extends Phaser.Scene {
       this.add.text(112, 18, candidate.name, {
         ...this.cardNameStyle(),
         fontSize: "18px",
-        wordWrap: { width: 228 },
+        wordWrap: { width: tooltipWidth - 132 },
       }),
     );
     tooltip.add(
@@ -526,18 +527,21 @@ export class RewardSelectionScene extends Phaser.Scene {
       this.add.text(112, 72, candidate.description, {
         ...this.cardDescriptionStyle(),
         fontSize: "12px",
-        wordWrap: { width: 228 },
+        wordWrap: { width: tooltipWidth - 132 },
         lineSpacing: 3,
       }),
     );
-    const detailsText = tooltip.add(
-      this.add.text(18, 142, candidate.details ?? candidate.effect, {
-        ...this.cardEffectStyle(),
-        fontSize: "13px",
-        wordWrap: { width: tooltipWidth - 36 },
-      }),
-    );
-    const tooltipHeight = Math.max(initialTooltipHeight, detailsText.y + detailsText.height + 18);
+    const detailsText = this.add.text(18, 142, candidate.details ?? candidate.effect, {
+      ...this.cardEffectStyle(),
+      fontSize: "13px",
+      wordWrap: { width: tooltipWidth - 36 },
+    });
+    tooltip.add(detailsText);
+    const contentHeight = detailsText.y + detailsText.height + 18;
+    const tooltipHeight = Math.min(maxTooltipHeight, Math.max(initialTooltipHeight, contentHeight));
+    if (contentHeight > maxTooltipHeight) {
+      detailsText.setFixedSize(tooltipWidth - 36, Math.max(1, maxTooltipHeight - detailsText.y - 18));
+    }
     const panel = tooltip.list[0];
     if (panel instanceof Phaser.GameObjects.Rectangle) {
       panel.setSize(tooltipWidth, tooltipHeight);
@@ -555,9 +559,12 @@ export class RewardSelectionScene extends Phaser.Scene {
     tooltipWidth = 360,
     tooltipHeight = 184,
   ): void {
+    const panel = tooltip.list[0];
+    const actualWidth = panel instanceof Phaser.GameObjects.Rectangle ? panel.width : tooltipWidth;
+    const actualHeight = panel instanceof Phaser.GameObjects.Rectangle ? panel.height : tooltipHeight;
     tooltip.setPosition(
-      Math.min(pointer.x + 18, Math.max(12, width - tooltipWidth - 12)),
-      Math.min(pointer.y + 18, Math.max(12, height - tooltipHeight - 12)),
+      Math.min(pointer.x + 18, Math.max(12, width - actualWidth - 12)),
+      Math.min(pointer.y + 18, Math.max(12, height - actualHeight - 12)),
     );
   }
 

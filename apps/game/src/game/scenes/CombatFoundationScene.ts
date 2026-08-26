@@ -206,7 +206,9 @@ export class CombatFoundationScene extends Phaser.Scene {
       placeholder.add(healthBar.container);
       this.enemyHealthBars.set(enemy.instanceId, healthBar);
       const effectHud = new ActorEffectHud(this);
-      effectHud.setPosition(0, -198);
+      // Status icons live above the HP/telegraph region so newly applied
+      // debuffs never cover the enemy's current attack name or target marker.
+      effectHud.setPosition(0, ENEMY_HEALTH_BAR_OFFSET_Y + ENEMY_HEALTH_BAR_REGION_TOP - 34);
       placeholder.add(effectHud.container);
       this.enemyEffectHuds.set(enemy.instanceId, effectHud);
       const marker = this.add

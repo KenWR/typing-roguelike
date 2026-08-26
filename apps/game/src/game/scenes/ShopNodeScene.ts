@@ -317,9 +317,12 @@ export class ShopNodeScene extends Phaser.Scene {
 
     const details = getShopOfferHoverDetails(offer);
     const { width, height } = this.scale.gameSize;
+    const tooltipWidth = Math.min(TOOLTIP_WIDTH, Math.max(220, width - 24));
+    const maxTooltipHeight = Math.max(96, height - 24);
+    const initialTooltipHeight = Math.min(TOOLTIP_MIN_HEIGHT, maxTooltipHeight);
     const tooltip = this.add.container(0, 0).setDepth(900);
     const panel = this.add
-      .rectangle(0, 0, TOOLTIP_WIDTH, TOOLTIP_MIN_HEIGHT, 0x0f172a, 0.98)
+      .rectangle(0, 0, tooltipWidth, initialTooltipHeight, 0x0f172a, 0.98)
       .setOrigin(0)
       .setStrokeStyle(2, 0x64748b);
     tooltip.add(panel);
@@ -359,7 +362,7 @@ export class ShopNodeScene extends Phaser.Scene {
     }
 
     const textX = TOOLTIP_PADDING + TOOLTIP_IMAGE_SIZE + 20;
-    const textWidth = TOOLTIP_WIDTH - textX - TOOLTIP_PADDING;
+    const textWidth = tooltipWidth - textX - TOOLTIP_PADDING;
     const name = this.add.text(textX, 18, details.name, {
       fontFamily: "Galmuri9, monospace",
       fontSize: "20px",
@@ -389,17 +392,21 @@ export class ShopNodeScene extends Phaser.Scene {
     });
     tooltip.add(price);
 
-    const tooltipHeight = Math.max(
-      TOOLTIP_MIN_HEIGHT,
+    const contentHeight = Math.max(
+      initialTooltipHeight,
       description.y + description.height + 18,
       price.y + price.height + 14,
     );
-    panel.setSize(TOOLTIP_WIDTH, tooltipHeight);
+    const tooltipHeight = Math.min(maxTooltipHeight, contentHeight);
+    if (contentHeight > maxTooltipHeight) {
+      description.setFixedSize(textWidth, Math.max(1, maxTooltipHeight - description.y - 18));
+    }
+    panel.setSize(tooltipWidth, tooltipHeight);
 
     const anchorRight = anchor.x + anchor.width;
     const preferredRightX = anchorRight + 16;
-    const preferredLeftX = anchor.x - TOOLTIP_WIDTH - 16;
-    const x = preferredRightX + TOOLTIP_WIDTH <= width - 12 ? preferredRightX : Math.max(12, preferredLeftX);
+    const preferredLeftX = anchor.x - tooltipWidth - 16;
+    const x = preferredRightX + tooltipWidth <= width - 12 ? preferredRightX : Math.max(12, preferredLeftX);
     const y = Math.max(12, Math.min(anchor.y, height - tooltipHeight - 12));
     tooltip.setPosition(x, y);
     this.offerTooltip = tooltip;
