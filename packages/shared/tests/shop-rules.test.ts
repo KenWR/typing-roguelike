@@ -77,6 +77,25 @@ describe("shop rules", () => {
 		expect(duplicate.runState.inventory.itemInstances).toEqual(["sword-a"]);
 	});
 
+	test("rejects purchasing equipment that is already in the inventory", () => {
+		const runState = {
+			...createInitialRunState({ seed: 11 }),
+			runCurrency: 80,
+			inventory: { itemInstances: ["sword-a"], relicInstances: [] },
+		};
+		const offer = { id: "offer-a", equipmentId: "sword-a", price: 35 } as const;
+		const result = applyShopPurchase({ offerId: offer.id, offers: [offer], runState });
+
+		expect(result).toMatchObject({
+			applied: false,
+			reason: "already_owned",
+			beforeCurrency: 80,
+			afterCurrency: 80,
+		});
+		expect(result.runState).toBe(runState);
+		expect(result.runState.inventory.itemInstances).toEqual(["sword-a"]);
+	});
+
 	test("leaves run state unchanged when exiting and rejects invalid input", () => {
 		const runState = createInitialRunState({ seed: 11 });
 		expect(exitShop(runState)).toBe(runState);

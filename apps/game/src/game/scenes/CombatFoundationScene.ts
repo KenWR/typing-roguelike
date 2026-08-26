@@ -5,7 +5,6 @@ import {
   type RunState,
 } from "@typing-roguelike/shared";
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
-import { EnemyCombatRuntime } from "../combat/enemy-combat-runtime";
 import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
 import { ActionPointResource } from "../combat/action-point-resource";
 import { CombatState } from "../combat/combat-state";
@@ -70,7 +69,6 @@ export class CombatFoundationScene extends Phaser.Scene {
   private actionPoints!: ActionPointResource;
   private combat!: CombatState;
   private playerCombatRuntime?: PlayerCombatRuntime;
-  private enemyCombatRuntime?: EnemyCombatRuntime;
   private feedback?: CombatFeedbackController;
   private pauseController?: CombatPauseController;
   private pauseOverlay?: Phaser.GameObjects.Text;
@@ -96,7 +94,6 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.nextNodeIds = data.nextNodeIds ?? [];
     this.bossNode = data.bossNode;
     this.playerCombatRuntime = undefined;
-    this.enemyCombatRuntime = undefined;
     this.feedback = undefined;
     this.transitionStarted = false;
   }
@@ -131,10 +128,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.backgroundLayer.add([this.background, this.overlay]);
 
     this.playerPlaceholder = this.createActorPlaceholder("플레이어", 0x3f7f84);
-    const enemyLabel = initialization.enemies.length === 0
-      ? "적"
-      : initialization.enemies.map((enemy) => enemy.name).join(" / ");
-    this.enemyPlaceholder = this.createActorPlaceholder(enemyLabel, 0x8d4b52);
+    this.enemyPlaceholder = this.createActorPlaceholder(
+      this.createEnemyLabel(initialization),
+      0x8d4b52,
+    );
     this.worldLayer.add([this.playerPlaceholder, this.enemyPlaceholder]);
 
     this.encounterLabel = this.add
@@ -187,15 +184,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.uiLayer.add(this.combatHud.container);
 
     this.enemyAttackTimeline = new EnemyAttackTimeline();
-    if (this.runState !== undefined) {
-      this.enemyCombatRuntime = new EnemyCombatRuntime({
-        combat: this.combat,
-        enemyTimeline: this.enemyAttackTimeline,
-        runState: this.runState as RunState,
-        initialization,
-      });
-      this.enemyCombatRuntime.start();
-    } else {
+    if (this.runState === undefined) {
       for (const enemy of initialization.enemies.slice(0, 2)) {
         const action = enemy.actions[0];
         if (action === undefined) continue;
@@ -243,6 +232,7 @@ export class CombatFoundationScene extends Phaser.Scene {
         nextNodeIds: this.nextNodeIds,
         ...(this.bossNode === undefined ? {} : { bossNode: this.bossNode }),
       });
+      this.playerCombatRuntime.start();
     }
 
     const skillStarter = new SkillCommandStarter({
@@ -287,38 +277,30 @@ export class CombatFoundationScene extends Phaser.Scene {
     const safeDelta = Math.max(0, delta);
     const ap = this.actionPoints.advance(safeDelta);
     this.combatHud.update({ ap: ap.currentAp });
-
+    const previousPlayerHp = this.playerCombatRuntime?.playerHp;
     const playerUpdate = this.playerCombatRuntime?.advance(safeDelta);
-    if (playerUpdate !== undefined) {
-      this.updateEnemyHealth(playerUpdate.enemyHp);
-      this.enemyCombatRuntime?.setEnemyHp(playerUpdate.enemyHp);
+    if (playerUpdate === undefined) {
+      const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
+      this.enemyAttackGauge.update(enemyUpdate.snapshot);
+      return;
     }
 
-    if (playerUpdate?.route !== null && playerUpdate?.route !== undefined) {
-      this.feedback?.trigger("victory");
+    this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);
+    this.combatHud.update({ hp: playerUpdate.playerHp });
+    this.updateEnemyHealth(playerUpdate.enemyHp);
+
+    if (
+      previousPlayerHp !== undefined &&
+      playerUpdate.playerHp < previousPlayerHp
+    ) {
+      this.feedback?.trigger("player-hit");
+    }
+
+    if (playerUpdate.route !== null) {
+      const outcome = this.combat.snapshot.status;
+      this.feedback?.trigger(outcome === "victory" ? "victory" : "defeat");
       this.startCombatRoute(playerUpdate.route.sceneKey, playerUpdate.route.payload);
-      return;
     }
-
-    if (this.enemyCombatRuntime !== undefined) {
-      const playerHpBefore = this.enemyCombatRuntime.playerHp;
-      const enemyUpdate = this.enemyCombatRuntime.advance(safeDelta);
-      this.enemyAttackGauge.update(enemyUpdate.timeline);
-      this.combatHud.update({ hp: enemyUpdate.playerHp });
-      this.playerCombatRuntime?.setRunState(enemyUpdate.runState);
-
-      if (enemyUpdate.playerHp < playerHpBefore) {
-        this.feedback?.trigger("player-hit");
-      }
-      if (enemyUpdate.route !== null) {
-        this.feedback?.trigger("defeat");
-        this.startCombatRoute(enemyUpdate.route.sceneKey, enemyUpdate.route.payload);
-      }
-      return;
-    }
-
-    const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
-    this.enemyAttackGauge.update(enemyUpdate.snapshot);
   }
 
   private updateEnemyHealth(enemyHp: Readonly<Record<string, number>>): void {
@@ -332,6 +314,7 @@ export class CombatFoundationScene extends Phaser.Scene {
 
   private startCombatRoute(sceneKey: string, payload: Readonly<Record<string, unknown>>): void {
     this.transitionStarted = true;
+    this.releaseCommandInputElement();
     const transition = resolveSceneTransition(sceneKey, payload);
     this.scene.start(transition.key, transition.payload);
   }
@@ -491,6 +474,14 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandStatusCleanup?.();
     this.commandStatusCleanup = undefined;
     this.isComposing = false;
+  }
+
+  private createEnemyLabel(initialization: CombatEncounterInitialization): string {
+    return initialization.enemies.length === 0
+      ? "적"
+      : initialization.enemies
+          .map((enemy) => `${enemy.name} HP ${enemy.hp}/${enemy.hp}`)
+          .join(" / ");
   }
 
   private createActorPlaceholder(

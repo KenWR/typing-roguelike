@@ -53,10 +53,7 @@ const expectAdvancedMap = (
   previousChoicePath: readonly number[],
 ): void => {
   expect(runState.map.currentRound).toBe(completedNode.round + 1);
-  expect(runState.map.choicePath).toEqual([
-    ...previousChoicePath,
-    completedNode.choice,
-  ]);
+  expect(runState.map.choicePath).toEqual([...previousChoicePath, completedNode.choice]);
   expect(runState.map.nodeStatuses[completedNode.key]).toBe("cleared");
 
   const hud = createMapHudView(runState);
