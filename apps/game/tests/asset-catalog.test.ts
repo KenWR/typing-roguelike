@@ -7,6 +7,7 @@ import {
   RUNTIME_IMAGE_ASSETS,
   getRelicIconTextureKey,
 } from "../src/game/assets/asset-catalog";
+import { PLAYER_WEAPON_IMAGE_ASSETS } from "../src/game/assets/player-visual-assets";
 
 describe("relic icon asset catalog", () => {
   test("maps every configured relic to an existing 96px runtime icon", async () => {
@@ -40,6 +41,13 @@ describe("relic icon asset catalog", () => {
     );
     expect(new Set(RUNTIME_IMAGE_ASSETS.map((asset) => asset.key)).size).toBe(
       RUNTIME_IMAGE_ASSETS.length,
+    );
+  });
+
+  test("keeps all eight player weapon mappings in the runtime catalog contract", () => {
+    expect(PLAYER_WEAPON_IMAGE_ASSETS).toHaveLength(8);
+    expect(RUNTIME_IMAGE_ASSETS).toEqual(
+      expect.arrayContaining([...PLAYER_WEAPON_IMAGE_ASSETS]),
     );
   });
 });
