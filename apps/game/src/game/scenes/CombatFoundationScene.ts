@@ -7,6 +7,7 @@ import {
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
 import { ActionPointResource } from "../combat/action-point-resource";
+import { CombatApEffectController } from "../combat/combat-ap-effects";
 import { CombatState } from "../combat/combat-state";
 import {
   CombatPauseController,
@@ -24,6 +25,7 @@ import {
 import { CombatHud } from "../hud/combat-hud";
 import { CommandHud } from "../hud/command-hud";
 import { EnemyAttackGauge } from "../hud/enemy-attack-gauge";
+import { RelicHud } from "../hud/relic-hud";
 import { CommandInputBuffer } from "../input/command-input-buffer";
 import { createCombatLayout } from "../layout/combat-layout";
 import { MENU_SETTINGS_REGISTRY_KEYS } from "./menu-settings";
@@ -60,10 +62,13 @@ export class CombatFoundationScene extends Phaser.Scene {
   private playerPlaceholder!: Phaser.GameObjects.Container;
   private enemyPlaceholder!: Phaser.GameObjects.Container;
   private enemyHealthText!: Phaser.GameObjects.Text;
+  private encounterLabel!: Phaser.GameObjects.Text;
   private combatHud!: CombatHud;
+  private relicHud!: RelicHud;
   private enemyAttackGauge!: EnemyAttackGauge;
   private enemyAttackTimeline!: EnemyAttackTimeline;
   private actionPoints!: ActionPointResource;
+  private apEffects!: CombatApEffectController;
   private combat!: CombatState;
   private playerCombatRuntime?: PlayerCombatRuntime;
   private feedback?: CombatFeedbackController;
@@ -131,10 +136,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     );
     this.worldLayer.add([this.playerPlaceholder, this.enemyPlaceholder]);
 
-    const encounterLabel = this.add
+    this.encounterLabel = this.add
       .text(
-        24,
-        18,
+        0,
+        0,
         `${initialization.encounterId} · ${initialization.rewardPolicy.toUpperCase()}`,
         {
           color: "#9eb0c4",
@@ -142,8 +147,8 @@ export class CombatFoundationScene extends Phaser.Scene {
           fontSize: "14px",
         },
       )
-      .setOrigin(0, 0);
-    this.uiLayer.add(encounterLabel);
+      .setOrigin(1, 0);
+    this.uiLayer.add(this.encounterLabel);
 
     const initialEnemyHp = Object.fromEntries(
       initialization.enemies.map((enemy) => [enemy.instanceId, enemy.hp]),
@@ -166,6 +171,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.uiLayer.add(this.enemyHealthText);
 
     this.actionPoints = new ActionPointResource();
+    this.apEffects = new CombatApEffectController({
+      actionPoints: this.actionPoints,
+      relicIds: this.runState?.build.equippedRelicIds ?? [],
+    });
     this.combat = new CombatState();
     this.combatHud = new CombatHud(this, {
       hp: initialization.player.currentHp,
@@ -173,6 +182,11 @@ export class CombatFoundationScene extends Phaser.Scene {
       ap: this.actionPoints.snapshot.currentAp,
       maxAp: this.actionPoints.snapshot.maxAp,
     });
+    this.relicHud = new RelicHud(
+      this,
+      this.runState?.inventory.relicInstances ?? [],
+    );
+    this.relicHud.container.setDepth(900);
     this.uiLayer.add(this.combatHud.container);
 
     this.enemyAttackTimeline = new EnemyAttackTimeline();
@@ -219,6 +233,8 @@ export class CombatFoundationScene extends Phaser.Scene {
       this.playerCombatRuntime = new PlayerCombatRuntime({
         combat: this.combat,
         enemyTimeline: this.enemyAttackTimeline,
+        actionPoints: this.actionPoints,
+        apEffects: this.apEffects,
         runState: this.runState,
         initialization,
         nextNodeIds: this.nextNodeIds,
@@ -236,18 +252,20 @@ export class CombatFoundationScene extends Phaser.Scene {
         initialSkill.kind === "defense"
           ? "player"
           : (initialization.enemies[0]?.instanceId ?? "player"),
+      resolveApCost: (skill) => this.apEffects.resolveSkillCost(skill),
     });
     this.commandCompletionCleanup = skillStarter.connect(
       this.commandInputBuffer,
       (result) => {
-        this.combatHud.update({ ap: result.ap.currentAp });
         if (result.started) {
+          this.apEffects.onSkillStarted(result.skill, result.combo.count);
           this.playerCombatRuntime?.registerAction(result.actionId, result.skill);
           if (result.skill.kind === "defense") {
             this.feedback?.trigger("guard");
           }
           this.commandHud.showSkillStarted();
         }
+        this.combatHud.update({ ap: this.actionPoints.snapshot.currentAp });
       },
     );
     this.createCommandInputElement();
@@ -278,7 +296,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     }
 
     this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);
-    this.combatHud.update({ hp: playerUpdate.playerHp });
+    this.combatHud.update({ hp: playerUpdate.playerHp, ap: playerUpdate.playerAp });
     this.updateEnemyHealth(playerUpdate.enemyHp);
 
     if (
@@ -371,6 +389,21 @@ export class CombatFoundationScene extends Phaser.Scene {
       layout.enemy.y - 135 * layout.actorScale,
     );
 
+    this.relicHud.setPosition(
+      layout.relicHudReservation.x,
+      layout.relicHudReservation.y,
+    );
+    this.relicHud.setSize(
+      layout.relicHudReservation.width,
+      layout.relicHudReservation.height,
+      width >= 720 ? 260 : 0,
+    );
+    this.encounterLabel
+      .setPosition(
+        layout.relicHudReservation.right - 12,
+        layout.relicHudReservation.y + 15,
+      )
+      .setVisible(width >= 720);
     this.combatHud.setPosition(layout.hudReservation.x, layout.hudReservation.y);
     this.combatHud.setSize(layout.hudReservation.width, layout.hudReservation.height);
     this.enemyAttackGauge.setPosition(

@@ -59,6 +59,7 @@ type RewardCardView = Readonly<{
   rarityText: Phaser.GameObjects.Text;
   kindText: Phaser.GameObjects.Text;
   iconText: Phaser.GameObjects.Text;
+  iconImage?: Phaser.GameObjects.Image;
   nameText: Phaser.GameObjects.Text;
   descriptionText: Phaser.GameObjects.Text;
   effectText: Phaser.GameObjects.Text;
@@ -173,6 +174,10 @@ export class RewardSelectionScene extends Phaser.Scene {
     const iconText = this.add
       .text(0, 0, candidate.icon ?? "◇", this.iconStyle())
       .setOrigin(0.5);
+    const iconImage = candidate.imageKey !== undefined && this.textures.exists(candidate.imageKey)
+      ? this.add.image(0, 0, candidate.imageKey).setOrigin(0.5)
+      : undefined;
+    iconText.setVisible(iconImage === undefined);
     const nameText = this.add.text(0, 0, candidate.name, this.cardNameStyle());
     const descriptionText = this.add.text(0, 0, candidate.description, this.cardDescriptionStyle());
     const effectText = this.add.text(0, 0, candidate.effect, this.cardEffectStyle());
@@ -182,6 +187,7 @@ export class RewardSelectionScene extends Phaser.Scene {
       accentBar,
       rarityText,
       kindText,
+      ...(iconImage === undefined ? [] : [iconImage]),
       iconText,
       nameText,
       descriptionText,
@@ -196,6 +202,7 @@ export class RewardSelectionScene extends Phaser.Scene {
       rarityText,
       kindText,
       iconText,
+      iconImage,
       nameText,
       descriptionText,
       effectText,
@@ -379,6 +386,9 @@ export class RewardSelectionScene extends Phaser.Scene {
     card.iconText
       .setPosition(compact ? padding + 28 : width / 2, compact ? height / 2 - 6 : height * 0.31)
       .setFontSize(compact ? 26 : 44);
+    card.iconImage
+      ?.setPosition(compact ? padding + 28 : width / 2, compact ? height / 2 - 6 : height * 0.31)
+      .setDisplaySize(compact ? 52 : 92, compact ? 52 : 92);
     card.nameText
       .setPosition(compact ? padding + 68 : padding, compact ? 42 : height * 0.5 - 4)
       .setFontSize(compact ? 20 : 24);
