@@ -10,3 +10,4 @@ export * from "./content/relics.ts";
 export * from "./content/enemies.ts";
 export * from "./content/encounters.ts";
 export * from "./rules/relic-damage.ts";
+export * from "./rules/equipment-drops.ts";
