@@ -17,7 +17,6 @@ export type ShopOfferHoverDetails = Readonly<{
 const equipmentById = new Map(
   EQUIPMENT_CONFIGS.map((equipment) => [equipment.id, equipment] as const),
 );
-const relicById = new Map(RELIC_CONFIGS.map((relic) => [relic.id, relic] as const));
 
 const formatEquipmentDescription = (
   equipment: (typeof EQUIPMENT_CONFIGS)[number],
@@ -33,9 +32,10 @@ export const getShopOfferHoverDetails = (
   offer: Pick<ShopOffer, "kind" | "itemId">,
 ): ShopOfferHoverDetails => {
   if (offer.kind === "relic") {
-    const relic = relicById.get(
-      offer.itemId as (typeof RELIC_CONFIGS)[number]["id"],
-    );
+    // ShopOffer.itemId is intentionally a string because it also accepts
+    // restored/legacy offers. Find keeps that boundary type-safe and lets the
+    // UI fall back cleanly for an unknown id.
+    const relic = RELIC_CONFIGS.find(({ id }) => id === offer.itemId);
     return {
       name: relic?.name ?? "알 수 없는 유물",
       kindLabel: "유물",
