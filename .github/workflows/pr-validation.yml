@@ -76,32 +76,6 @@ jobs:
           test -d packages/shared
           echo "Unfiltered root validation covers game, API, and shared workspace paths."
 
-      - name: Format actor effect HUD files for recovery
-        run: |
-          bunx biome format --write \
-            apps/game/src/game/assets/effect-visual-assets.ts \
-            apps/game/src/game/combat/player-combat-runtime.ts \
-            apps/game/src/game/combat/skill-impact-resolver.ts \
-            apps/game/src/game/hud/actor-effect-hud.ts \
-            apps/game/src/game/hud/command-hud.ts \
-            apps/game/src/game/hud/effect-presentation.ts \
-            apps/game/src/game/scenes/CombatFoundationScene.ts \
-            apps/game/tests/actor-effect-presentation.test.ts
-
-      - name: Upload formatted effect HUD files
-        uses: actions/upload-artifact@v4
-        with:
-          name: formatted-effect-hud-files
-          path: |
-            apps/game/src/game/assets/effect-visual-assets.ts
-            apps/game/src/game/combat/player-combat-runtime.ts
-            apps/game/src/game/combat/skill-impact-resolver.ts
-            apps/game/src/game/hud/actor-effect-hud.ts
-            apps/game/src/game/hud/command-hud.ts
-            apps/game/src/game/hud/effect-presentation.ts
-            apps/game/src/game/scenes/CombatFoundationScene.ts
-            apps/game/tests/actor-effect-presentation.test.ts
-
       - name: Validate repository
         env:
           CI: "true"
