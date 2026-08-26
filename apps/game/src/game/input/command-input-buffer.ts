@@ -77,6 +77,21 @@ export class CommandInputBuffer {
   updateInput(rawInput: string, options: UpdateInputOptions = {}): CommandInputSnapshot {
     this.bindEnterResetIfAvailable();
     const input = this.prepareInputForNextCycle(rawInput);
+
+    // A completed command has already been consumed by the combat runtime.
+    // If the user types another character before pressing Enter, begin a new
+    // cycle with that trailing input instead of keeping the consumed command
+    // stuck in the buffer or treating the whole string as another success.
+    if (this.status === "complete") {
+      const completedCommand = normalizeForMatching(this.command);
+      const normalizedInput = normalizeForMatching(input);
+      if (normalizedInput.startsWith(completedCommand) && normalizedInput.length > completedCommand.length) {
+        const trailingInput = input.slice(this.command.length);
+        this.reset();
+        return trailingInput.length === 0 ? this.snapshot : this.updateInput(trailingInput, options);
+      }
+    }
+
     this.input = input;
     this.command = this.resolveActiveCommand(input);
 

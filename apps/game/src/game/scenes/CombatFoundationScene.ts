@@ -1,5 +1,12 @@
 import Phaser from "phaser";
-import { defineSkill, type GeneratedMapNode, type RunState, type SkillDefinition } from "@typing-roguelike/shared";
+import {
+  calculateRelicDamage,
+  defineSkill,
+  EQUIPMENT_CONFIGS,
+  type GeneratedMapNode,
+  type RunState,
+  type SkillDefinition,
+} from "@typing-roguelike/shared";
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import { resolveEnemyTextureKey, resolveEnemyVisualState } from "../assets/enemy-visual-assets";
 import { resolvePlayerAttackTextureKey, resolvePlayerTextureKey } from "../assets/player-visual-assets";
@@ -257,7 +264,11 @@ export class CombatFoundationScene extends Phaser.Scene {
     const initialSkill = availableSkills[0] ?? MAGIC_SHIELD;
     this.commandInputBuffer = new CommandInputBuffer(availableSkills.map((skill) => skill.command));
     this.commandInputRecovery = new CommandInputRecoveryController(this.commandInputBuffer);
-    this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
+    this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot, {
+      skills: availableSkills,
+      resolveApCost: (skill) => this.apEffects.resolveSkillCost(skill as SkillDefinition),
+      resolveDamage: (skill) => this.resolveExpectedSkillDamage(skill as SkillDefinition),
+    });
     this.uiLayer.add(this.commandHud.container);
     this.comboText = this.add
       .text(0, 0, "x0 +0%", {
@@ -444,6 +455,39 @@ export class CombatFoundationScene extends Phaser.Scene {
       });
       healthBar?.updateTelegraph(activeAttack?.attackName, activeAttack?.attackType ?? null, telegraphProgress);
     }
+  }
+
+  private resolveExpectedSkillDamage(skill: SkillDefinition): number | null {
+    const damageEffect = skill.effects.find((effect) => effect.type === "damage");
+    if (damageEffect === undefined) return null;
+
+    const weaponAttack =
+      this.combatInitialization?.player.equipmentIds.reduce((total, equipmentId) => {
+        const equipment = EQUIPMENT_CONFIGS.find(({ id }) => id === equipmentId);
+        return total + (equipment?.baseAttack ?? 0);
+      }, 0) ?? 0;
+    const targetId = this.targeting?.targetId;
+    const target = this.combatInitialization?.enemies.find((enemy) => enemy.instanceId === targetId);
+    const targetHp = target === undefined ? 1 : (this.displayedEnemyHp.get(target.instanceId) ?? target.hp) / target.hp;
+    const hasTwoHandedWeapon =
+      this.combatInitialization?.player.equipmentIds.some(
+        (equipmentId) => EQUIPMENT_CONFIGS.find(({ id }) => id === equipmentId)?.kind === "greatsword",
+      ) ?? false;
+    const relicDamage = calculateRelicDamage({
+      weaponAttack: Math.max(1, weaponAttack),
+      skillCoefficient: damageEffect.coefficient,
+      skillCategory: skill.category,
+      ownedRelicIds: new Set(this.runState?.build.equippedRelicIds ?? []),
+      targetHpRatio: targetHp,
+      enemyCount: this.combatInitialization?.enemies.length ?? 1,
+      playerHpRatio:
+        this.runState === undefined ? 1 : this.runState.character.currentHp / this.runState.character.maxHp,
+      hasTwoHandedWeapon,
+      recoveryMs: skill.recoveryMs,
+      floor: this.combatInitialization?.floor ?? 0,
+    });
+    const comboMultiplier = this.skillStarter?.comboSnapshot.multiplier ?? 1;
+    return Math.max(1, Math.round(relicDamage.damage * comboMultiplier));
   }
 
   private createTargetHandling(): void {
