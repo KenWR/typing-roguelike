@@ -126,6 +126,8 @@ export class ShopNodeScene extends Phaser.Scene {
       this.syncCheckpoint();
     } else if (this.flow.purchasedOfferIds.has(offer.id)) {
       this.feedbackText?.setText("이미 구매한 상품입니다.").setColor("#fbbf24");
+    } else if (this.flow.runState.inventory.itemInstances.includes(offer.equipmentId)) {
+      this.feedbackText?.setText("이미 보유한 장비입니다.").setColor("#fbbf24");
     } else {
       this.feedbackText?.setText("골드가 부족합니다.").setColor("#fca5a5");
     }
@@ -158,19 +160,21 @@ export class ShopNodeScene extends Phaser.Scene {
     this.offerButtons = [];
     this.flow.offers.forEach((offer, index) => {
       const purchased = this.flow.purchasedOfferIds.has(offer.id);
+      const owned = this.flow.runState.inventory.itemInstances.includes(offer.equipmentId);
+      const status = purchased ? "구매 완료" : owned ? "보유 중" : "";
       const button = this.add.text(
         36,
         142 + index * 52,
-        `${formatShopOfferLabel(offer)}${purchased ? " · 구매 완료" : ""}`,
+        `${formatShopOfferLabel(offer)}${status ? ` · ${status}` : ""}`,
         {
           fontFamily: "Galmuri9, monospace",
           fontSize: "18px",
-          color: purchased ? "#9ca3af" : "#f9fafb",
-          backgroundColor: purchased ? "#1f2937" : "#243247",
+          color: purchased || owned ? "#9ca3af" : "#f9fafb",
+          backgroundColor: purchased || owned ? "#1f2937" : "#243247",
           padding: { x: 12, y: 8 },
         },
       );
-      if (!purchased) {
+      if (!purchased && !owned) {
         button.setInteractive({ useHandCursor: true });
         button.on("pointerdown", () => this.handlePurchase(offer));
       }

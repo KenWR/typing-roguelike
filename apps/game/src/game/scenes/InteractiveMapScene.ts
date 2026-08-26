@@ -107,7 +107,7 @@ export class InteractiveMapScene extends MapScene {
       .setOrigin(0.5)
       .setDepth(80);
 
-    const maskShape = this.make.graphics({ x: 0, y: 0 });
+    const maskShape = this.make.graphics({ x: 0, y: 0 }, false);
     maskShape.fillStyle(0xffffff);
     maskShape.fillRect(mapLeft, MAP_VIEW_TOP, mapWidth, mapViewportHeight);
     const mapMask = maskShape.createGeometryMask();

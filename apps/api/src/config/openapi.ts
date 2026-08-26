@@ -183,6 +183,8 @@ export const openApiDocument = {
         requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/CompleteRunRequest" } } } },
         responses: {
           "200": { description: "종료 결과 저장 성공" },
+          "400": { description: "잘못된 종료 요청" },
+          "404": { description: "런을 찾을 수 없음" },
           "409": { description: "활성 런이 아니거나 이미 종료됨" },
         },
       },
