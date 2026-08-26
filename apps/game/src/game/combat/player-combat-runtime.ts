@@ -5,6 +5,7 @@ import {
   type SkillDefinition,
 } from "@typing-roguelike/shared";
 import { playRuntimeBgm, playWeaponImpactSound } from "../audio/runtime-audio";
+import { ActionPointResource } from "./action-point-resource";
 import { CombatApEffectController } from "./combat-ap-effects";
 import type { CombatEncounterInitialization } from "./encounter-initializer";
 import { CombatState, type CombatUpdate } from "./combat-state";
@@ -15,7 +16,7 @@ import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome
 export type PlayerCombatRuntimeConfig = Readonly<{
   combat: CombatState;
   enemyTimeline: EnemyAttackTimeline;
-  apEffects: CombatApEffectController;
+  apEffects?: CombatApEffectController;
   runState: Readonly<RunState>;
   initialization: CombatEncounterInitialization;
   nextNodeIds?: readonly string[];
@@ -53,7 +54,7 @@ export class PlayerCombatRuntime {
   constructor(config: PlayerCombatRuntimeConfig) {
     this.combat = config.combat;
     this.enemyTimeline = config.enemyTimeline;
-    this.apEffects = config.apEffects;
+    this.apEffects = config.apEffects ?? new CombatApEffectController({ actionPoints: new ActionPointResource() });
     this.runState = config.runState as RunState;
     this.initialization = config.initialization;
     this.nextNodeIds = config.nextNodeIds ?? [];
