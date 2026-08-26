@@ -158,7 +158,10 @@ export class EnemyAttackGauge {
   ) {
     this.lastSnapshot = initialSnapshot;
     this.state = createEnemyAttackGaugeState(initialSnapshot);
-    this.container = scene.add.container(0, 0);
+    // The active combat HUD now renders telegraphs per enemy on the HP bar.
+    // Keep this legacy gauge stateful for compatibility, but never render the
+    // old global overlay on top of the encounter.
+    this.container = scene.add.container(0, 0).setVisible(false);
 
     this.panel = scene.add
       .rectangle(0, 0, this.panelWidth, this.panelHeight, 0x0b1220, 0.94)
