@@ -29,9 +29,6 @@ jobs:
         github.event.workflow_run.head_sha != ''
       }}
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: ${{ vars.PRODUCTION_GAME_URL }}
     env:
       VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
       VALIDATED_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
@@ -102,7 +99,7 @@ jobs:
             PRODUCTION_API_URL \
             PRODUCTION_GAME_URL; do
             if [[ -z "${!variable_name:-}" ]]; then
-              echo "::error title=Missing production configuration::$variable_name is required in the production environment."
+              echo "::error title=Missing production configuration::$variable_name is required in repository Actions variables."
               missing=1
             fi
           done
@@ -165,7 +162,7 @@ jobs:
           if [[ "$checked_in_d1_id" != "00000000-0000-0000-0000-000000000000" ]] && \
             { [[ "$CLOUDFLARE_D1_DATABASE_NAME" != "$checked_in_d1_name" ]] || \
               [[ "$CLOUDFLARE_D1_DATABASE_ID" != "$checked_in_d1_id" ]]; }; then
-            echo "::error title=Production D1 mismatch::The production Environment D1 name and ID must match apps/api/wrangler.toml."
+            echo "::error title=Production D1 mismatch::Repository Actions D1 name and ID must match apps/api/wrangler.toml."
             exit 1
           fi
 
@@ -189,7 +186,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
-            echo "::error title=Missing production configuration::CLOUDFLARE_API_TOKEN is required in the production environment."
+            echo "::error title=Missing production configuration::CLOUDFLARE_API_TOKEN is required in repository Actions secrets."
             exit 1
           fi
           bunx wrangler@4.126.0 d1 migrations apply "$CLOUDFLARE_D1_DATABASE_NAME" \
