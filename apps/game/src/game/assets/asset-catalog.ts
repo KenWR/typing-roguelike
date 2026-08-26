@@ -40,6 +40,12 @@ export const COMBAT_IMAGE_ASSETS: readonly {
   ...PLAYER_WEAPON_IMAGE_ASSETS,
 ];
 
+/** The complete image catalog consumed by the BootScene preload boundary. */
+export const RUNTIME_IMAGE_ASSETS: readonly {
+  key: string;
+  path: string;
+}[] = [...RELIC_ICON_ASSETS, ...COMBAT_IMAGE_ASSETS];
+
 export const TEXTURE_KEYS = {
   combatBackground: COMBAT_BACKGROUND_ASSET.key,
   missingAsset: "placeholder:missing-asset",
