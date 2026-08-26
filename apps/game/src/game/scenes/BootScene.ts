@@ -3,6 +3,7 @@ import {
   RUNTIME_IMAGE_ASSETS,
   TEXTURE_KEYS,
 } from "../assets/asset-catalog";
+import { runRemotePersistence } from "../run/run-remote-persistence";
 import { runSession } from "../run/run-session";
 import { applyMenuSettings, loadMenuSettings } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
@@ -67,7 +68,14 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    const restoredRun = runSession.restore();
+    const localRun = runSession.restore();
+    void this.restoreRunAndContinue(localRun);
+  }
+
+  private async restoreRunAndContinue(localRun: ReturnType<typeof runSession.restore>): Promise<void> {
+    const restoredRun = await runRemotePersistence.restore(localRun);
+    if (restoredRun !== null) runSession.replace(restoredRun);
+
     const transition = restoredRun === null
       ? resolveSceneTransition(SCENE_KEYS.start, undefined)
       : resolveSceneTransition(SCENE_KEYS.map, { runState: restoredRun });
