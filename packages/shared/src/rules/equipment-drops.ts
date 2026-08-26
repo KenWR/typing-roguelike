@@ -19,6 +19,7 @@ export interface EquipmentRewardOptions {
   count?: number;
   random?: () => number;
   tierWeightOverrides?: EquipmentTierWeightOverrides;
+  excludedEquipmentIds?: readonly string[];
 }
 
 const DROP_RARITIES = ["common", "uncommon", "rare", "epic", "legendary"] as const;
@@ -86,12 +87,16 @@ export const generateEquipmentRewardCandidates = ({
   count = 2,
   random = Math.random,
   tierWeightOverrides = {},
+  excludedEquipmentIds = [],
 }: EquipmentRewardOptions): readonly EquipmentConfig[] => {
   if (!Number.isSafeInteger(count) || count < 0) {
     throw new RangeError(`Equipment reward count must be a non-negative integer: ${count}`);
   }
 
-  const available = EQUIPMENT_CONFIGS.filter((equipment) => equipment.rarity !== "hidden");
+  const excludedIds = new Set(excludedEquipmentIds);
+  const available = EQUIPMENT_CONFIGS.filter(
+    (equipment) => equipment.rarity !== "hidden" && !excludedIds.has(equipment.id),
+  );
   const table = createEquipmentDropTable(tier, tierWeightOverrides);
   const candidates: EquipmentConfig[] = [];
   while (candidates.length < count && available.length > 0) {
