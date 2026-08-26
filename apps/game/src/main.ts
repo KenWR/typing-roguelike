@@ -4,7 +4,7 @@ import { CombatFoundationScene } from "./game/scenes/CombatFoundationScene";
 import { StartScene } from "./game/scenes/CoreFlowScenes";
 import { CurrencyLobbyScene } from "./game/scenes/CurrencyLobbyScene";
 import { EquipmentScene } from "./game/scenes/EquipmentScene";
-import { RewardSelectionScene } from "./game/scenes/RewardSelectionScene";
+import { RunRewardSelectionScene } from "./game/scenes/RunRewardSelectionScene";
 import { CompletableRunResultScene } from "./game/scenes/CompletableRunResultScene";
 import { ShopNodeScene } from "./game/scenes/ShopNodeScene";
 import { RestNodeScene } from "./game/scenes/RestNodeScene";
@@ -33,7 +33,7 @@ const game = new Phaser.Game({
     CurrencyLobbyScene,
     InteractiveMapScene,
     CombatFoundationScene,
-    RewardSelectionScene,
+    RunRewardSelectionScene,
     EquipmentScene,
     ShopNodeScene,
     RestNodeScene,
