@@ -60,6 +60,17 @@ export class EnemyImpactResolver {
       );
     }
 
+    if (event.attackType === "defense") {
+      this.resolvedTimelineIds.add(event.timelineId);
+      return {
+        applied: true,
+        timelineId: event.timelineId,
+        defended: false,
+        damageApplied: 0,
+        statusEffectsApplied: 0,
+      };
+    }
+
     const baseDamage = calculateDamage({
       attackPower: validateNonNegative("Enemy attack damage", damage),
       damageCoefficient: 1,

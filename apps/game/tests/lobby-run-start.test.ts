@@ -18,10 +18,10 @@ describe("LobbyRunStarter", () => {
     expect(runState?.map.seed).toBe(4242);
     expect(runState?.status).toBe("active");
     expect(calls).toBe(1);
-    expect(starter.isStarting).toBe(true);
+    expect(starter.isStarting).toBe(false);
   });
 
-  test("locks duplicate start requests", () => {
+  test("can start another run after the first run finishes", () => {
     let calls = 0;
     const starter = new LobbyRunStarter(
       (seed) => {
@@ -32,8 +32,8 @@ describe("LobbyRunStarter", () => {
     );
 
     expect(starter.start()).not.toBeNull();
-    expect(starter.start()).toBeNull();
-    expect(calls).toBe(1);
+    expect(starter.start()).not.toBeNull();
+    expect(calls).toBe(2);
   });
 
   test("releases the lock when initialization fails", () => {

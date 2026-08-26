@@ -14,6 +14,12 @@ const impactEvent = (timelineId = "enemy.attack.1"): EnemyAttackEvent => ({
   atMs: 600,
 });
 
+const defenseImpactEvent: EnemyAttackEvent = {
+  ...impactEvent("enemy.defense.1"),
+  attackId: "guard",
+  attackType: "defense",
+};
+
 const castEvent: EnemyAttackEvent = {
   ...impactEvent(),
   type: "cast-completed",
@@ -62,6 +68,21 @@ describe("enemy impact resolver", () => {
     });
     expect(resolver.resolve(input).applied).toBe(false);
     expect(player.snapshot.health.currentHp).toBe(50);
+  });
+
+  test("does not damage the player when an enemy defense completes", () => {
+    const player = createPlayer();
+
+    const result = new EnemyImpactResolver().resolve({
+      event: defenseImpactEvent,
+      damage: 0,
+      target: player,
+      defenseWindows: new DefenseWindowTracker(),
+      defendedDamageMultiplier: 0.4,
+    });
+
+    expect(result).toMatchObject({ applied: true, damageApplied: 0 });
+    expect(player.snapshot.health.currentHp).toBe(100);
   });
 
   test("checks the defense window at the exact impact time and reduces damage", () => {
