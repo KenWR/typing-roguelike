@@ -125,3 +125,17 @@ export function continueRewardSelection(
     status: "continued",
   };
 }
+
+export function skipRewardSelection(
+  state: RewardSelectionViewState,
+): RewardSelectionViewState {
+  if (state.status === "continued") {
+    throw new Error("Reward selection is already complete.");
+  }
+
+  return {
+    ...state,
+    selectedRewardId: null,
+    status: "continued",
+  };
+}
