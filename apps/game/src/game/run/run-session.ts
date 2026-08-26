@@ -1,9 +1,18 @@
 import { createInitialRunState, type CreateInitialRunStateInput, type RunState } from "@typing-roguelike/shared";
+import {
+  clearSavedRun,
+  getBrowserRunStorage,
+  loadSavedRun,
+  saveRunState,
+  type RunStorage,
+} from "./run-persistence";
 
 export type RunStateUpdater = (current: Readonly<RunState>) => RunState;
 
 export class RunSession {
   private activeRun: RunState | null = null;
+
+  constructor(private readonly storage: RunStorage | undefined = getBrowserRunStorage()) {}
 
   create(input: CreateInitialRunStateInput): RunState {
     if (this.activeRun !== null && this.activeRun.status === "active") {
@@ -12,7 +21,14 @@ export class RunSession {
 
     const next = createInitialRunState(input);
     this.activeRun = next;
+    saveRunState(next, this.storage);
     return next;
+  }
+
+  restore(): Readonly<RunState> | null {
+    const restored = loadSavedRun(this.storage);
+    this.activeRun = restored;
+    return restored;
   }
 
   get(): Readonly<RunState> | null {
@@ -34,6 +50,8 @@ export class RunSession {
 
     const next = updater(current);
     this.activeRun = next;
+    if (next.status === "active") saveRunState(next, this.storage);
+    else clearSavedRun(this.storage);
     return next;
   }
 
@@ -44,11 +62,13 @@ export class RunSession {
     }
 
     this.activeRun = { ...current, status };
+    clearSavedRun(this.storage);
     return this.activeRun;
   }
 
   clear(): void {
     this.activeRun = null;
+    clearSavedRun(this.storage);
   }
 }
 
