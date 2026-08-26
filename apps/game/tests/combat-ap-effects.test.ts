@@ -17,6 +17,14 @@ describe("CombatApEffectController", () => {
     expect(actionPoints.snapshot.currentAp).toBe(3);
   });
 
+  test("supports direct AP text and structured AP deltas", () => {
+    const actionPoints = new ActionPointResource({ initialAp: 0 });
+    const effects = new CombatApEffectController({ actionPoints });
+    expect(effects.onSkillImpact(skill({ effect: "AP 3. 다음 적 공격 공개" }))).toBe(3);
+    expect(effects.onSkillImpact(skill({ apDeltaOnHit: 2, effect: "설명과 별도의 AP 변화" }))).toBe(2);
+    expect(actionPoints.snapshot.currentAp).toBe(5);
+  });
+
   test("does not turn conditional AP text into an unconditional gain", () => {
     const actionPoints = new ActionPointResource({ initialAp: 1 });
     const effects = new CombatApEffectController({ actionPoints });
@@ -51,6 +59,15 @@ describe("CombatApEffectController", () => {
     expect(effects.resolveSkillCost(special)).toBe(3);
   });
 
+  test("memory fragment discounts the first started special exactly once", () => {
+    const actionPoints = new ActionPointResource();
+    const effects = new CombatApEffectController({ actionPoints, relicIds: ["relic_memory_fragment"] });
+    const special = skill({ id: "special", name: "특수", command: "특수", category: "special", apCost: 3 });
+    expect(effects.resolveSkillCost(special)).toBe(2);
+    effects.onSkillStarted(special, 1);
+    expect(effects.resolveSkillCost(special)).toBe(3);
+  });
+
   test("broken metronome adds 0.5 AP regeneration for three seconds", () => {
     const actionPoints = new ActionPointResource({ initialAp: 0 });
     const effects = new CombatApEffectController({ actionPoints, relicIds: ["relic_broken_metronome"] });
@@ -66,6 +83,25 @@ describe("CombatApEffectController", () => {
     const effects = new CombatApEffectController({ actionPoints, relicIds: ["relic_hungry_grip"], random: () => 0 });
     expect(effects.onSkillImpact(skill({ tags: ["sword", "basic"] }))).toBe(1);
     expect(actionPoints.snapshot.currentAp).toBe(2);
+  });
+
+  test("applies successful-skill and defense AP relic hooks with their trigger caps", () => {
+    const actionPoints = new ActionPointResource({ initialAp: 0, maxAp: 20 });
+    const effects = new CombatApEffectController({
+      actionPoints,
+      relicIds: ["relic_echo_charm", "relic_veteran_shield", "relic_perfect_period", "relic_red_hourglass"],
+      random: () => 0,
+    });
+    expect(effects.onSkillImpact(skill())).toBe(1);
+    expect(effects.onSkillImpact(skill())).toBe(1);
+    expect(effects.onSkillImpact(skill())).toBe(0);
+
+    expect(effects.onEnemyImpact({ defended: true, perfect: true })).toBe(3);
+    expect(effects.onEnemyImpact({ defended: true, perfect: true })).toBe(3);
+    expect(effects.onEnemyImpact({ defended: true, perfect: true })).toBe(2);
+    expect(effects.onEnemyImpact({ defended: true, perfect: true })).toBe(1);
+    expect(effects.onEnemyImpact({ defended: false, perfect: false })).toBe(0);
+    expect(actionPoints.snapshot.currentAp).toBe(11);
   });
 
   test("converts enemy-delay and input-time relics into AP recovery", () => {

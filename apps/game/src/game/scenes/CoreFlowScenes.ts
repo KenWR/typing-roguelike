@@ -180,7 +180,7 @@ const NODE_STYLE: Record<MapNodeStatus, { fill: number; label: string }> = {
 };
 
 export class MapScene extends EmptyCoreScene {
-  protected readonly renderLegacyMapChoices = true;
+  protected readonly renderLegacyMapChoices: boolean = true;
   private runState?: Readonly<RunState>;
 
   constructor() {

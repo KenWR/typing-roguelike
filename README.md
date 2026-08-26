@@ -1,7 +1,7 @@
 # Typing Roguelike
 
 Bun 워크스페이스로 구성한 Phaser 게임 클라이언트와 Express API 서버 모노레포입니다.
-현재는 게임 개발을 시작하기 위한 실행 셸과 폴더 구조만 포함합니다.
+런 저장소는 Cloudflare D1을 사용하며, Express API는 저장소 주입 경계를 제공합니다.
 
 ## 요구 환경
 
@@ -11,18 +11,24 @@ Bun 워크스페이스로 구성한 Phaser 게임 클라이언트와 Express API
 
 ```bash
 bun install
-bun run dev
+bun run dev:game
 ```
 
 - 게임 클라이언트: `http://localhost:5173`
-- API 서버: `http://localhost:3000`
-- 상태 확인: `http://localhost:3000/health`
-- Swagger UI: `http://localhost:3000/docs`
-- OpenAPI JSON: `http://localhost:3000/openapi.json`
 
-API는 별도 DB 서버 없이 `apps/api/data/game.sqlite`에 익명 플레이어, 활성 런,
-노드 진입 체크포인트 이력, 종료 결과를 저장합니다. 로컬 개발에서는 기본적으로
-`http://localhost:5173`을 CORS 허용 origin으로 사용합니다.
+API Worker 런타임과 D1 바인딩 연결은 #259 범위입니다.
+
+Express API는 `createApp({ repository })`로 생성합니다. Cloudflare Worker에서는
+`env.DB`를 `createD1RunRepository(env.DB)`에 전달합니다. `apps/api/src/server.ts`는
+`DB` 바인딩이 없는 단독 Bun 실행을 fail-fast로 종료합니다. 로컬 D1 마이그레이션은 다음
+명령으로 실행하며, `--local`은 원격 D1을 수정하지 않습니다.
+
+```bash
+bun run --filter @typing-roguelike/api db:migrate:local
+```
+
+D1 설정은 `apps/api/wrangler.toml`에 있으며, 실제 원격 database ID 연결은 #260에서
+환경별로 구성합니다.
 
 맵 seed는 `RunState.map.seed`에 저장하며, 선택 경로(`choicePath`)와 seed를 사용해
 라운드별 3개 노드와 전투 몬스터를 결정적으로 재생성합니다. 1라운드는 상점을 제외하고,
@@ -36,12 +42,8 @@ API는 별도 DB 서버 없이 `apps/api/data/game.sqlite`에 익명 플레이�
 - `POST /runs/:runId/complete`: 사망·클리어·포기 결과 저장
 - `GET /leaderboard?limit=20`: 점수순 리더보드 조회 (최대 100개)
 
-개별 앱은 필터로 실행할 수 있습니다.
-
-```bash
-bun run dev:game
-bun run dev:api
-```
+`bun run dev:api`를 실행하려면 D1 바인딩을 제공하는 실행 경계가 필요합니다. Worker
+진입점 연결은 #259에서 추가합니다.
 
 ## 구조
 
@@ -49,8 +51,10 @@ bun run dev:api
 .
 ├── apps
 │   ├── api                 # Express API 서버
+│   │   ├── migrations      # D1 SQL 마이그레이션
 │   │   └── src
 │   │       ├── config      # 서버 환경 설정
+│   │       ├── repositories # D1 저장소와 저장소 인터페이스
 │   │       ├── controllers # 요청·응답 처리
 │   │       ├── middleware  # Express 미들웨어
 │   │       ├── routes      # API 라우트
@@ -76,6 +80,7 @@ bun run dev:api
 ```bash
 bun run typecheck
 bun run build
+bun run --filter @typing-roguelike/api test
 ```
 
-게임 클라이언트는 정적 결과물인 `apps/game/dist`를 생성합니다. 배포 제공자가 확정되면 해당 디렉터리를 Cloudflare Pages 또는 Vercel에 연결할 수 있습니다.
+게임 클라이언트는 정적 결과물인 `apps/game/dist`를 생성합니다. Cloudflare Workers Static Assets 배포 설정과 로컬 검증 절차는 [게임 Worker 배포 문서](docs/game-workers-static-assets.md)에 정리되어 있습니다.

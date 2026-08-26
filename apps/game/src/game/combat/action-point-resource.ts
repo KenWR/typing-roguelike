@@ -90,7 +90,7 @@ export class ActionPointResource {
   }
 
   addTemporaryRegeneration(amountPerSecond: number, durationMs: number): ActionPointSnapshot {
-    validateFinite("Temporary AP regeneration", amountPerSecond);
+    validateNonNegative("Temporary AP regeneration", amountPerSecond);
     validateNonNegative("Temporary AP regeneration duration", durationMs);
     if (durationMs > 0 && amountPerSecond !== 0) {
       this.timedRegenModifiers.push({ amountPerSecond, remainingMs: durationMs });

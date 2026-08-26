@@ -62,5 +62,6 @@ describe("ActionPointResource", () => {
     expect(() => resource.trySpend(-1)).toThrow(RangeError);
     expect(() => resource.advance(Number.NaN)).toThrow(RangeError);
     expect(() => resource.adjust(Number.POSITIVE_INFINITY)).toThrow(RangeError);
+    expect(() => resource.addTemporaryRegeneration(-0.5, 1_000)).toThrow(RangeError);
   });
 });

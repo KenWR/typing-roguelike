@@ -1,6 +1,10 @@
 import type { RunState } from "@typing-roguelike/shared";
 import { playPlayerHitSound } from "../audio/runtime-audio";
 import { ActionPointResource } from "./action-point-resource";
+import {
+  CombatApEffectController,
+  type CombatEnemyApImpact,
+} from "./combat-ap-effects";
 import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome-routing";
 import { CombatState } from "./combat-state";
 import { DefenseWindowTracker } from "./defense-window";
@@ -13,6 +17,7 @@ export type EnemyCombatRuntimeConfig = Readonly<{
   combat: CombatState;
   enemyTimeline: EnemyAttackTimeline;
   actionPoints?: ActionPointResource;
+  apEffects?: CombatApEffectController;
   runState: RunState;
   initialization: CombatEncounterInitialization;
   random?: () => number;
@@ -35,6 +40,7 @@ export class EnemyCombatRuntime {
   private readonly combat: CombatState;
   private readonly enemyTimeline: EnemyAttackTimeline;
   private readonly actionPoints: ActionPointResource;
+  private readonly apEffects: CombatApEffectController;
   private readonly initialization: CombatEncounterInitialization;
   private readonly random: () => number;
   private readonly player: SkillCombatantState;
@@ -49,7 +55,8 @@ export class EnemyCombatRuntime {
   constructor(config: EnemyCombatRuntimeConfig) {
     this.combat = config.combat;
     this.enemyTimeline = config.enemyTimeline;
-    this.actionPoints = config.actionPoints ?? new ActionPointResource();
+    this.actionPoints = config.actionPoints ?? config.apEffects?.resource ?? new ActionPointResource();
+    this.apEffects = config.apEffects ?? new CombatApEffectController({ actionPoints: this.actionPoints });
     this.initialization = config.initialization;
     this.random = config.random ?? Math.random;
     this.runState = config.runState;
@@ -94,7 +101,15 @@ export class EnemyCombatRuntime {
       });
       if (!result.applied) continue;
 
-      if (action.apDelta !== undefined) this.actionPoints.adjust(action.apDelta);
+      const defense = this.defenseWindows.resolveImpact("player", event.atMs);
+      const perfect: CombatEnemyApImpact["perfect"] = result.defended
+        && defense.window !== null
+        && event.atMs - defense.window.startsAtMs <= 300;
+      this.apEffects.onEnemyImpact({
+        apDelta: action.apDelta,
+        defended: result.defended,
+        perfect,
+      });
       playPlayerHitSound({ defended: result.defended, special: action.kind === "special" });
       completedEnemyIds.add(enemy.instanceId);
       this.activeTimelineByEnemy.delete(enemy.instanceId);

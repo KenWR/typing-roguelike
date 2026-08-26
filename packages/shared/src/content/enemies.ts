@@ -119,7 +119,7 @@ export const ENEMY_CONFIGS = [
   createEnemyConfig({ id: "chorus-conductor", name: "합창의 지휘 촉수", tier: "elite", role: "support", hp: 260, allowedFloors: [8, 9], attackDamage: 16, attackWindupMs: 4500, attackDescription: "동기화 공격", specialName: "동기화 지휘" }),
   createEnemyConfig({ id: "palimpsest", name: "붉은 편집장 팔림프세스트", tier: "boss", role: "disruption", hp: 430, allowedFloors: [5], attackDamage: 30, attackWindupMs: 5700, attackDescription: "추가 어절 기믹", specials: [
     { id: "word-storm", name: "어절 폭풍", damage: 45, windupMs: 6900, recoveryMs: 700, description: "플레이어 AP를 1 감소시킵니다.", apDelta: -1 },
-    { id: "red-edit", name: "붉은 교정", damage: 55, windupMs: 8100, recoveryMs: 900, description: "플레이어 AP를 1 감소시킵니다.", apDelta: -1 },
+    { id: "red-edit", name: "붉은 교정", damage: 55, windupMs: 8100, recoveryMs: 900, description: "붉은 교정으로 플레이어 AP를 1 감소시킵니다.", apDelta: -1 },
   ] }),
   createEnemyConfig({ id: "thousand-beat-chorus", name: "천 개의 박자 합창체", tier: "boss", role: "pressure", hp: 630, allowedFloors: [10], attackDamage: 20, attackWindupMs: 4500, attackDescription: "대합창은 최대 2회", specials: [
     { id: "grand-chorus", name: "대합창", damage: 30, windupMs: 5700, recoveryMs: 600, description: "합창의 압박으로 플레이어 AP를 1 감소시킵니다.", apDelta: -1 },
