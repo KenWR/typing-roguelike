@@ -7,10 +7,20 @@ export type RunRewardSceneEntry = Readonly<{
   nextSceneKey: string;
 }>;
 
-export const createRunRewardSceneEntry = (
-  runState: RunState,
-): RunRewardSceneEntry => {
-  const flow = createRunRewardSelectionFlow({ runState });
+export type CreateRunRewardSceneEntryOptions = Readonly<{
+  runState: RunState;
+  nodeId?: string;
+  nextNodeIds?: readonly string[];
+  onContinue?: (runState: RunState) => void;
+}>;
+
+export const createRunRewardSceneEntry = ({
+  runState,
+  nodeId,
+  nextNodeIds,
+  onContinue,
+}: CreateRunRewardSceneEntryOptions): RunRewardSceneEntry => {
+  const flow = createRunRewardSelectionFlow({ runState, nodeId, nextNodeIds, onContinue });
   return {
     adapter: flow.adapter,
     nextSceneKey: flow.nextSceneKey,
