@@ -93,7 +93,7 @@ export class ActorEffectHud {
     const textureKey = this.scene.textures.exists(effect.textureKey)
       ? effect.textureKey
       : EFFECT_PLACEHOLDER_TEXTURE_KEY;
-    const icon = this.scene.add.image(0, 0, textureKey).setDisplaySize(ICON_SIZE - 4, ICON_SIZE - 4);
+    const icon = this.scene.add.image(0, 0, textureKey).setDisplaySize(ICON_SIZE - 8, ICON_SIZE - 8);
     const darkness = this.scene.add.rectangle(0, ICON_SIZE / 2, ICON_SIZE - 2, 0, 0x020617, 0.68);
     const stackText = this.scene.add
       .text(ICON_SIZE / 2 - 2, ICON_SIZE / 2 - 1, "", {

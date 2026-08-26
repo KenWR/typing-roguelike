@@ -2406,12 +2406,12 @@ const describeDamage = (damageCoefficient: number | undefined): string =>
 const inferStatusEffects = (description: string): readonly SkillEffectConfig[] => {
   const effects: SkillEffectConfig[] = [];
   const rules: readonly [RegExp, string, number][] = [
-    [/출혈|bleed/i, "bleed", 3000],
-    [/약화|weaken/i, "weaken", 4000],
-    [/균열|crack/i, "crack", 4000],
-    [/집중|focus/i, "focus", 5000],
-    [/기절|stun/i, "stun", 2000],
-    [/장전|loaded|load/i, "loaded", 30000],
+    [/(?:출혈|bleed)\s*\d+|(?:출혈|bleed).*?(?:부여|적용)/i, "bleed", 3000],
+    [/(?:약화|weaken)\s*\d+|(?:약화|weaken).*?(?:부여|적용)/i, "weaken", 4000],
+    [/(?:균열|crack)\s*\d+|(?:균열|crack).*?(?:부여|적용)/i, "crack", 4000],
+    [/(?:집중|focus)\s*\d+|(?:집중|focus).*?(?:획득|얻)/i, "focus", 5000],
+    [/(?:기절|stun)(?:\s*\d+|\b)/i, "stun", 2000],
+    [/(?:장전|loaded|load)\s*\d+(?!\s*(?:을|를)?\s*소비)|(?:장전|loaded|load).*?(?:획득|얻)/i, "loaded", 30000],
   ];
   for (const [pattern, statusId, durationMs] of rules) {
     if (pattern.test(description)) {

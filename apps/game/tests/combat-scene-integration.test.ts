@@ -44,9 +44,16 @@ const setup = () => {
   return { combat, enemyTimeline, runtime, initialization: entry.combat };
 };
 
+const firstEnemy = <T extends { instanceId: string }>(enemies: readonly T[]): T => {
+  const enemy = enemies[0];
+  if (enemy === undefined) throw new Error("Expected combat test enemy.");
+  return enemy;
+};
+
 const startEnemyAttack = (ctx: ReturnType<typeof setup>, id: string) => {
-  const enemy = ctx.initialization.enemies[0]!;
-  const action = enemy.actions.find((candidate) => candidate.kind === "attack") ?? enemy.actions[0]!;
+  const enemy = firstEnemy(ctx.initialization.enemies);
+  const action = enemy.actions.find((candidate) => candidate.kind === "attack") ?? enemy.actions[0];
+  if (action === undefined) throw new Error("Expected combat test action.");
   ctx.enemyTimeline.startAttack({
     timelineId: id,
     enemyId: enemy.instanceId,
@@ -63,9 +70,7 @@ const startEnemyAttack = (ctx: ReturnType<typeof setup>, id: string) => {
 describe("combat scene runtime integration", () => {
   test("command input reaches player impact and updates enemy HP", () => {
     const ctx = setup();
-    const skillConfig = ctx.initialization.player.skills.find(
-      (candidate) => candidate.kind === "attack",
-    );
+    const skillConfig = ctx.initialization.player.skills.find((candidate) => candidate.kind === "attack");
     expect(skillConfig).toBeDefined();
     if (skillConfig === undefined) return;
 
@@ -81,7 +86,7 @@ describe("combat scene runtime integration", () => {
       actionPoints,
       combat: ctx.combat,
       actorId: "player",
-      targetId: ctx.initialization.enemies[0]!.instanceId,
+      targetId: firstEnemy(ctx.initialization.enemies).instanceId,
     });
     const results: ReturnType<SkillCommandStarter["tryStart"]>[] = [];
     const disconnect = starter.connect(input, (result) => {
@@ -89,9 +94,11 @@ describe("combat scene runtime integration", () => {
       if (result.started) ctx.runtime.registerAction(result.actionId, result.skill);
     });
 
-    const enemy = ctx.initialization.enemies[0]!;
-    const beforeHp = ctx.runtime.enemyHp[enemy.instanceId]!;
+    const enemy = firstEnemy(ctx.initialization.enemies);
+    const beforeHp = ctx.runtime.enemyHp[enemy.instanceId];
+    if (beforeHp === undefined) throw new Error("Expected combat test enemy HP.");
     input.updateInput(skill.command);
+    input.submit();
     const startResult = results[0];
     expect(startResult?.started).toBe(true);
     if (!startResult?.started) {
@@ -110,6 +117,72 @@ describe("combat scene runtime integration", () => {
     });
     expect(ctx.runtime.enemyHp[enemy.instanceId]).toBeLessThan(beforeHp);
     disconnect();
+  });
+
+  test("an area skill damages every living enemy in the encounter", () => {
+    const created = new RunSession().create({ seed: 84 });
+    const areaNode: GeneratedMapNode = {
+      choice: 1,
+      icon: "combat",
+      iconType: "combat",
+      key: "2-1",
+      monsterId: "ink-slime",
+      parentKey: "1-1",
+      nextNodeKeys: ["3-1"],
+      round: 2,
+      type: "combat",
+    };
+    const runState = {
+      ...created,
+      map: {
+        ...created.map,
+        currentNodeId: areaNode.key,
+        currentRound: areaNode.round,
+        nodeStatuses: { [areaNode.key]: "in_progress" as const, "3-1": "locked" as const },
+      },
+    };
+    const entry = initializeCombatEncounter(runState, areaNode);
+    expect(entry.ok).toBe(true);
+    if (!entry.ok) return;
+    expect(entry.combat.enemies.length).toBeGreaterThan(1);
+
+    const areaSkill = defineSkill({
+      id: "skill.test-area",
+      name: "지면 가르기",
+      command: "지면가르기",
+      kind: "attack",
+      category: "special",
+      apCost: 1,
+      windupMs: 100,
+      recoveryMs: 100,
+      effects: [{ type: "damage", coefficient: 0.5 }],
+      description: "모든 적에게 광역 피해를 줍니다.",
+    });
+    const initialization = {
+      ...entry.combat,
+      player: { ...entry.combat.player, skills: [areaSkill] },
+    };
+    const combat = new CombatState();
+    const enemyTimeline = new EnemyAttackTimeline();
+    const runtime = new PlayerCombatRuntime({ combat, enemyTimeline, runState, initialization });
+    const input = new CommandInputBuffer(areaSkill.command);
+    const starter = new SkillCommandStarter({
+      skills: [areaSkill],
+      actionPoints: new ActionPointResource({ initialAp: 6, maxAp: 6, regenerationPerSecond: 0 }),
+      combat,
+      actorId: "player",
+      targetId: firstEnemy(initialization.enemies).instanceId,
+    });
+    starter.connect(input, (result) => {
+      if (result.started) runtime.registerAction(result.actionId, result.skill);
+    });
+
+    input.updateInput(areaSkill.command);
+    input.submit();
+    runtime.advance(areaSkill.windupMs + areaSkill.recoveryMs);
+
+    expect(Object.values(runtime.enemyHp)).toHaveLength(initialization.enemies.length);
+    expect(Object.values(runtime.enemyHp).every((currentHp) => currentHp < 34)).toBe(true);
   });
 
   test("enemy impact updates player HP and eventually routes defeat once", () => {

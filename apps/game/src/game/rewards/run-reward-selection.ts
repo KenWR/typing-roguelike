@@ -20,8 +20,13 @@ import {
 import { getRelicIconTextureKey } from "../assets/asset-catalog";
 import { resolveEquipmentIconTextureKey } from "../assets/equipment-icon-assets";
 import { resolveRingIconTextureKey } from "../assets/ring-icon-assets";
+import { formatEquipmentSkillDetails, getEquipmentHandLabel } from "../equipment/equipment-info";
 import { SCENE_KEYS } from "../scenes/scene-contract";
-import { createRewardSelectionAdapter, type RewardSelectionAdapter } from "./reward-selection-adapter";
+import {
+  createRewardSelectionAdapter,
+  type RewardSelectionAdapter,
+  type RingReplacementOption,
+} from "./reward-selection-adapter";
 import { createRewardSelectionViewState, type RewardCandidate, type RewardRarity } from "./reward-selection-view-state";
 
 /** 보상 후보 칸 수. 기본 보상에는 유물 두 개를 항상 포함한다. */
@@ -83,8 +88,9 @@ const toRewardCandidate = (equipment: EquipmentConfig): RewardCandidate => ({
   kind: "weapon",
   name: equipment.name,
   rarity: toRewardRarity(equipment.rarity),
-  description: `${equipment.slot === "weapon" ? "주무기" : "보조무기"} · ${equipment.kind}`,
+  description: `${getEquipmentHandLabel(equipment)} · ${equipment.kind}`,
   effect: `공격 ${equipment.baseAttack ?? 0} · 사용 스킬 ${equipment.skills.length}개`,
+  details: formatEquipmentSkillDetails(equipment),
   icon: equipment.slot === "weapon" ? "⚔" : "◇",
   imageKey: resolveEquipmentIconTextureKey(equipment.id),
 });
@@ -165,9 +171,10 @@ export const getRunAvailableSkills = (runState: Readonly<RunState>): readonly Sk
 export const applyRunReward = (
   runState: Readonly<RunState>,
   reward: Pick<RewardCandidate, "id" | "kind">,
+  replacementRingId?: string | null,
 ): RunState => {
   if (reward.kind === "relic") return applyRelicAcquisition(runState, reward.id);
-  if (reward.kind === "ring") return applyRingAcquisition(runState, reward.id);
+  if (reward.kind === "ring") return applyRingAcquisition(runState, reward.id, { replaceRingId: replacementRingId });
   return applyEquipmentReward(runState, reward.id);
 };
 
@@ -233,12 +240,20 @@ export const createRunRewardSelectionFlow = ({
       currency: runState.runCurrency,
     }),
     initialRunState: runState,
-    applySelection: (currentRunState, reward) => {
-      const rewardedRun = applyRunReward(currentRunState, reward);
+    applySelection: (currentRunState, reward, replacementRingId) => {
+      const rewardedRun = applyRunReward(currentRunState, reward, replacementRingId);
       if (completionTarget === undefined) return rewardedRun;
 
       const completion = completeMapNode(rewardedRun.map, completionTarget.nodeId, completionTarget.nextNodeIds);
       return completion.applied ? { ...rewardedRun, map: completion.map } : rewardedRun;
+    },
+    getRingReplacementOptions: (currentRunState, reward): readonly RingReplacementOption[] => {
+      if (reward.kind !== "ring") return [];
+      const equippedRingIds = [currentRunState.loadout.ring1Id, currentRunState.loadout.ring2Id].filter(
+        (id): id is string => id !== null,
+      );
+      if (equippedRingIds.length < 2) return [];
+      return equippedRingIds.map((id) => ({ id, name: findRing(id).name }));
     },
     onContinue: (completedRunState) => onContinue?.(completedRunState),
   });

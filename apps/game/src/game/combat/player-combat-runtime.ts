@@ -11,8 +11,10 @@ import type { CombatEnemyInitialization, CombatEncounterInitialization } from ".
 import type { CombatState, CombatUpdate } from "./combat-state";
 import { ShieldPool, type ShieldInstance } from "./shield-pool";
 import type { EnemyAttackTimeline, EnemyAttackEvent, EnemyAttackTimelineUpdate } from "./enemy-attack-timeline";
+import { resolveEnemyAttackType } from "./enemy-attack-type";
 import { EnemyImpactResolver } from "./enemy-impact-resolver";
 import { SkillCombatantState, SkillImpactResolver, type TimedStatusEffect } from "./skill-impact-resolver";
+import { isAreaSkill } from "./skill-targeting";
 import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome-routing";
 
 export type PlayerCombatRuntimeConfig = Readonly<{
@@ -308,32 +310,46 @@ export class PlayerCombatRuntime {
     if (entry === undefined) return;
     const { skill, damageMultiplier } = entry;
 
-    const target = event.targetId === "player" ? this.player : this.resolveLivingEnemyTarget(event.targetId);
-    if (target === undefined) return;
+    const targets =
+      event.targetId === "player"
+        ? [this.player]
+        : isAreaSkill(skill)
+          ? Array.from(this.enemies.values()).filter((enemy) => !enemy.snapshot.health.isDead)
+          : [this.resolveLivingEnemyTarget(event.targetId)].filter(
+              (target): target is SkillCombatantState => target !== undefined,
+            );
+    if (targets.length === 0) return;
 
-    const impactEvent = target.id === event.targetId ? event : { ...event, targetId: target.id };
-    const result = this.impactResolver.resolve({
-      event: impactEvent,
-      skill,
-      actor: this.player,
-      target,
-      shields: this.shields,
-      damageMultiplier,
-    });
-    if (!result.applied) return;
+    let applied = false;
+    let dealtDamage = false;
+    for (const target of targets) {
+      const impactEvent = target.id === event.targetId ? event : { ...event, targetId: target.id };
+      const result = this.impactResolver.resolve({
+        event: impactEvent,
+        skill,
+        actor: this.player,
+        target,
+        shields: this.shields,
+        damageMultiplier,
+      });
+      if (!result.applied) continue;
+      applied = true;
+      dealtDamage ||= result.damageApplied > 0 || result.shieldAbsorbedDamage > 0;
+
+      if (target.id !== this.player.id && target.snapshot.health.isDead) {
+        this.cancelEnemyAttacks(target.id);
+      }
+
+      for (const shieldId of result.brokenShieldIds) {
+        this.cancelAttackOnBrokenShield(shieldId);
+      }
+    }
+    if (!applied) return;
 
     this.apEffects.onSkillImpact(skill);
 
-    if (target.id !== this.player.id && (result.damageApplied > 0 || result.shieldAbsorbedDamage > 0)) {
+    if (event.targetId !== this.player.id && dealtDamage) {
       playWeaponImpactSound(this.initialization.player.equipmentIds);
-    }
-
-    if (target.id !== this.player.id && target.snapshot.health.isDead) {
-      this.cancelEnemyAttacks(target.id);
-    }
-
-    for (const shieldId of result.brokenShieldIds) {
-      this.cancelAttackOnBrokenShield(shieldId);
     }
   }
 
@@ -454,7 +470,7 @@ export class PlayerCombatRuntime {
       targetId: this.player.id,
       attackId: action.id,
       attackName: action.name,
-      attackType: action.kind === "defense" ? "defense" : "attack",
+      attackType: resolveEnemyAttackType(action),
       windupMs: action.windupMs,
       recoveryMs: action.recoveryMs,
     });

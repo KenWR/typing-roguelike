@@ -2,11 +2,12 @@ import type { RunState } from "@typing-roguelike/shared";
 import { playPlayerHitSound } from "../audio/runtime-audio";
 import { ActionPointResource } from "./action-point-resource";
 import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome-routing";
-import { CombatState } from "./combat-state";
+import type { CombatState } from "./combat-state";
 import { ShieldPool } from "./shield-pool";
 import type { CombatEncounterInitialization, CombatEnemyInitialization } from "./encounter-initializer";
 import { EnemyImpactResolver } from "./enemy-impact-resolver";
-import { EnemyAttackTimeline, type EnemyAttackTimelineSnapshot } from "./enemy-attack-timeline";
+import type { EnemyAttackTimeline, EnemyAttackTimelineSnapshot } from "./enemy-attack-timeline";
+import { resolveEnemyAttackType } from "./enemy-attack-type";
 import { SkillCombatantState } from "./skill-impact-resolver";
 
 export type EnemyCombatRuntimeConfig = Readonly<{
@@ -27,7 +28,8 @@ export type EnemyCombatRuntimeUpdate = Readonly<{
 }>;
 
 const validateRandomValue = (value: number): number => {
-  if (!Number.isFinite(value) || value < 0 || value >= 1) throw new RangeError("Enemy attack random value must be in [0, 1).");
+  if (!Number.isFinite(value) || value < 0 || value >= 1)
+    throw new RangeError("Enemy attack random value must be in [0, 1).");
   return value;
 };
 
@@ -63,11 +65,19 @@ export class EnemyCombatRuntime {
     });
   }
 
-  get currentRunState(): RunState { return this.runState; }
-  get playerHp(): number { return this.player.snapshot.health.currentHp; }
-  get currentRoute(): CombatOutcomeRoute | null { return this.route; }
+  get currentRunState(): RunState {
+    return this.runState;
+  }
+  get playerHp(): number {
+    return this.player.snapshot.health.currentHp;
+  }
+  get currentRoute(): CombatOutcomeRoute | null {
+    return this.route;
+  }
 
-  setEnemyHp(enemyHp: Readonly<Record<string, number>>): void { this.enemyHp = { ...enemyHp }; }
+  setEnemyHp(enemyHp: Readonly<Record<string, number>>): void {
+    this.enemyHp = { ...enemyHp };
+  }
 
   start(): void {
     if (this.combat.snapshot.status !== "active" || this.enemyTimeline.snapshot.status !== "active") return;
@@ -104,7 +114,12 @@ export class EnemyCombatRuntime {
     }
 
     if (this.player.snapshot.health.isDead) {
-      this.route = finalizeCombatOutcome({ combat: this.combat, enemyTimeline: this.enemyTimeline, runState: this.runState, outcome: "defeat" });
+      this.route = finalizeCombatOutcome({
+        combat: this.combat,
+        enemyTimeline: this.enemyTimeline,
+        runState: this.runState,
+        outcome: "defeat",
+      });
       this.runState = this.route.runState;
       return this.snapshot();
     }
@@ -133,7 +148,7 @@ export class EnemyCombatRuntime {
       targetId: "player",
       attackId: action.id,
       attackName: action.name,
-      attackType: action.kind === "defense" ? "defense" : "attack",
+      attackType: resolveEnemyAttackType(action),
       windupMs: action.windupMs,
       recoveryMs: action.recoveryMs,
     });

@@ -1,9 +1,6 @@
 import type { EnemyActionConfig, EnemyConfig } from "@typing-roguelike/shared";
-import {
-  EnemyAttackTimeline,
-  type EnemyAttackTimelineUpdate,
-  type EnemyAttackType,
-} from "./enemy-attack-timeline";
+import type { EnemyAttackTimeline, EnemyAttackTimelineUpdate } from "./enemy-attack-timeline";
+import { resolveEnemyAttackType } from "./enemy-attack-type";
 
 export const ENEMY_COMMAND_WINDUP_MULTIPLIER = 1 as const;
 
@@ -24,14 +21,6 @@ export type EnemyAttackSelectionResult = Readonly<{
 
 export type EnemyAttackSelectionRandom = () => number;
 
-const toAttackType = (action: Readonly<EnemyActionConfig>): EnemyAttackType => {
-  if (action.kind === "defense") {
-    return "defense";
-  }
-
-  return "attack";
-};
-
 const validateRandomValue = (value: number): number => {
   if (!Number.isFinite(value) || value < 0 || value >= 1) {
     throw new RangeError("Enemy attack selection random value must be in [0, 1).");
@@ -48,10 +37,7 @@ export class EnemyAttackSelectionLoop {
     private readonly random: EnemyAttackSelectionRandom = Math.random,
   ) {}
 
-  selectAndStart(
-    combatant: EnemyCombatantState,
-    targetId: string,
-  ): EnemyAttackSelectionResult {
+  selectAndStart(combatant: EnemyCombatantState, targetId: string): EnemyAttackSelectionResult {
     if (combatant.currentHp <= 0 || this.timeline.snapshot.status !== "active") {
       return {
         started: false,
@@ -95,7 +81,7 @@ export class EnemyAttackSelectionLoop {
       targetId,
       attackId: action.id,
       attackName: action.name,
-      attackType: toAttackType(action),
+      attackType: resolveEnemyAttackType(action),
       windupMs: applyEnemyCommandWindupMultiplier(action.windupMs),
       recoveryMs: action.recoveryMs,
     });

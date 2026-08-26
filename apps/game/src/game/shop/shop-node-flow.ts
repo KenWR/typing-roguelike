@@ -58,6 +58,7 @@ export const createShopNodeFlow = (
 export const purchaseShopOffer = (
   state: ShopNodeFlowState,
   offerId: string,
+  replacementRingId?: string | null,
 ): ShopNodeFlowState => {
   if (state.completed) throw new Error("Shop node is already complete.");
 
@@ -66,6 +67,7 @@ export const purchaseShopOffer = (
     offers: state.offers,
     runState: state.runState,
     purchasedOfferIds: state.purchasedOfferIds,
+    replacementRingId,
   });
 
   return {
@@ -75,10 +77,7 @@ export const purchaseShopOffer = (
   };
 };
 
-export const rerollShopOffers = (
-  state: ShopNodeFlowState,
-  random: () => number = Math.random,
-): ShopNodeFlowState => {
+export const rerollShopOffers = (state: ShopNodeFlowState, random: () => number = Math.random): ShopNodeFlowState => {
   if (state.completed) throw new Error("Shop node is already complete.");
   const cost = getShopRerollCost(state);
   if (state.runState.runCurrency < cost) return state;

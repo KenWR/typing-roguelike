@@ -40,6 +40,7 @@ describe("SkillCommandStarter", () => {
     const { input, actionPoints, combat, results } = createFixture(6);
 
     input.updateInput("매직실드");
+    input.submit();
 
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({
@@ -63,10 +64,25 @@ describe("SkillCommandStarter", () => {
     expect(combat.snapshot.actions).toHaveLength(1);
   });
 
+  test("does not start a command repeated before Enter", () => {
+    const { input, combat, results } = createFixture(6);
+
+    input.updateInput("매직실드매직실드");
+
+    expect(input.snapshot.status).toBe("incorrect");
+    expect(results).toHaveLength(0);
+    expect(combat.snapshot.actions).toHaveLength(0);
+
+    input.submit();
+    expect(results).toHaveLength(0);
+    expect(combat.snapshot.actions).toHaveLength(0);
+  });
+
   test("does not increase combo when AP is insufficient", () => {
     const { input, actionPoints, combat, starter, results } = createFixture(1);
 
     input.updateInput("매직실드");
+    input.submit();
 
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({
@@ -86,6 +102,7 @@ describe("SkillCommandStarter", () => {
     combat.pause();
 
     input.updateInput("매직실드");
+    input.submit();
 
     expect(results[0]).toMatchObject({
       started: false,
@@ -102,10 +119,12 @@ describe("SkillCommandStarter", () => {
     const { input, starter, results } = createFixture(6);
 
     input.updateInput("매직실드");
+    input.submit();
     expect(results[0]).toMatchObject({ combo: { count: 1 } });
 
     input.reset();
     input.updateInput("매직실드");
+    input.submit();
     expect(results[1]).toMatchObject({ combo: { count: 2 } });
     expect(starter.comboSnapshot.count).toBe(2);
 
@@ -124,6 +143,7 @@ describe("SkillCommandStarter", () => {
     const { input, starter, results } = createFixture(6);
 
     input.updateInput(input.snapshot.command);
+    input.submit();
     expect(results[0]).toMatchObject({ started: true, combo: { count: 1 } });
 
     input.reset();
@@ -165,9 +185,11 @@ describe("SkillCommandStarter", () => {
     starter.connect(input, (result) => results.push(result));
 
     input.updateInput("베기");
+    input.submit();
     input.reset();
     targetId = "enemy:2";
     input.updateInput("베기");
+    input.submit();
 
     expect(combat.snapshot.actions.map((action) => action.targetId)).toEqual(["enemy:1", "enemy:2"]);
     expect(results.every((result) => result.started)).toBe(true);

@@ -44,6 +44,7 @@ describe("combat input and skill integration", () => {
     const { input, actionPoints, combat, results, disconnect } = createHarness(6);
 
     input.updateInput(attackSkill.command);
+    input.submit();
 
     expect(results).toHaveLength(1);
     const result = results[0];
@@ -77,6 +78,7 @@ describe("combat input and skill integration", () => {
     const { input, actionPoints, combat, results, disconnect } = createHarness(1);
 
     input.updateInput(attackSkill.command);
+    input.submit();
 
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({

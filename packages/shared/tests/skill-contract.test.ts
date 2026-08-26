@@ -36,6 +36,18 @@ describe("skill contract", () => {
     });
   });
 
+  test("does not mark a conditional bleed reference as an applied status", () => {
+    const conditionalSkill = EQUIPMENT_CONFIGS.find(({ id }) => id === "equipment_blood_sword")?.skills[1];
+
+    expect(conditionalSkill).toBeDefined();
+    expect(defineSkill(conditionalSkill!).effects).not.toContainEqual({
+      type: "status",
+      statusId: "bleed",
+      durationMs: 3_000,
+      stacks: 1,
+    });
+  });
+
   test("builds a stable registry for equipment skill references", () => {
     const equipmentSkills = EQUIPMENT_CONFIGS.flatMap(({ skills }) => skills);
     const registry = createSkillRegistry(equipmentSkills);

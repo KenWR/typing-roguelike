@@ -1,18 +1,13 @@
 import Phaser from "phaser";
-import {
-  createRewardSelectionFixtureAdapter,
-  type RewardSelectionAdapter,
-} from "../rewards/reward-selection-adapter";
-import {
-  getRewardSourcePresentation,
-  type RewardSource,
-} from "../rewards/reward-source-presentation";
+import { createRewardSelectionFixtureAdapter, type RewardSelectionAdapter } from "../rewards/reward-selection-adapter";
+import { getRewardSourcePresentation, type RewardSource } from "../rewards/reward-source-presentation";
 import type {
   RewardCandidate,
   RewardKind,
   RewardRarity,
   RewardSelectionViewState,
 } from "../rewards/reward-selection-view-state";
+import type { RingReplacementOption } from "../rewards/reward-selection-adapter";
 
 const COLORS = {
   background: 0x0c1422,
@@ -27,10 +22,7 @@ const COLORS = {
   disabled: 0x304054,
 } as const;
 
-const RARITY_PRESENTATION: Record<
-  RewardRarity,
-  Readonly<{ label: string; color: string; accent: number }>
-> = {
+const RARITY_PRESENTATION: Record<RewardRarity, Readonly<{ label: string; color: string; accent: number }>> = {
   common: { label: "COMMON", color: "#cbd5e1", accent: 0x94a3b8 },
   uncommon: { label: "UNCOMMON", color: "#5eead4", accent: 0x14b8a6 },
   rare: { label: "RARE", color: "#93c5fd", accent: 0x3b82f6 },
@@ -68,12 +60,10 @@ type RewardCardView = Readonly<{
   actionText: Phaser.GameObjects.Text;
 }>;
 
-const clamp = (value: number, minimum: number, maximum: number): number =>
-  Math.min(Math.max(value, minimum), maximum);
+const clamp = (value: number, minimum: number, maximum: number): number => Math.min(Math.max(value, minimum), maximum);
 
 export class RewardSelectionScene extends Phaser.Scene {
-  private adapter: RewardSelectionAdapter<unknown> =
-    createRewardSelectionFixtureAdapter();
+  private adapter: RewardSelectionAdapter<unknown> = createRewardSelectionFixtureAdapter();
   private nextSceneKey: string | undefined;
   private rewardSource: RewardSource = "combat-victory";
   private backdrop!: Phaser.GameObjects.Graphics;
@@ -88,6 +78,7 @@ export class RewardSelectionScene extends Phaser.Scene {
   private continueText!: Phaser.GameObjects.Text;
   private feedbackText!: Phaser.GameObjects.Text;
   private rewardTooltip?: Phaser.GameObjects.Container;
+  private ringReplacementModal?: Phaser.GameObjects.Container;
   private rewardTooltipCandidateId?: string;
   private cards: RewardCardView[] = [];
 
@@ -113,9 +104,7 @@ export class RewardSelectionScene extends Phaser.Scene {
     this.headerTitle = this.add.text(0, 0, "", this.headerTitleStyle()).setDepth(11);
     this.headerMeta = this.add.text(0, 0, "", this.smallTextStyle()).setDepth(11);
     this.currencyText = this.add.text(0, 0, "", this.currencyTextStyle()).setDepth(11);
-    this.instructionText = this.add
-      .text(0, 0, state.subtitle, this.instructionStyle())
-      .setDepth(11);
+    this.instructionText = this.add.text(0, 0, state.subtitle, this.instructionStyle()).setDepth(11);
     this.selectionText = this.add
       .text(0, 0, "보상 후보를 선택하면 상세 효과를 확인할 수 있습니다.", this.smallTextStyle())
       .setDepth(11);
@@ -125,10 +114,7 @@ export class RewardSelectionScene extends Phaser.Scene {
       .setOrigin(0)
       .setDepth(10)
       .setStrokeStyle(1, COLORS.border, 1);
-    this.continueButton = this.add
-      .rectangle(0, 0, 1, 1, COLORS.disabled, 1)
-      .setOrigin(0)
-      .setDepth(11);
+    this.continueButton = this.add.rectangle(0, 0, 1, 1, COLORS.disabled, 1).setOrigin(0).setDepth(11);
     this.continueButton.on(Phaser.Input.Events.POINTER_DOWN, this.handleContinue, this);
     this.continueButton.on(Phaser.Input.Events.POINTER_OVER, () => {
       if (this.adapter.getViewState().status === "selected") {
@@ -138,14 +124,8 @@ export class RewardSelectionScene extends Phaser.Scene {
     this.continueButton.on(Phaser.Input.Events.POINTER_OUT, () => {
       this.refreshContinueButton(this.adapter.getViewState());
     });
-    this.continueText = this.add
-      .text(0, 0, "", this.buttonTextStyle())
-      .setOrigin(0.5)
-      .setDepth(12);
-    this.feedbackText = this.add
-      .text(0, 0, "", this.feedbackTextStyle())
-      .setOrigin(0.5)
-      .setDepth(12);
+    this.continueText = this.add.text(0, 0, "", this.buttonTextStyle()).setOrigin(0.5).setDepth(12);
+    this.feedbackText = this.add.text(0, 0, "", this.feedbackTextStyle()).setOrigin(0.5).setDepth(12);
 
     this.cards = state.candidates.map((candidate) => this.createCard(candidate));
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
@@ -159,17 +139,12 @@ export class RewardSelectionScene extends Phaser.Scene {
 
   private createCard(candidate: RewardCandidate): RewardCardView {
     const container = this.add.container(0, 0).setDepth(20);
-    const panel = this.add
-      .rectangle(0, 0, 1, 1, COLORS.panelRaised, 1)
-      .setOrigin(0);
+    const panel = this.add.rectangle(0, 0, 1, 1, COLORS.panelRaised, 1).setOrigin(0);
     const hitArea = this.add
       .rectangle(0, 0, 1, 1, 0xffffff, 0)
       .setOrigin(0)
       .setDepth(30)
-      .setInteractive(
-        new Phaser.Geom.Rectangle(0, 0, 1, 1),
-        Phaser.Geom.Rectangle.Contains,
-      );
+      .setInteractive(new Phaser.Geom.Rectangle(0, 0, 1, 1), Phaser.Geom.Rectangle.Contains);
     hitArea.on(Phaser.Input.Events.POINTER_DOWN, () => {
       this.handleRewardSelection(candidate.id);
     });
@@ -192,12 +167,11 @@ export class RewardSelectionScene extends Phaser.Scene {
     const accentBar = this.add.rectangle(0, 0, 4, 1, COLORS.border, 1).setOrigin(0);
     const rarityText = this.add.text(0, 0, "", this.cardMetaStyle());
     const kindText = this.add.text(0, 0, "", this.cardMetaStyle()).setOrigin(1, 0);
-    const iconText = this.add
-      .text(0, 0, candidate.icon ?? "◇", this.iconStyle())
-      .setOrigin(0.5);
-    const iconImage = candidate.imageKey !== undefined && this.textures.exists(candidate.imageKey)
-      ? this.add.image(0, 0, candidate.imageKey).setOrigin(0.5)
-      : undefined;
+    const iconText = this.add.text(0, 0, candidate.icon ?? "◇", this.iconStyle()).setOrigin(0.5);
+    const iconImage =
+      candidate.imageKey !== undefined && this.textures.exists(candidate.imageKey)
+        ? this.add.image(0, 0, candidate.imageKey).setOrigin(0.5)
+        : undefined;
     iconText.setVisible(iconImage === undefined);
     const nameText = this.add.text(0, 0, candidate.name, this.cardNameStyle());
     const descriptionText = this.add.text(0, 0, candidate.description, this.cardDescriptionStyle());
@@ -247,20 +221,93 @@ export class RewardSelectionScene extends Phaser.Scene {
       return;
     }
 
-    const continuedState = this.adapter.continue();
+    const replacementOptions = this.adapter.getRingReplacementOptions();
+    if (replacementOptions.length > 0) {
+      this.showRingReplacementModal(replacementOptions);
+      return;
+    }
+
+    this.finishContinue();
+  }
+
+  private finishContinue(replacementRingId?: string | null): void {
+    const continuedState = this.adapter.continue(replacementRingId);
     this.refresh(continuedState);
     if (this.nextSceneKey !== undefined) {
       this.scene.start(this.nextSceneKey, { runState: this.adapter.getRunState() });
     }
   }
 
+  private showRingReplacementModal(options: readonly RingReplacementOption[]): void {
+    if (this.ringReplacementModal !== undefined) return;
+    const { width, height } = this.scale.gameSize;
+    const modal = this.add.container(0, 0).setDepth(1000);
+    modal.add(this.add.rectangle(0, 0, width, height, 0x020617, 0.78).setOrigin(0).setInteractive());
+    const panelWidth = Math.min(width - 32, 560);
+    const panelHeight = 236 + options.length * 52;
+    modal.add(
+      this.add
+        .rectangle(width / 2, height / 2, panelWidth, panelHeight, 0x111d2f, 1)
+        .setStrokeStyle(2, COLORS.selected, 1),
+    );
+    modal.add(
+      this.add.text(width / 2, height / 2 - panelHeight / 2 + 28, "반지 교체", this.headerTitleStyle()).setOrigin(0.5),
+    );
+    modal.add(
+      this.add
+        .text(
+          width / 2,
+          height / 2 - panelHeight / 2 + 72,
+          "반지는 최대 2개까지 장착할 수 있습니다. 버릴 반지를 선택하세요.",
+          this.smallTextStyle(),
+        )
+        .setOrigin(0.5),
+    );
+    options.forEach((option, index) => {
+      this.addRingReplacementButton(
+        modal,
+        option.name,
+        option.id,
+        width / 2,
+        height / 2 - panelHeight / 2 + 112 + index * 52,
+      );
+    });
+    this.addRingReplacementButton(
+      modal,
+      "새 반지 버리기",
+      null,
+      width / 2,
+      height / 2 - panelHeight / 2 + 112 + options.length * 52,
+    );
+    this.ringReplacementModal = modal;
+  }
+
+  private addRingReplacementButton(
+    modal: Phaser.GameObjects.Container,
+    label: string,
+    replacementRingId: string | null,
+    x: number,
+    y: number,
+  ): void {
+    const button = this.add
+      .text(x, y, replacementRingId === null ? label : `\`${label}\` 버리기`, this.buttonTextStyle())
+      .setOrigin(0.5)
+      .setPadding(18, 9, 18, 9)
+      .setBackgroundColor(replacementRingId === null ? "#334155" : "#7f1d1d")
+      .setInteractive({ useHandCursor: true });
+    button.on(Phaser.Input.Events.POINTER_DOWN, () => {
+      this.ringReplacementModal?.destroy();
+      this.ringReplacementModal = undefined;
+      this.finishContinue(replacementRingId);
+    });
+    modal.add(button);
+  }
+
   private refresh(state: RewardSelectionViewState): void {
     this.hideRewardTooltip();
     const presentation = getRewardSourcePresentation(this.rewardSource, state.title);
     this.headerTitle.setText(presentation.title.toUpperCase());
-    this.headerMeta.setText(
-      `ROUND ${String(state.round).padStart(2, "0")}  /  ${presentation.meta}`,
-    );
+    this.headerMeta.setText(`ROUND ${String(state.round).padStart(2, "0")}  /  ${presentation.meta}`);
     this.currencyText.setText(`◈  ${state.currency}`);
     this.selectionText.setText(
       state.selectedRewardId === null
@@ -268,9 +315,7 @@ export class RewardSelectionScene extends Phaser.Scene {
         : `선택 중  ·  ${this.getCandidate(state.selectedRewardId)?.name ?? "보상"}`,
     );
     this.feedbackText.setText(
-      state.status === "continued"
-        ? "RUN STATE  ·  보상이 적용되었습니다. 다음 단계로 이동합니다."
-        : "",
+      state.status === "continued" ? "RUN STATE  ·  보상이 적용되었습니다. 다음 단계로 이동합니다." : "",
     );
     if (state.status === "continued") {
       this.feedbackText.setColor("#5eead4");
@@ -311,9 +356,7 @@ export class RewardSelectionScene extends Phaser.Scene {
     this.continueButton
       .setFillStyle(isComplete ? 0x164e63 : isSelected ? 0xd97706 : COLORS.disabled, 1)
       .setAlpha(isSelected || isComplete ? 1 : 0.88);
-    this.continueText.setText(
-      isComplete ? "다음 단계 준비 완료" : isSelected ? "보상 받기" : "보상 선택",
-    );
+    this.continueText.setText(isComplete ? "다음 단계 준비 완료" : isSelected ? "보상 받기" : "보상 선택");
     this.continueText.setColor(isSelected || isComplete ? "#fff7ed" : COLORS.dim);
     this.continueButton.disableInteractive();
     if (!isComplete) {
@@ -347,17 +390,11 @@ export class RewardSelectionScene extends Phaser.Scene {
     this.headerPanel.setPosition(safeInset, headerY).setSize(contentWidth, headerHeight);
     this.headerTitle.setPosition(safeInset + 18, headerY + 13);
     this.headerMeta.setPosition(safeInset + 18, headerY + 43);
-    this.currencyText
-      .setPosition(width - safeInset - 18, headerY + headerHeight / 2)
-      .setOrigin(1, 0.5);
+    this.currencyText.setPosition(width - safeInset - 18, headerY + headerHeight / 2).setOrigin(1, 0.5);
     this.instructionText.setPosition(safeInset, introY);
-    this.selectionText
-      .setPosition(safeInset, introY + (compact ? 30 : 36))
-      .setWordWrapWidth(contentWidth);
+    this.selectionText.setPosition(safeInset, introY + (compact ? 30 : 36)).setWordWrapWidth(contentWidth);
 
-    const cardWidth = compact
-      ? contentWidth
-      : Math.max(220, (contentWidth - gap * 2) / 3);
+    const cardWidth = compact ? contentWidth : Math.max(220, (contentWidth - gap * 2) / 3);
     const cardHeight = compact
       ? clamp((cardsBottom - cardsY - gap * 2) / 3, 132, 176)
       : clamp(cardsBottom - cardsY, 260, 360);
@@ -371,9 +408,7 @@ export class RewardSelectionScene extends Phaser.Scene {
     this.footerPanel.setPosition(safeInset, footerY).setSize(contentWidth, footerHeight);
     const buttonWidth = compact ? contentWidth - 28 : Math.min(280, contentWidth * 0.32);
     const buttonHeight = compact ? 44 : 48;
-    this.continueButton
-      .setPosition(width / 2 - buttonWidth / 2, footerY + 14)
-      .setSize(buttonWidth, buttonHeight);
+    this.continueButton.setPosition(width / 2 - buttonWidth / 2, footerY + 14).setSize(buttonWidth, buttonHeight);
     if (this.continueButton.input === null) {
       this.continueButton.setInteractive({ useHandCursor: true });
     } else {
@@ -428,9 +463,7 @@ export class RewardSelectionScene extends Phaser.Scene {
   }
 
   private getCandidate(rewardId: string): RewardCandidate | undefined {
-    return this.adapter
-      .getViewState()
-      .candidates.find((candidate) => candidate.id === rewardId);
+    return this.adapter.getViewState().candidates.find((candidate) => candidate.id === rewardId);
   }
 
   private handleResize(gameSize: Phaser.Structs.Size): void {
@@ -441,14 +474,8 @@ export class RewardSelectionScene extends Phaser.Scene {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
   }
 
-  private showRewardTooltip(
-    candidate: RewardCandidate,
-    pointer: Phaser.Input.Pointer,
-  ): void {
-    if (
-      this.rewardTooltip !== undefined &&
-      this.rewardTooltipCandidateId === candidate.id
-    ) {
+  private showRewardTooltip(candidate: RewardCandidate, pointer: Phaser.Input.Pointer): void {
+    if (this.rewardTooltip !== undefined && this.rewardTooltipCandidateId === candidate.id) {
       this.positionRewardTooltip(this.rewardTooltip, pointer);
       return;
     }
@@ -456,12 +483,12 @@ export class RewardSelectionScene extends Phaser.Scene {
     this.hideRewardTooltip();
 
     const tooltipWidth = 360;
-    const tooltipHeight = 184;
+    const initialTooltipHeight = 184;
     const { width, height } = this.scale.gameSize;
     const tooltip = this.add.container(0, 0).setDepth(900);
     tooltip.add(
       this.add
-        .rectangle(0, 0, tooltipWidth, tooltipHeight, 0x0f172a, 0.98)
+        .rectangle(0, 0, tooltipWidth, initialTooltipHeight, 0x0f172a, 0.98)
         .setOrigin(0)
         .setStrokeStyle(2, RARITY_PRESENTATION[candidate.rarity].accent),
     );
@@ -503,13 +530,18 @@ export class RewardSelectionScene extends Phaser.Scene {
         lineSpacing: 3,
       }),
     );
-    tooltip.add(
-      this.add.text(18, 142, candidate.effect, {
+    const detailsText = tooltip.add(
+      this.add.text(18, 142, candidate.details ?? candidate.effect, {
         ...this.cardEffectStyle(),
         fontSize: "13px",
         wordWrap: { width: tooltipWidth - 36 },
       }),
     );
+    const tooltipHeight = Math.max(initialTooltipHeight, detailsText.y + detailsText.height + 18);
+    const panel = tooltip.list[0];
+    if (panel instanceof Phaser.GameObjects.Rectangle) {
+      panel.setSize(tooltipWidth, tooltipHeight);
+    }
     this.rewardTooltip = tooltip;
     this.rewardTooltipCandidateId = candidate.id;
     this.positionRewardTooltip(tooltip, pointer, width, height, tooltipWidth, tooltipHeight);
