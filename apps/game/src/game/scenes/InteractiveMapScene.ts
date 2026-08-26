@@ -1,6 +1,7 @@
 import type { GeneratedMapNode, RunState } from "@typing-roguelike/shared";
 import { createMapHudView } from "../run/map-hud-view";
 import { routeMapNodeSelection } from "../run/map-node-routing";
+import { runRemotePersistence } from "../run/run-remote-persistence";
 import { RUN_RESUME_CHECKPOINT_VERSION } from "../run/run-resume-checkpoint";
 import { runSession } from "../run/run-session";
 import { MapScene } from "./CoreFlowScenes";
@@ -51,10 +52,7 @@ export class InteractiveMapScene extends MapScene {
         }
 
         const selectedNode = route.payload.node as GeneratedMapNode | undefined;
-        if (
-          selectedNode !== undefined &&
-          route.sceneKey !== SCENE_KEYS.map
-        ) {
+        if (selectedNode !== undefined && route.sceneKey !== SCENE_KEYS.map) {
           runSession.setCheckpoint({
             version: RUN_RESUME_CHECKPOINT_VERSION,
             sceneKey: route.sceneKey,
@@ -63,6 +61,8 @@ export class InteractiveMapScene extends MapScene {
               (route.payload.nextNodeIds as readonly string[] | undefined) ?? [],
           });
         }
+
+        void runRemotePersistence.checkpoint(route.runState);
         this.scene.start(route.sceneKey, route.payload);
       });
     });
