@@ -15,15 +15,23 @@ describe("enemy visual assets", () => {
     expect(COMBAT_BACKGROUND_ASSET.path).toBe("/assets/background/전투 배경.png");
     expect(ENEMY_IMAGE_ASSETS).toContainEqual({
       key: "enemy:ink-slime:ready",
-      path: "/assets/monster/먹물 슬라임_행동준비.png",
+      path: "/assets/images/enemies/ink-slime/ready.png",
     });
     expect(ENEMY_IMAGE_ASSETS).toContainEqual({
       key: "enemy:ink-slime:special",
-      path: "/assets/monster/먹물 슬라임_특수행동준비.png",
+      path: "/assets/images/enemies/ink-slime/special.png",
     });
     expect(ENEMY_IMAGE_ASSETS).toContainEqual({
       key: "enemy:ink-slime:disabled",
-      path: "/assets/monster/먹물 슬라임_행동불능.png",
+      path: "/assets/images/enemies/ink-slime/disabled.png",
+    });
+    expect(ENEMY_IMAGE_ASSETS).toContainEqual({
+      key: "enemy:red-corrector:idle",
+      path: "/assets/images/enemies/red-corrector/idle.png",
+    });
+    expect(ENEMY_IMAGE_ASSETS).toContainEqual({
+      key: "enemy:chain-executor:defend",
+      path: "/assets/images/enemies/chain-executor/defend.png",
     });
   });
 
@@ -44,6 +52,8 @@ describe("enemy visual assets", () => {
     expect(resolveEnemyTextureKey("iron-beetle", "defend")).toBe(
       "enemy:iron-beetle:defend",
     );
+    expect(resolveEnemyTextureKey("ink-slime")).toBe("enemy:ink-slime:idle");
+    expect(resolveEnemyTextureKey("iron-beetle")).toBe("enemy:iron-beetle:ready");
     expect(resolveEnemyTextureKey("unknown")).toBeUndefined();
     expect(resolveEnemyTextureKey(undefined)).toBeUndefined();
   });
@@ -74,5 +84,9 @@ describe("enemy visual assets", () => {
       hitRemainingMs: 0,
       activeAttackId: "ink-slime-attack",
     })).toBe("ready");
+    expect(resolveEnemyVisualState({
+      currentHp: 10,
+      hitRemainingMs: 0,
+    })).toBe("idle");
   });
 });

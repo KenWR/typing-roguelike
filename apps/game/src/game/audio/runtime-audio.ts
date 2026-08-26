@@ -18,6 +18,7 @@ export const RUNTIME_AUDIO_PATHS = Object.freeze({
   relicPickup: "/assets/audio/유물 줍는 소리.mp3",
   coin: "/assets/audio/동전.mp3",
   walk: "/assets/audio/걷는소리.mp3",
+  comboBreak: "/assets/audio/콤보 깨질때.mp3",
 });
 
 export type RuntimeBgmCue = "menu" | "tower" | "boss";
@@ -153,3 +154,4 @@ export const playWeaponImpactSound = (equipmentIds: readonly string[]): void => 
 export const playRewardPickupSound = (): void => playSfx(RUNTIME_AUDIO_PATHS.relicPickup, 0.8);
 export const playCoinSound = (): void => playSfx(RUNTIME_AUDIO_PATHS.coin, 0.8);
 export const playWalkSound = (): void => playSfx(RUNTIME_AUDIO_PATHS.walk, 0.65);
+export const playComboBreakSound = (): void => playSfx(RUNTIME_AUDIO_PATHS.comboBreak, 0.78);

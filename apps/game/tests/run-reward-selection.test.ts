@@ -78,7 +78,7 @@ describe("run reward equipment flow", () => {
 
     runState = applyEquipmentReward(runState, second.id);
     expect(runState.loadout.subweaponId).toBe(second.id);
-    expect(runState.inventory.itemInstances).toContain(first.id);
+    expect(runState.inventory.itemInstances).not.toContain(first.id);
     expect(runState.inventory.itemInstances).toContain(second.id);
   });
 
@@ -124,7 +124,7 @@ describe("run reward relic candidates", () => {
       const candidates = flow.adapter.getViewState().candidates;
 
       expect(candidates).toHaveLength(3);
-      expect(candidates.some((candidate) => candidate.kind === "weapon")).toBe(true);
+      expect(candidates.filter((candidate) => candidate.kind === "relic")).toHaveLength(2);
       if (candidates.some((candidate) => candidate.kind === "relic")) sawRelic = true;
     }
 

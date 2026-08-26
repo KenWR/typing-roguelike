@@ -1,6 +1,7 @@
 import {
   EQUIPMENT_BY_ID,
   RELIC_BY_ID,
+  RING_BY_ID,
   type EquipmentConfig,
   type RelicConfig,
   type Rarity,
@@ -66,36 +67,58 @@ export const createInventoryView = (
 
   const equipment = runState.inventory.itemInstances.map((id) => {
     const config = EQUIPMENT_BY_ID.get(id);
-    if (config === undefined) {
+    if (config !== undefined) {
       return {
-        id,
-        name: id,
-        rarity: "common" as const,
+        id: config.id,
+        name: config.name,
+        rarity: config.rarity,
+        slot: config.slot,
+        isEquipped: equippedEquipmentIds.has(config.id),
+        skills: config.skills.map((skill) => ({
+          id: skill.id,
+          name: skill.name,
+          command: skill.command,
+          effect: getSkillEffect(skill.description, skill.effect),
+        })),
+      } satisfies InventoryEquipmentView;
+    }
+
+    const ring = RING_BY_ID.get(id);
+    if (ring !== undefined) {
+      return {
+        id: ring.id,
+        name: ring.name,
+        rarity: ring.rarity,
+        // 기존 인벤토리 카드 계약을 유지하면서 반지를 정식 등록 아이템으로 표시한다.
         slot: "unknown" as const,
-        isEquipped: equippedEquipmentIds.has(id),
+        isEquipped: equippedEquipmentIds.has(ring.id),
         skills: [
           {
-            id: `${id}:unknown-effect`,
-            name: "효과 정보 없음",
-            command: "-",
-            effect: "등록되지 않은 장비입니다.",
+            id: `${ring.id}:affix`,
+            name: ring.position === "prefix" ? "반지 · 접두사" : "반지 · 접미사",
+            command: ring.position === "prefix"
+              ? `${ring.commandAffix} …`
+              : `… ${ring.commandAffix}`,
+            effect: ring.description,
           },
         ],
       } satisfies InventoryEquipmentView;
     }
 
     return {
-      id: config.id,
-      name: config.name,
-      rarity: config.rarity,
-      slot: config.slot,
-      isEquipped: equippedEquipmentIds.has(config.id),
-      skills: config.skills.map((skill) => ({
-        id: skill.id,
-        name: skill.name,
-        command: skill.command,
-        effect: getSkillEffect(skill.description, skill.effect),
-      })),
+      id,
+      name: id,
+      rarity: "common" as const,
+      slot: "unknown" as const,
+      isEquipped: equippedEquipmentIds.has(id),
+      skills: [
+        {
+          id: `${id}:unknown-effect`,
+          name: "효과 정보 없음",
+          command: "-",
+          effect: "등록되지 않은 장비입니다.",
+        },
+      ],
     } satisfies InventoryEquipmentView;
   });
 

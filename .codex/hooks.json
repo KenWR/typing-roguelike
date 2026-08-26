@@ -1,0 +1,41 @@
+{
+  "description": "Repository-local quality gate for changed Codex tasks.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "^(startup|resume|clear)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/hooks/quality-gate.ts\"",
+            "timeout": 30,
+            "statusMessage": "Recording repository baseline"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/hooks/quality-gate.ts\"",
+            "timeout": 900,
+            "statusMessage": "Running the repository quality gate"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/hooks/quality-gate.ts\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

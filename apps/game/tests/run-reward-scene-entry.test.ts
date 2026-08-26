@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   EQUIPMENT_CONFIGS,
   RELIC_CONFIGS,
+  RING_CONFIGS,
   beginMapNode,
   createInitialRunState,
 } from "@typing-roguelike/shared";
@@ -30,7 +31,7 @@ const createRewardRun = () => {
 };
 
 describe("run reward scene entry", () => {
-  test("builds real equipment rewards from RunState and routes back to map", () => {
+  test("builds real reward candidates from RunState and routes back to map", () => {
     const { runState, nodeId, nextNodeIds } = createRewardRun();
     const entry = createRunRewardSceneEntry({ runState, nodeId, nextNodeIds });
     const state = entry.adapter.getViewState();
@@ -39,12 +40,18 @@ describe("run reward scene entry", () => {
     expect(state.round).toBe(runState.map.currentRound);
     expect(state.currency).toBe(runState.runCurrency);
     expect(state.candidates.length).toBeGreaterThan(0);
-    // 보상에는 장비와 유물이 섞여 나온다.
-    expect(state.candidates.every((candidate) =>
-      candidate.kind === "relic"
-        ? RELIC_CONFIGS.some((relic) => relic.id === candidate.id)
-        : EQUIPMENT_CONFIGS.some((equipment) => equipment.id === candidate.id),
-    )).toBe(true);
+    // 보상 종류가 늘어나도 각 후보는 해당 공용 content registry의 실제 항목이어야 한다.
+    expect(state.candidates.every((candidate) => {
+      if (candidate.kind === "relic") {
+        return RELIC_CONFIGS.some((relic) => relic.id === candidate.id);
+      }
+      if (candidate.kind === "ring") {
+        return RING_CONFIGS.some((ring) => ring.id === candidate.id);
+      }
+      return candidate.kind === "weapon"
+        && EQUIPMENT_CONFIGS.some((equipment) => equipment.id === candidate.id);
+    })).toBe(true);
+    // 특수 보상이 섞여도 기존 보장 조건인 최소 장비 1칸은 유지한다.
     expect(state.candidates.some((candidate) => candidate.kind === "weapon")).toBe(true);
   });
 

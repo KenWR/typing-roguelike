@@ -2,6 +2,7 @@ import {
   ENCOUNTER_CONFIGS,
   ENEMY_CONFIGS,
   EQUIPMENT_CONFIGS,
+  resolveSkillsWithRings,
   type EncounterConfig,
   type EnemyActionConfig,
   type GeneratedMapNode,
@@ -82,11 +83,19 @@ const getEquippedIds = (runState: Readonly<RunState>): string[] =>
     (equipmentId): equipmentId is string => equipmentId !== null,
   );
 
-const getEquippedSkills = (equipmentIds: readonly string[]): SkillConfig[] =>
-  equipmentIds.flatMap(
+const getEquippedSkills = (
+  runState: Readonly<RunState>,
+  equipmentIds: readonly string[],
+): SkillConfig[] => {
+  const baseSkills = equipmentIds.flatMap(
     (equipmentId) =>
       EQUIPMENT_CONFIGS.find((equipment) => equipment.id === equipmentId)?.skills ?? [],
   );
+  return resolveSkillsWithRings(baseSkills, [
+    runState.loadout.ring1Id,
+    runState.loadout.ring2Id,
+  ]).map(({ skill }) => skill);
+};
 
 const getRewardPolicy = (
   nodeType: CombatEncounterInitialization["nodeType"],
@@ -137,7 +146,7 @@ export const initializeCombatEncounter = (
         currentHp: runState.character.currentHp,
         maxHp: runState.character.maxHp,
         equipmentIds,
-        skills: getEquippedSkills(equipmentIds),
+        skills: getEquippedSkills(runState, equipmentIds),
       },
       rewardPolicy: getRewardPolicy(node.type),
     },

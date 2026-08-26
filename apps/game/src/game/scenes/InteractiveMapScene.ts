@@ -1,8 +1,11 @@
 import Phaser from "phaser";
-import type {
-  GeneratedMapNode,
-  MapNodeStatus,
-  RunState,
+import {
+  getCombatLoadoutOptions,
+  type CombatLoadoutMode,
+  type CombatLoadoutOption,
+  type GeneratedMapNode,
+  type MapNodeStatus,
+  type RunState,
 } from "@typing-roguelike/shared";
 import { playWalkSound } from "../audio/runtime-audio";
 import { InventoryModal } from "../inventory/inventory-modal";
@@ -326,29 +329,26 @@ export class InteractiveMapScene extends MapScene {
       hitArea.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
         if (!this.isMapViewportPointer(pointer, layout)) return;
         if (this.selectionLocked || this.inventoryModal !== undefined) return;
-
-        const route = routeMapNodeSelection(activeRun, node.id);
-        if (!route.applied) return;
-
-        this.selectionLocked = true;
-        this.input.enabled = false;
-        playWalkSound();
-        if (runSession.get()?.status === "active") {
-          runSession.update(() => route.runState);
+        const currentRun = runSession.get() ?? activeRun;
+        if (
+          node.type === "combat" ||
+          node.type === "elite" ||
+          node.type === "boss"
+        ) {
+          const loadoutOptions = getCombatLoadoutOptions(currentRun);
+          if (loadoutOptions.length > 1) {
+            this.openCombatLoadoutModal(node.id, currentRun, loadoutOptions);
+            return;
+          }
+          this.routeSelectedNode(
+            node.id,
+            currentRun,
+            loadoutOptions[0]?.mode,
+          );
+          return;
         }
 
-        const selectedNode = route.payload.node as GeneratedMapNode | undefined;
-        if (selectedNode !== undefined && route.sceneKey !== SCENE_KEYS.map) {
-          runSession.setCheckpoint({
-            version: RUN_RESUME_CHECKPOINT_VERSION,
-            sceneKey: route.sceneKey,
-            node: selectedNode,
-            nextNodeIds: (route.payload.nextNodeIds as readonly string[] | undefined) ?? [],
-          });
-        }
-
-        void runRemotePersistence.checkpoint(route.runState);
-        this.scene.start(route.sceneKey, route.payload);
+        this.routeSelectedNode(node.id, currentRun);
       });
 
     }
@@ -522,6 +522,61 @@ export class InteractiveMapScene extends MapScene {
       point.y >= MAP_VIEW_TOP &&
       point.y <= MAP_VIEW_TOP + layout.mapViewportHeight
     );
+  }
+
+  private openCombatLoadoutModal(
+    nodeId: string,
+    runState: Readonly<RunState>,
+    options: readonly CombatLoadoutOption[],
+  ): void {
+    this.inventoryModal = new InventoryModal(
+      this,
+      runState,
+      () => this.closeInventoryModal(),
+      {
+        combatLoadout: {
+          options,
+          onSelect: (mode) => {
+            this.closeInventoryModal();
+            this.routeSelectedNode(nodeId, runState, mode);
+          },
+        },
+      },
+    );
+  }
+
+  private routeSelectedNode(
+    nodeId: string,
+    fallbackRunState: Readonly<RunState>,
+    combatLoadout?: CombatLoadoutMode,
+  ): void {
+    const runState = runSession.get() ?? fallbackRunState;
+    const route = routeMapNodeSelection(
+      runState,
+      nodeId,
+      combatLoadout === undefined ? {} : { combatLoadout },
+    );
+    if (!route.applied) return;
+
+    this.selectionLocked = true;
+    this.input.enabled = false;
+    playWalkSound();
+    if (runSession.get()?.status === "active") {
+      runSession.update(() => route.runState);
+    }
+
+    const selectedNode = route.payload.node as GeneratedMapNode | undefined;
+    if (selectedNode !== undefined && route.sceneKey !== SCENE_KEYS.map) {
+      runSession.setCheckpoint({
+        version: RUN_RESUME_CHECKPOINT_VERSION,
+        sceneKey: route.sceneKey,
+        node: selectedNode,
+        nextNodeIds: (route.payload.nextNodeIds as readonly string[] | undefined) ?? [],
+      });
+    }
+
+    void runRemotePersistence.checkpoint(route.runState);
+    this.scene.start(route.sceneKey, route.payload);
   }
 
   private createInventoryButton(width: number): Phaser.GameObjects.Container {

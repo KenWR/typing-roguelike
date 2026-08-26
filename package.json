@@ -10,7 +10,19 @@
     "dev": "bun run --filter './apps/*' dev",
     "dev:game": "bun run --filter @typing-roguelike/game dev",
     "dev:api": "bun run --filter @typing-roguelike/api dev",
+    "format": "bun scripts/quality/changed-files.ts format --write",
+    "format:check": "bun scripts/quality/changed-files.ts format",
+    "lint": "bun scripts/quality/changed-files.ts lint --error-on-warnings",
+    "check:static": "bun run format:check && bun run lint && bun scripts/quality/diff-check.ts",
     "build": "bun run --filter './apps/*' build",
-    "typecheck": "bun run --filter '*' typecheck"
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun test",
+    "test:scripts": "bun test ./.codex/hooks/quality-gate.test.ts",
+    "test:e2e": "playwright test",
+    "validate": "bun run check:static && bun run typecheck && bun run test && bun run test:scripts && bun run build && bun run test:e2e"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.10",
+    "@playwright/test": "1.62.1"
   }
 }

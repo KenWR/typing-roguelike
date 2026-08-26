@@ -1,4 +1,6 @@
 import type Phaser from "phaser";
+import { resolveEffectTextureKey } from "../assets/effect-visual-assets";
+import { RING_CONFIGS } from "@typing-roguelike/shared";
 import { MENU_SETTINGS_REGISTRY_KEYS, type CommandLanguage } from "../scenes/menu-settings";
 import type {
   CommandInputSnapshot,
@@ -16,7 +18,7 @@ export type CommandHudEffect = Readonly<{
   description: string;
   durationMs: number | null;
   remainingMs: number | null;
-  placeholderTextureKey: "command-effect-placeholder";
+  textureKey: string;
 }>;
 
 export type CommandHudState = Readonly<{
@@ -30,12 +32,18 @@ export type CommandHudState = Readonly<{
 
 export type CommandHudCharacterState = "matched" | "incorrect" | "pending";
 export type CommandHudCharacter = Readonly<{ value: string; state: CommandHudCharacterState }>;
+export type CommandHudSegments = Readonly<{
+  prefix?: string;
+  baseCommand: string;
+  suffix?: string;
+}>;
 
 type CommandHudPresentation = Readonly<{ labelKo: string; labelEn: string; color: string; accent: number }>;
 
 type SkillEffectLike =
   | Readonly<{ type: "damage"; coefficient: number }>
   | Readonly<{ type: "guard"; damageMultiplier: number; durationMs: number }>
+  | Readonly<{ type: "shield"; amount: number; durationMs: number }>
   | Readonly<{ type: "status"; statusId: string; durationMs: number; stacks?: number }>;
 
 type SkillLike = Readonly<{
@@ -65,6 +73,7 @@ type EffectAwareScene = Phaser.Scene & Readonly<{
 type EffectVisual = Readonly<{
   container: Phaser.GameObjects.Container;
   frame: Phaser.GameObjects.Graphics;
+  icon: Phaser.GameObjects.Image;
   darkness: Phaser.GameObjects.Rectangle;
   darknessMask: Phaser.Display.Masks.GeometryMask;
   hitArea: Phaser.GameObjects.Zone;
@@ -83,7 +92,9 @@ const EFFECT_GAP = 6;
 const EFFECT_TOP = 8;
 const EFFECT_LEFT = 8;
 const EFFECT_RADIUS = 7;
-const PLACEHOLDER_TEXTURE_KEY = "command-effect-placeholder" as const;
+const MISSING_ASSET_TEXTURE_KEY = "placeholder:missing-asset";
+const effectTextureKey = (effectId: string): string =>
+  resolveEffectTextureKey(effectId) ?? MISSING_ASSET_TEXTURE_KEY;
 const SCENE_UPDATE_EVENT = "update";
 const SCENE_SHUTDOWN_EVENT = "shutdown";
 const SCENE_DESTROY_EVENT = "destroy";
@@ -93,6 +104,55 @@ const clamp = (value: number, minimum: number, maximum: number): number => Math.
 
 export function formatAvailableCommands(commands: readonly string[]): string {
   return commands.join(", ");
+}
+
+/** Ring registry를 기준으로 표시용 접두사/기본 명령어/접미사를 분리한다. */
+export function splitRingCommand(command: string): CommandHudSegments {
+  let baseCommand = command;
+  let prefix: string | undefined;
+  let suffix: string | undefined;
+  const prefixes = RING_CONFIGS
+    .filter((ring) => ring.position === "prefix")
+    .sort((left, right) => right.commandAffix.length - left.commandAffix.length);
+  const suffixes = RING_CONFIGS
+    .filter((ring) => ring.position === "suffix")
+    .sort((left, right) => right.commandAffix.length - left.commandAffix.length);
+
+  for (const ring of prefixes) {
+    const token = `${ring.commandAffix} `;
+    if (baseCommand.startsWith(token)) {
+      prefix = ring.commandAffix;
+      baseCommand = baseCommand.slice(token.length);
+      break;
+    }
+  }
+  for (const ring of suffixes) {
+    const token = ` ${ring.commandAffix}`;
+    if (baseCommand.endsWith(token)) {
+      suffix = ring.commandAffix;
+      baseCommand = baseCommand.slice(0, -token.length);
+      break;
+    }
+  }
+
+  return {
+    ...(prefix === undefined ? {} : { prefix }),
+    baseCommand,
+    ...(suffix === undefined ? {} : { suffix }),
+  };
+}
+
+export function formatSegmentedCommand(command: string): string {
+  const segments = splitRingCommand(command);
+  return [
+    segments.prefix === undefined ? null : `접두사: ${segments.prefix}`,
+    `명령어: ${segments.baseCommand}`,
+    segments.suffix === undefined ? null : `접미사: ${segments.suffix}`,
+  ].filter((part): part is string => part !== null).join("  |  ");
+}
+
+export function formatSegmentedAvailableCommands(commands: readonly string[]): string {
+  return commands.map(formatSegmentedCommand).join("\n");
 }
 
 export function getEffectDarknessRatio(effect: Pick<CommandHudEffect, "durationMs" | "remainingMs">): number {
@@ -119,7 +179,17 @@ export function createSkillCommandEffects(skill: SkillLike | undefined): Command
         description: `${skill.name}: 받는 피해 ${reduction}% 감소 · ${effect.durationMs / 1_000}초`,
         durationMs: effect.durationMs,
         remainingMs: null,
-        placeholderTextureKey: PLACEHOLDER_TEXTURE_KEY,
+        textureKey: effectTextureKey("guard"),
+      }];
+    }
+    if (effect.type === "shield") {
+      return [{
+        id: `${skill.id}:shield:${index}`,
+        name: "실드",
+        description: `${skill.name}: 실드 ${effect.amount} · ${effect.durationMs / 1_000}초`,
+        durationMs: effect.durationMs,
+        remainingMs: null,
+        textureKey: effectTextureKey("shield"),
       }];
     }
     return [{
@@ -128,7 +198,7 @@ export function createSkillCommandEffects(skill: SkillLike | undefined): Command
       description: `${skill.name}: ${effect.statusId} ${effect.stacks ?? 1}중첩 · ${effect.durationMs / 1_000}초`,
       durationMs: effect.durationMs,
       remainingMs: null,
-      placeholderTextureKey: PLACEHOLDER_TEXTURE_KEY,
+      textureKey: effectTextureKey(effect.statusId),
     }];
   });
 }
@@ -140,7 +210,9 @@ export function createTimedApCommandEffects(effects: readonly TimedApEffectLike[
     description: `AP 재생 ${effect.amountPerSecond >= 0 ? "+" : ""}${effect.amountPerSecond}/초`,
     durationMs: effect.durationMs,
     remainingMs: effect.remainingMs,
-    placeholderTextureKey: PLACEHOLDER_TEXTURE_KEY,
+    textureKey: effectTextureKey(
+      effect.amountPerSecond >= 0 ? "ap-regen-up" : "ap-regen-down",
+    ),
   }));
 }
 
@@ -254,6 +326,10 @@ export class CommandHud {
       const x = EFFECT_LEFT + index * (EFFECT_SIZE + EFFECT_GAP);
       const darknessHeight = EFFECT_SIZE * getEffectDarknessRatio(effect);
       visual.container.setPosition(x, EFFECT_TOP).setVisible(true).setActive(true);
+      const textureKey = this.scene.textures.exists(effect.textureKey)
+        ? effect.textureKey
+        : MISSING_ASSET_TEXTURE_KEY;
+      if (visual.icon.texture.key !== textureKey) visual.icon.setTexture(textureKey);
       visual.darkness.setPosition(0, EFFECT_SIZE - darknessHeight).setSize(EFFECT_SIZE, darknessHeight);
       visual.hitArea.setData("effectId", effect.id);
       visual.hitArea.setData("effect", effect);
@@ -280,6 +356,9 @@ export class CommandHud {
     frame.fillRoundedRect(0, 0, EFFECT_SIZE, EFFECT_SIZE, EFFECT_RADIUS);
     frame.lineStyle(2, 0x94a3b8, 0.95);
     frame.strokeRoundedRect(0, 0, EFFECT_SIZE, EFFECT_SIZE, EFFECT_RADIUS);
+    const icon = this.scene.add
+      .image(EFFECT_SIZE / 2, EFFECT_SIZE / 2, MISSING_ASSET_TEXTURE_KEY)
+      .setDisplaySize(EFFECT_SIZE - 4, EFFECT_SIZE - 4);
 
     const maskShape = this.scene.make.graphics({ x: 0, y: 0 });
     maskShape.setVisible(false);
@@ -299,11 +378,11 @@ export class CommandHud {
       this.hideTooltip();
     });
 
-    effectContainer.add([frame, darkness, hitArea]);
+    effectContainer.add([frame, icon, darkness, hitArea]);
     this.container.add(effectContainer);
     this.container.bringToTop(this.tooltipBackground);
     this.container.bringToTop(this.tooltipText);
-    const visual = { container: effectContainer, frame, darkness, darknessMask, hitArea };
+    const visual = { container: effectContainer, frame, icon, darkness, darknessMask, hitArea };
     this.effectVisuals.push(visual);
     return visual;
   }
@@ -348,7 +427,7 @@ export class CommandHud {
       .setPosition(contentLeft, 30)
       .setFontSize(commandFontSize)
       .setWordWrapWidth(Math.max(120, this.panelWidth - contentLeft - 18), true)
-      .setText(formatAvailableCommands(this.state.commands))
+      .setText(formatSegmentedAvailableCommands(this.state.commands))
       .setColor("#f8fafc");
 
     const listBottom = 30 + this.commandText.height;
@@ -369,7 +448,7 @@ export class CommandHud {
     const statusLabel = language === "ko" ? presentation.labelKo : presentation.labelEn;
     this.statusText
       .setPosition(18, statusY)
-      .setText(`${activePrefix}: ${this.state.command} · ${statusLabel} ${matchedLength}/${commandLength}`)
+      .setText(`${activePrefix}: ${formatSegmentedCommand(this.state.command)} · ${statusLabel} ${matchedLength}/${commandLength}`)
       .setColor(presentation.color);
 
     this.progressTrack.setPosition(18, progressY).setSize(progressWidth, 8);

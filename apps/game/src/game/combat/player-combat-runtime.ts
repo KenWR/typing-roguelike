@@ -107,7 +107,10 @@ export class PlayerCombatRuntime {
   private readonly enemyShieldIdByTimelineId = new Map<string, string>();
   private readonly player: SkillCombatantState;
   private readonly enemies = new Map<string, SkillCombatantState>();
-  private readonly skillsByActionId = new Map<string, SkillDefinition>();
+  private readonly skillsByActionId = new Map<
+    string,
+    Readonly<{ skill: SkillDefinition; damageMultiplier: number }>
+  >();
   private route: CombatOutcomeRoute | null = null;
   private nextEnemyTimelineSequence = 1;
 
@@ -162,9 +165,13 @@ export class PlayerCombatRuntime {
    * 커맨드가 완성된 순간 호출됩니다. 스킬의 실드는 선딜을 기다리지 않고
    * 이 시점에 즉시 부여됩니다.
    */
-  registerAction(actionId: string, skill: SkillDefinition): void {
+  registerAction(
+    actionId: string,
+    skill: SkillDefinition,
+    damageMultiplier = 1,
+  ): void {
     if (this.route !== null) return;
-    this.skillsByActionId.set(actionId, skill);
+    this.skillsByActionId.set(actionId, { skill, damageMultiplier });
     this.grantSkillShields(actionId, skill);
   }
 
@@ -226,7 +233,7 @@ export class PlayerCombatRuntime {
       combat: this.route === null ? combatUpdate : this.combat.advance(0),
       enemyTimeline:
         this.route === null
-          ? enemyTimelineUpdate
+          ? { ...enemyTimelineUpdate, snapshot: this.enemyTimeline.snapshot }
           : this.enemyTimeline.advance(0),
       playerHp: this.playerHp,
       playerAp: this.actionPoints.snapshot.currentAp,
@@ -304,8 +311,9 @@ export class PlayerCombatRuntime {
   }
 
   private resolvePlayerImpact(event: PlayerImpactEvent): void {
-    const skill = this.skillsByActionId.get(event.actionId);
-    if (skill === undefined) return;
+    const entry = this.skillsByActionId.get(event.actionId);
+    if (entry === undefined) return;
+    const { skill, damageMultiplier } = entry;
 
     const target = event.targetId === "player"
       ? this.player
@@ -321,6 +329,7 @@ export class PlayerCombatRuntime {
       actor: this.player,
       target,
       shields: this.shields,
+      damageMultiplier,
     });
     if (!result.applied) return;
 
@@ -333,8 +342,24 @@ export class PlayerCombatRuntime {
       playWeaponImpactSound(this.initialization.player.equipmentIds);
     }
 
+    if (target.id !== this.player.id && target.snapshot.health.isDead) {
+      this.cancelEnemyAttacks(target.id);
+    }
+
     for (const shieldId of result.brokenShieldIds) {
       this.cancelAttackOnBrokenShield(shieldId);
+    }
+  }
+
+  /** 사망한 적의 진행 중인 행동과 해당 행동의 실드를 즉시 정리합니다. */
+  private cancelEnemyAttacks(enemyId: string): void {
+    const attacks = this.enemyTimeline.snapshot.attacks.filter(
+      (attack) => attack.enemyId === enemyId,
+    );
+
+    for (const attack of attacks) {
+      this.releaseEnemyShield(attack.timelineId);
+      this.enemyTimeline.cancelAttack(attack.timelineId);
     }
   }
 
@@ -457,7 +482,6 @@ export class PlayerCombatRuntime {
     enemyId: string,
     action: CombatEnemyInitialization["actions"][number],
   ): void {
-    if (action.kind !== "defense") return;
     const amount = action.shieldAmount ?? 0;
     if (amount <= 0 || action.windupMs <= 0) return;
 
