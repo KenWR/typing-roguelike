@@ -55,7 +55,22 @@ type SkillLike = Readonly<{
   name: string;
   command: string;
   description: string;
+  category?: "basic" | "special" | "guard";
+  apCost?: number;
   effects?: readonly SkillEffectLike[];
+}>;
+
+type SkillPreviewInput = Readonly<{
+  name: string;
+  category: "basic" | "special" | "guard";
+  apCost: number;
+}>;
+type SkillPreviewSkill = SkillLike & SkillPreviewInput;
+
+export type CommandHudOptions = Readonly<{
+  skills?: readonly SkillPreviewSkill[];
+  resolveApCost?: (skill: SkillPreviewInput) => number;
+  resolveDamage?: (skill: SkillPreviewInput) => number | null;
 }>;
 
 type TimedApEffectLike = Readonly<{
@@ -159,6 +174,27 @@ export function formatSegmentedCommand(command: string): string {
 
 export function formatSegmentedAvailableCommands(commands: readonly string[]): string {
   return commands.map(formatSegmentedCommand).join("\n");
+}
+
+export function formatAvailableSkillPreviews(
+  skills: readonly SkillPreviewInput[],
+  resolveApCost: (skill: SkillPreviewInput) => number = (skill) => skill.apCost,
+  resolveDamage: (skill: SkillPreviewInput) => number | null = () => null,
+): string {
+  const sortedSkills = [...skills].sort((left, right) => {
+    const leftRank = left.category === "special" ? 1 : 0;
+    const rightRank = right.category === "special" ? 1 : 0;
+    return leftRank - rightRank;
+  });
+  return [
+    "TYPE // COMMAND // COST // DAMAGE",
+    ...sortedSkills.map((skill) => {
+      const label = skill.category === "special" ? "특수기술" : "기본기술";
+      const ap = Math.max(0, Math.round(resolveApCost(skill)));
+      const damage = resolveDamage(skill);
+      return `${label} : ${skill.name} : ${ap} : ${damage === null ? "-" : Math.max(0, Math.round(damage))}`;
+    }),
+  ].join("\n");
 }
 
 export function createSkillCommandEffects(skill: SkillLike | undefined): CommandHudEffect[] {
@@ -269,13 +305,19 @@ export class CommandHud {
   private readonly tooltipText: Phaser.GameObjects.Text;
   private readonly effectVisuals: EffectVisual[] = [];
   private readonly scene: Phaser.Scene;
+  private readonly skills: readonly SkillPreviewSkill[];
+  private readonly resolveApCost: (skill: SkillPreviewInput) => number;
+  private readonly resolveDamage: (skill: SkillPreviewInput) => number | null;
   private state: CommandHudState;
   private panelWidth = 420;
   private panelHeight = 152;
   private hoveredEffectId: string | null = null;
 
-  constructor(scene: Phaser.Scene, initialSnapshot: CommandInputSnapshot) {
+  constructor(scene: Phaser.Scene, initialSnapshot: CommandInputSnapshot, options: CommandHudOptions = {}) {
     this.scene = scene;
+    this.skills = options.skills ?? [];
+    this.resolveApCost = options.resolveApCost ?? ((skill) => skill.apCost);
+    this.resolveDamage = options.resolveDamage ?? (() => null);
     this.state = createCommandHudState(initialSnapshot);
     this.container = scene.add.container(0, 0);
     this.panel = scene.add
@@ -348,10 +390,13 @@ export class CommandHud {
   }
   setSize(width: number, height: number): void {
     this.panelWidth = Math.max(260, width);
-    this.panelHeight = Math.max(132, height);
+    this.panelHeight = Math.max(132, height, this.getRequiredHeight());
     this.panel.setSize(this.panelWidth, this.panelHeight);
     this.container.setSize(this.panelWidth, this.panelHeight);
     this.refresh();
+  }
+  getHeight(): number {
+    return this.panelHeight;
   }
   update(snapshot: CommandInputSnapshot): void {
     this.state = updateCommandHudState(this.state, snapshot);
@@ -378,9 +423,7 @@ export class CommandHud {
 
   private resolveEffects(): CommandHudEffect[] {
     const effectScene = this.scene as EffectAwareScene;
-    const currentSkill = effectScene.combatInitialization?.player.skills.find(
-      (skill) => skill.command === this.state.command,
-    );
+    const currentSkill = this.skills.find((skill) => skill.command === this.state.command);
     const skillEffects = createSkillCommandEffects(currentSkill);
     const timedApEffects = createTimedApCommandEffects(effectScene.actionPoints?.snapshot.timedEffects);
     return [...skillEffects, ...timedApEffects];
@@ -512,17 +555,19 @@ export class CommandHud {
 
     this.panel.setStrokeStyle(2, presentation.accent, 0.95);
     this.title.setX(contentLeft);
+    const inputY = Math.max(58, this.panelHeight - 42);
+    const listHeight = Math.max(24, inputY - 34);
+    const previewText = formatAvailableSkillPreviews(this.skills, this.resolveApCost, this.resolveDamage);
+    const previewLineCount = Math.max(1, previewText.split("\n").length);
+    const previewFontSize = Math.max(10, Math.min(commandFontSize, Math.floor(listHeight / previewLineCount)));
     this.commandText
       .setPosition(contentLeft, 30)
-      .setFontSize(commandFontSize)
+      .setFontSize(previewFontSize)
+      .setLineSpacing(0)
       .setWordWrapWidth(Math.max(120, this.panelWidth - contentLeft - 18), true)
-      .setText(formatSegmentedAvailableCommands(this.state.commands))
-      .setColor("#f8fafc");
-
-    const listBottom = 30 + this.commandText.height;
-    const inputY = Math.min(Math.max(58, listBottom + 5), Math.max(58, this.panelHeight - 58));
-    const statusY = Math.min(inputY + 23, this.panelHeight - 33);
-    const progressY = Math.min(statusY + 23, this.panelHeight - 12);
+      .setText(previewText)
+      .setColor("#f8fafc")
+      .setCrop(0, 0, Math.max(120, this.panelWidth - contentLeft - 18), listHeight);
 
     const inputPrefix = language === "ko" ? "입력" : "INPUT";
     this.inputText
@@ -530,27 +575,20 @@ export class CommandHud {
       .setText(this.state.input.length > 0 ? `${inputPrefix}: ${this.state.input}` : `${inputPrefix}: —`)
       .setColor(presentation.color);
 
-    const activePrefix = language === "ko" ? "활성" : "ACTIVE";
-    const statusLabel = language === "ko" ? presentation.labelKo : presentation.labelEn;
-    this.statusText
-      .setPosition(18, statusY)
-      .setText(
-        `${activePrefix}: ${formatSegmentedCommand(this.state.command)} · ${statusLabel} ${matchedLength}/${commandLength}`,
-      )
-      .setColor(presentation.color);
+    this.statusText.setVisible(false);
 
+    const progressY = this.panelHeight - 12;
     this.progressTrack.setPosition(18, progressY).setSize(progressWidth, 8);
     this.progressFill
       .setPosition(18, progressY)
       .setSize(progressWidth * progressRatio, 8)
       .setFillStyle(presentation.accent, 1);
-    this.feedbackText
-      .setText(this.state.feedback?.type === "skill-started" ? `[SKILL START] ${this.state.feedback.command}` : "")
-      .setColor(presentation.color)
-      .setPosition(
-        isCompact ? Math.max(18, this.panelWidth - 210) : Math.max(218, this.panelWidth - 194),
-        isCompact ? 10 : statusY,
-      );
+    this.feedbackText.setVisible(false).setText("");
     this.refreshEffects();
+  }
+
+  private getRequiredHeight(): number {
+    const rowHeight = this.panelWidth < 380 ? 18 : this.panelWidth < 620 ? 20 : 24;
+    return 70 + Math.max(1, this.skills.length + 1) * rowHeight;
   }
 }

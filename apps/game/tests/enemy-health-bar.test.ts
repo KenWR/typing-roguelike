@@ -19,6 +19,14 @@ describe("enemy health bar", () => {
     });
   });
 
+  test("starts each enemy telegraph empty until its own action begins", () => {
+    expect(createEnemyHealthBarState(24, 30)).toMatchObject({
+      telegraphAttackName: "",
+      telegraphAttackType: null,
+      telegraphProgress: 0,
+    });
+  });
+
   test("formats hp and shield totals beside each other", () => {
     const state = createEnemyHealthBarState(56, 56, {
       shield: 0,
@@ -28,11 +36,19 @@ describe("enemy health bar", () => {
     expect(formatEnemyHealthBarLabel(state)).toBe("HP 56/56   SHD 0/30");
   });
 
-  test("expands max shield to include the requested current shield", () => {
+  test("clamps a current shield to its configured maximum", () => {
     expect(createEnemyHealthBarState(40, 40, { shield: 80, maxShield: 30 })).toMatchObject({
-      shield: 80,
-      maxShield: 80,
-      shieldRatio: 0,
+      shield: 30,
+      maxShield: 30,
+      healthRatio: 40 / 70,
+      shieldRatio: 30 / 70,
+    });
+  });
+
+  test("scales a full HP bar and shield to their combined total", () => {
+    expect(createEnemyHealthBarState(100, 100, { shield: 50, maxShield: 50 })).toMatchObject({
+      healthRatio: 2 / 3,
+      shieldRatio: 1 / 3,
     });
   });
 

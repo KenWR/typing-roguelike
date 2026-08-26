@@ -10,7 +10,7 @@ import { CombatApEffectController } from "./combat-ap-effects";
 import type { CombatEnemyInitialization, CombatEncounterInitialization } from "./encounter-initializer";
 import type { CombatState, CombatUpdate } from "./combat-state";
 import { ShieldPool, type ShieldInstance } from "./shield-pool";
-import type { EnemyAttackEvent, EnemyAttackTimeline, EnemyAttackTimelineUpdate } from "./enemy-attack-timeline";
+import type { EnemyAttackTimeline, EnemyAttackEvent, EnemyAttackTimelineUpdate } from "./enemy-attack-timeline";
 import { EnemyImpactResolver } from "./enemy-impact-resolver";
 import { SkillCombatantState, SkillImpactResolver, type TimedStatusEffect } from "./skill-impact-resolver";
 import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome-routing";
@@ -143,6 +143,10 @@ export class PlayerCombatRuntime {
     }
   }
 
+  /**
+   * 커맨드가 완성된 순간 호출됩니다. 스킬의 실드는 선딜을 기다리지 않고
+   * 이 시점에 즉시 부여됩니다.
+   */
   registerAction(actionId: string, skill: SkillDefinition, damageMultiplier = 1): void {
     if (this.route !== null) return;
     this.skillsByActionId.set(actionId, { skill, damageMultiplier });
@@ -176,6 +180,7 @@ export class PlayerCombatRuntime {
     return Object.fromEntries(Array.from(this.enemies, ([enemyId, enemy]) => [enemyId, enemy.timedStatuses]));
   }
 
+  /** 커맨드 완성으로 얻어 아직 남아 있는 플레이어 실드량입니다. */
   get playerShield(): number {
     return this.shields.totalAmount(this.player.id, this.elapsedMs);
   }
@@ -184,6 +189,7 @@ export class PlayerCombatRuntime {
     return this.shields.activeShields(this.player.id, this.elapsedMs);
   }
 
+  /** 선딜 중이라 실드가 차 있는 적들의 남은 실드량입니다. */
   get enemyShield(): Readonly<Record<string, number>> {
     const atMs = this.elapsedMs;
     return Object.fromEntries(
@@ -210,8 +216,15 @@ export class PlayerCombatRuntime {
     const enemyTimelineUpdate = this.enemyTimeline.advance(deltaMs);
 
     if (this.route === null) {
-      this.releaseFinishedWindupShields(enemyTimelineUpdate.snapshot);
       this.resolveImpactsChronologically(combatUpdate, enemyTimelineUpdate.events);
+      // Release after resolving the whole interval. ShieldPool checks each
+      // impact at its event timestamp, so a hit that lands before a defense
+      // windup ends can still be absorbed even when the frame crosses the
+      // cast-completed boundary. Canceled or expired windups are cleaned up
+      // once all events for the interval have been applied.
+      // Use the live snapshot because resolving an impact may start the next
+      // enemy action in the same update (including a new defense windup).
+      this.releaseFinishedWindupShields(this.enemyTimeline.snapshot);
     }
 
     return {
@@ -236,7 +249,12 @@ export class PlayerCombatRuntime {
   private resolveImpactsChronologically(combatUpdate: CombatUpdate, enemyEvents: readonly EnemyAttackEvent[]): void {
     const playerImpacts: OrderedRuntimeImpact[] = combatUpdate.events
       .filter((event) => event.type === "impact-resolved")
-      .map((event, sequence) => ({ source: "player", event, priority: 1, sequence }));
+      .map((event, sequence) => ({
+        source: "player",
+        event,
+        priority: 1,
+        sequence,
+      }));
     const enemyImpacts: OrderedRuntimeImpact[] = enemyEvents
       .filter((event) => event.type === "impact-resolved")
       .map((event, sequence) => ({
@@ -251,8 +269,11 @@ export class PlayerCombatRuntime {
     );
 
     for (const impact of orderedImpacts) {
-      if (impact.source === "player") this.resolvePlayerImpact(impact.event);
-      else this.resolveEnemyImpact(impact.event);
+      if (impact.source === "player") {
+        this.resolvePlayerImpact(impact.event);
+      } else {
+        this.resolveEnemyImpact(impact.event);
+      }
       this.resolveOutcome();
       if (this.route !== null) break;
     }
@@ -261,13 +282,16 @@ export class PlayerCombatRuntime {
     this.shields.pruneExpired(this.elapsedMs);
   }
 
+  /** 선딜이 끝나는 순간 적의 실드는 남은 양과 상관없이 사라집니다. */
   private releaseFinishedWindupShields(timeline: Readonly<EnemyAttackTimeline["snapshot"]>): void {
     const activeWindupTimelineIds = new Set(
       timeline.attacks.filter((attack) => attack.phase === "windup").map((attack) => attack.timelineId),
     );
 
     for (const timelineId of this.enemyShieldIdByTimelineId.keys()) {
-      if (!activeWindupTimelineIds.has(timelineId)) this.releaseEnemyShield(timelineId);
+      if (!activeWindupTimelineIds.has(timelineId)) {
+        this.releaseEnemyShield(timelineId);
+      }
     }
   }
 
@@ -308,17 +332,25 @@ export class PlayerCombatRuntime {
       this.cancelEnemyAttacks(target.id);
     }
 
-    for (const shieldId of result.brokenShieldIds) this.cancelAttackOnBrokenShield(shieldId);
+    for (const shieldId of result.brokenShieldIds) {
+      this.cancelAttackOnBrokenShield(shieldId);
+    }
   }
 
+  /** 사망한 적의 진행 중인 행동과 해당 행동의 실드를 즉시 정리합니다. */
   private cancelEnemyAttacks(enemyId: string): void {
     const attacks = this.enemyTimeline.snapshot.attacks.filter((attack) => attack.enemyId === enemyId);
+
     for (const attack of attacks) {
       this.releaseEnemyShield(attack.timelineId);
       this.enemyTimeline.cancelAttack(attack.timelineId);
     }
   }
 
+  /**
+   * 선딜 중인 적의 실드를 모두 깎으면 그 행동은 취소되고 적은 곧바로 다음
+   * 행동을 고릅니다.
+   */
   private cancelAttackOnBrokenShield(shieldId: string): void {
     const timelineId = this.enemyTimelineByShieldId.get(shieldId);
     if (timelineId === undefined) return;
@@ -355,15 +387,25 @@ export class PlayerCombatRuntime {
     });
     if (!result.applied) return;
 
-    if (action.apDelta !== undefined) this.actionPoints.adjust(action.apDelta);
+    if (action.apDelta !== undefined) {
+      this.actionPoints.adjust(action.apDelta);
+    }
 
-    playPlayerHitSound({ defended: result.defended, special: action.kind === "special" });
+    playPlayerHitSound({
+      defended: result.defended,
+      special: action.kind === "special",
+    });
     this.runState = {
       ...this.runState,
-      character: { ...this.runState.character, currentHp: this.playerHp },
+      character: {
+        ...this.runState.character,
+        currentHp: this.playerHp,
+      },
     };
 
-    if (!this.player.snapshot.health.isDead) this.startNextEnemyAttack(enemy.instanceId);
+    if (!this.player.snapshot.health.isDead) {
+      this.startNextEnemyAttack(enemy.instanceId);
+    }
   }
 
   private isEnemyDefenseImpact(event: ResolvedEnemyImpactEvent): boolean {
@@ -379,8 +421,9 @@ export class PlayerCombatRuntime {
       this.route !== null ||
       this.combat.snapshot.status !== "active" ||
       this.enemyTimeline.snapshot.status !== "active"
-    )
+    ) {
       return;
+    }
 
     const enemyState = this.enemies.get(enemyId);
     if (enemyState?.snapshot.health.isDead !== false) return;
@@ -412,6 +455,7 @@ export class PlayerCombatRuntime {
     this.grantEnemyWindupShield(timelineId, enemy.instanceId, action);
   }
 
+  /** 적은 선딜이 시작되는 순간 실드가 가득 찬 상태로 행동을 시작합니다. */
   private grantEnemyWindupShield(
     timelineId: string,
     enemyId: string,
@@ -433,6 +477,7 @@ export class PlayerCombatRuntime {
     this.enemyShieldIdByTimelineId.set(timelineId, shieldId);
   }
 
+  /** 커맨드를 완성한 순간 스킬의 실드를 즉시 부여합니다. */
   private grantSkillShields(actionId: string, skill: SkillDefinition): void {
     const atMs = this.elapsedMs;
     skill.effects.forEach((effect, index) => {
@@ -460,6 +505,7 @@ export class PlayerCombatRuntime {
     if (requestedTarget !== undefined && !requestedTarget.snapshot.health.isDead) {
       return requestedTarget;
     }
+
     return Array.from(this.enemies.values()).find((enemy) => !enemy.snapshot.health.isDead);
   }
 

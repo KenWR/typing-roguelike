@@ -1,22 +1,10 @@
-import {
-  createSkillActionDefinition,
-  type SkillDefinition,
-} from "@typing-roguelike/shared";
-import {
-  type CommandInputBuffer,
-  type CommandCompletedEvent,
-} from "../input/command-input-buffer";
-import {
-  ActionPointResource,
-  type ActionPointSnapshot,
-} from "./action-point-resource";
-import { CombatState, type CombatUpdate } from "./combat-state";
+import { createSkillActionDefinition, type SkillDefinition } from "@typing-roguelike/shared";
+import type { CommandInputBuffer, CommandCompletedEvent } from "../input/command-input-buffer";
+import type { ActionPointResource, ActionPointSnapshot } from "./action-point-resource";
+import type { CombatState, CombatUpdate } from "./combat-state";
 import { ComboTracker, type ComboSnapshot } from "./combo-tracker";
 
-export type SkillStartFailureReason =
-  | "unknown-command"
-  | "combat-unavailable"
-  | "insufficient-ap";
+export type SkillStartFailureReason = "unknown-command" | "combat-unavailable" | "insufficient-ap";
 
 export type SkillStartResult =
   | Readonly<{
@@ -90,19 +78,38 @@ export class SkillCommandStarter {
     }
   }
 
-  get comboSnapshot(): ComboSnapshot { return this.combo.snapshot; }
+  get comboSnapshot(): ComboSnapshot {
+    return this.combo.snapshot;
+  }
 
   breakCombo(reason: Parameters<ComboTracker["breakCombo"]>[0]): ComboSnapshot {
     return this.combo.breakCombo(reason);
   }
 
   connect(inputBuffer: CommandInputBuffer, listener: SkillStartListener): () => void {
-    const disconnectCompleted = inputBuffer.onCompleted((event) => listener(this.tryStart(event)));
-    const disconnectStatus = inputBuffer.onStatusChanged((event) => {
-      if (event.snapshot.status === "incorrect") this.combo.breakCombo("incorrect-input");
+    let commandStarted = false;
+    const disconnectCompleted = inputBuffer.onCompleted((event) => {
+      const result = this.tryStart(event);
+      commandStarted = result.started;
+      listener(result);
+    });
+    const disconnectSubmitted = inputBuffer.onSubmitted(({ snapshot }) => {
+      // A typo should not break the combo while the player is still editing.
+      // The Enter submission ends the cycle; only a cycle that never started
+      // a skill is considered a failed command.
+      if (snapshot.input.length > 0 && !commandStarted) {
+        this.combo.breakCombo("incorrect-input");
+      }
+      commandStarted = false;
+    });
+    const disconnectStatus = inputBuffer.onStatusChanged(({ snapshot }) => {
+      if (snapshot.status === "idle" && snapshot.input.length === 0) {
+        commandStarted = false;
+      }
     });
     return () => {
       disconnectCompleted();
+      disconnectSubmitted();
       disconnectStatus();
     };
   }
@@ -135,10 +142,7 @@ export class SkillCommandStarter {
     return { started: true, skill, actionId, ap: spend.snapshot, combat, combo };
   }
 
-  private failure(
-    command: string,
-    reason: Exclude<SkillStartFailureReason, "insufficient-ap">,
-  ): SkillStartResult {
+  private failure(command: string, reason: Exclude<SkillStartFailureReason, "insufficient-ap">): SkillStartResult {
     return {
       started: false,
       command,

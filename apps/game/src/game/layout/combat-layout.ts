@@ -11,8 +11,10 @@ export type CombatLayout = {
   commandHudReservation: Phaser.Geom.Rectangle;
 };
 
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), max);
+/** Local y offset of the enemy HP bar relative to its actor anchor. */
+export const ENEMY_HEALTH_BAR_OFFSET_Y = -170;
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 export function createCombatLayout(width: number, height: number): CombatLayout {
   const shortestSide = Math.min(width, height);
@@ -22,29 +24,29 @@ export function createCombatLayout(width: number, height: number): CombatLayout 
   const contentWidth = Math.max(0, width - safeInset * 2);
   const relicHudHeight = 48;
   const topContentY = safeInset + relicHudHeight + 8;
-  const hudHeight = isCompact
-    ? clamp(height * 0.14, 96, 124)
-    : clamp(height * 0.18, 72, 156);
-  const enemyAttackGaugeHeight = isCompact
-    ? clamp(height * 0.15, 112, 136)
-    : hudHeight;
-  const hudWidth = isCompact
-    ? contentWidth
-    : clamp(contentWidth * 0.34, 300, 420);
-  const hudGap = isCompact ? 0 : 12;
-  const enemyAttackGaugeX = isCompact
-    ? safeInset
-    : safeInset + hudWidth + hudGap;
-  const enemyAttackGaugeY = isCompact
-    ? topContentY + hudHeight + 8
-    : topContentY;
-  const enemyAttackGaugeWidth = isCompact
-    ? contentWidth
-    : Math.max(0, contentWidth - hudWidth - hudGap);
+  const hudHeight = isCompact ? clamp(height * 0.14, 96, 124) : clamp(height * 0.18, 72, 156);
+  // The former global gauge is retained as a layout reservation for backwards
+  // compatible callers, but it is now compact because telegraphs render on
+  // each enemy health bar instead.
+  const enemyAttackGaugeHeight = isCompact ? clamp(height * 0.15, 112, 136) : Math.min(hudHeight, 88);
+  const hudWidth = isCompact ? contentWidth : clamp(contentWidth * 0.34, 300, 420);
+  const enemyAttackGaugeWidth = isCompact ? contentWidth : Math.min(420, contentWidth);
   const commandHudHeight = clamp(height * 0.2, 132, 172);
-  const worldTop = Math.max(
-    topContentY + hudHeight,
-    enemyAttackGaugeY + enemyAttackGaugeHeight,
+  const worldTop = topContentY + hudHeight;
+  const playerX = clamp(width * 0.24, safeInset + 64, width * 0.42);
+  const playerY = clamp(height * 0.64, worldTop + 80, height - safeInset - 70);
+  const enemyX = clamp(width * 0.76, width * 0.58, width - safeInset - 64);
+  const enemyY = clamp(height * 0.48, worldTop + 60, height - safeInset - 90);
+  const enemyHealthBarTop = enemyY + ENEMY_HEALTH_BAR_OFFSET_Y * actorScale;
+  const enemyAttackGaugeX = clamp(
+    enemyX - enemyAttackGaugeWidth / 2,
+    safeInset,
+    Math.max(safeInset, width - safeInset - enemyAttackGaugeWidth),
+  );
+  const enemyAttackGaugeY = clamp(
+    enemyHealthBarTop - enemyAttackGaugeHeight - 8,
+    safeInset,
+    Math.max(safeInset, height - safeInset - commandHudHeight - enemyAttackGaugeHeight - 8),
   );
 
   return {
@@ -53,25 +55,15 @@ export function createCombatLayout(width: number, height: number): CombatLayout 
     safeInset,
     actorScale,
     player: {
-      x: clamp(width * 0.24, safeInset + 64, width * 0.42),
-      y: clamp(height * 0.64, worldTop + 80, height - safeInset - 70),
+      x: playerX,
+      y: playerY,
     },
     enemy: {
-      x: clamp(width * 0.76, width * 0.58, width - safeInset - 64),
-      y: clamp(height * 0.48, worldTop + 60, height - safeInset - 90),
+      x: enemyX,
+      y: enemyY,
     },
-    relicHudReservation: new Phaser.Geom.Rectangle(
-      safeInset,
-      safeInset,
-      contentWidth,
-      relicHudHeight,
-    ),
-    hudReservation: new Phaser.Geom.Rectangle(
-      safeInset,
-      topContentY,
-      hudWidth,
-      hudHeight,
-    ),
+    relicHudReservation: new Phaser.Geom.Rectangle(safeInset, safeInset, contentWidth, relicHudHeight),
+    hudReservation: new Phaser.Geom.Rectangle(safeInset, topContentY, hudWidth, hudHeight),
     enemyAttackGaugeReservation: new Phaser.Geom.Rectangle(
       enemyAttackGaugeX,
       enemyAttackGaugeY,

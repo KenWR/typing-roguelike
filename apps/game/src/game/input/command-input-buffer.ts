@@ -1,9 +1,4 @@
-export type CommandInputStatus =
-  | "idle"
-  | "composing"
-  | "matching"
-  | "incorrect"
-  | "complete";
+export type CommandInputStatus = "idle" | "composing" | "matching" | "incorrect" | "complete";
 
 export type CommandInputSnapshot = Readonly<{
   commands: readonly string[];
@@ -25,9 +20,11 @@ export type CommandStatusChangedEvent = Readonly<{
 }>;
 
 export type CommandCompletedListener = (event: CommandCompletedEvent) => void;
-export type CommandStatusChangedListener = (
-  event: CommandStatusChangedEvent,
-) => void;
+export type CommandSubmittedEvent = Readonly<{
+  snapshot: CommandInputSnapshot;
+}>;
+export type CommandSubmittedListener = (event: CommandSubmittedEvent) => void;
+export type CommandStatusChangedListener = (event: CommandStatusChangedEvent) => void;
 
 export type UpdateInputOptions = Readonly<{
   isComposing?: boolean;
@@ -44,13 +41,12 @@ export class CommandInputBuffer {
   private completionEmitted = false;
   private boundEnterResetElement: HTMLInputElement | null = null;
   private readonly completedListeners = new Set<CommandCompletedListener>();
+  private readonly submittedListeners = new Set<CommandSubmittedListener>();
   private readonly statusChangedListeners = new Set<CommandStatusChangedListener>();
 
   constructor(commands: string | readonly string[]) {
-    this.commands = this.validateCommands(
-      typeof commands === "string" ? [commands] : commands,
-    );
-    this.command = this.commands[0]!;
+    this.commands = this.validateCommands(typeof commands === "string" ? [commands] : commands);
+    this.command = this.firstCommand();
   }
 
   get snapshot(): CommandInputSnapshot {
@@ -70,7 +66,7 @@ export class CommandInputBuffer {
 
   setCommands(commands: readonly string[]): CommandInputSnapshot {
     this.commands = this.validateCommands(commands);
-    this.command = this.commands[0]!;
+    this.command = this.firstCommand();
     return this.reset();
   }
 
@@ -78,12 +74,24 @@ export class CommandInputBuffer {
     return this.updateInput(this.committedInput + input);
   }
 
-  updateInput(
-    rawInput: string,
-    options: UpdateInputOptions = {},
-  ): CommandInputSnapshot {
+  updateInput(rawInput: string, options: UpdateInputOptions = {}): CommandInputSnapshot {
     this.bindEnterResetIfAvailable();
     const input = this.prepareInputForNextCycle(rawInput);
+
+    // A completed command has already been consumed by the combat runtime.
+    // If the user types another character before pressing Enter, begin a new
+    // cycle with that trailing input instead of keeping the consumed command
+    // stuck in the buffer or treating the whole string as another success.
+    if (this.status === "complete") {
+      const completedCommand = normalizeForMatching(this.command);
+      const normalizedInput = normalizeForMatching(input);
+      if (normalizedInput.startsWith(completedCommand) && normalizedInput.length > completedCommand.length) {
+        const trailingInput = input.slice(this.command.length);
+        this.reset();
+        return trailingInput.length === 0 ? this.snapshot : this.updateInput(trailingInput, options);
+      }
+    }
+
     this.input = input;
     this.command = this.resolveActiveCommand(input);
 
@@ -106,16 +114,32 @@ export class CommandInputBuffer {
   reset(): CommandInputSnapshot {
     this.input = "";
     this.committedInput = "";
-    this.command = this.commands[0]!;
+    this.command = this.firstCommand();
     this.completionEmitted = false;
     this.updateStatus("idle");
     return this.snapshot;
+  }
+
+  /** Submit the current command cycle and then clear it for the next command. */
+  submit(): CommandInputSnapshot {
+    const submitted = this.snapshot;
+    for (const listener of this.submittedListeners) {
+      listener({ snapshot: submitted });
+    }
+    return this.reset();
   }
 
   onCompleted(listener: CommandCompletedListener): () => void {
     this.completedListeners.add(listener);
     return () => {
       this.completedListeners.delete(listener);
+    };
+  }
+
+  onSubmitted(listener: CommandSubmittedListener): () => void {
+    this.submittedListeners.add(listener);
+    return () => {
+      this.submittedListeners.delete(listener);
     };
   }
 
@@ -141,7 +165,7 @@ export class CommandInputBuffer {
 
       event.preventDefault();
       element.value = "";
-      this.reset();
+      this.submit();
       element.dispatchEvent(new Event("input", { bubbles: true }));
     });
   }
@@ -173,33 +197,32 @@ export class CommandInputBuffer {
     return validated;
   }
 
+  private firstCommand(): string {
+    const command = this.commands[0];
+    if (command === undefined) throw new Error("Command list unexpectedly empty.");
+    return command;
+  }
+
   private resolveActiveCommand(input: string): string {
     const normalizedInput = normalizeForMatching(input);
     if (normalizedInput.length === 0) {
-      return this.commands[0]!;
+      return this.firstCommand();
     }
 
-    const exact = this.commands.find(
-      (command) => normalizeForMatching(command) === normalizedInput,
-    );
+    const exact = this.commands.find((command) => normalizeForMatching(command) === normalizedInput);
     if (exact !== undefined) {
       return exact;
     }
 
-    const prefixMatch = this.commands.find((command) =>
-      normalizeForMatching(command).startsWith(normalizedInput),
-    );
+    const prefixMatch = this.commands.find((command) => normalizeForMatching(command).startsWith(normalizedInput));
     if (prefixMatch !== undefined) {
       return prefixMatch;
     }
 
-    let bestCommand = this.commands[0]!;
+    let bestCommand = this.firstCommand();
     let bestMatchedLength = -1;
     for (const command of this.commands) {
-      const matchedLength = this.getCommonPrefixLength(
-        normalizedInput,
-        normalizeForMatching(command),
-      );
+      const matchedLength = this.getCommonPrefixLength(normalizedInput, normalizeForMatching(command));
       if (matchedLength > bestMatchedLength) {
         bestCommand = command;
         bestMatchedLength = matchedLength;
@@ -220,25 +243,17 @@ export class CommandInputBuffer {
       return "complete";
     }
 
-    return normalizedCommand.startsWith(normalizedInput)
-      ? "matching"
-      : "incorrect";
+    return normalizedCommand.startsWith(normalizedInput) ? "matching" : "incorrect";
   }
 
   private getMatchedLength(): number {
-    return this.getCommonPrefixLength(
-      normalizeForMatching(this.input),
-      normalizeForMatching(this.command),
-    );
+    return this.getCommonPrefixLength(normalizeForMatching(this.input), normalizeForMatching(this.command));
   }
 
   private getCommonPrefixLength(left: string, right: string): number {
     const comparableLength = Math.min(left.length, right.length);
     let matchedLength = 0;
-    while (
-      matchedLength < comparableLength &&
-      left[matchedLength] === right[matchedLength]
-    ) {
+    while (matchedLength < comparableLength && left[matchedLength] === right[matchedLength]) {
       matchedLength += 1;
     }
     return matchedLength;
