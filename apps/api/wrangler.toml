@@ -7,3 +7,6 @@ binding = "DB"
 database_name = "typing-roguelike"
 database_id = "8f8dd5e8-7130-4c63-885c-63a52c3d5f9f"
 migrations_dir = "migrations"
+
+[vars]
+CORS_ORIGIN = "https://typing-roguelike-game.42cartel.workers.dev"

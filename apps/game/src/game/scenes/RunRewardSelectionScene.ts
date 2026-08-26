@@ -1,12 +1,12 @@
 import Phaser from "phaser";
 import type { RunState } from "@typing-roguelike/shared";
 import type { RewardSelectionAdapter } from "../rewards/reward-selection-adapter";
+import { persistCompletedRunReward } from "../rewards/run-reward-persistence";
 import { createRunRewardSceneEntry } from "../rewards/run-reward-scene-entry";
 import {
   createRewardTransitionPointerGuard,
   type RewardTransitionPointerGuard,
 } from "../rewards/reward-transition-pointer-guard";
-import { runSession } from "../run/run-session";
 import {
   RewardSelectionScene,
   type RewardSelectionSceneData,
@@ -19,9 +19,6 @@ export type RunRewardSelectionSceneData = RewardSelectionSceneData &
     nextNodeIds?: readonly string[];
     suppressPointerUntilRelease?: boolean;
   }>;
-
-const clamp = (value: number, minimum: number, maximum: number): number =>
-  Math.min(Math.max(value, minimum), maximum);
 
 const persistedAdapters = new WeakMap<object, RewardSelectionAdapter<unknown>>();
 
@@ -38,9 +35,7 @@ const withRunPersistence = (
     continue: () => {
       const state = adapter.continue();
       const completedRun = adapter.getRunState() as RunState;
-      if (runSession.get()?.status === "active") {
-        runSession.update(() => completedRun);
-      }
+      persistCompletedRunReward(completedRun);
       return state;
     },
   };
@@ -52,13 +47,11 @@ const withRunPersistence = (
 export class RunRewardSelectionScene extends RewardSelectionScene {
   private runAdapter?: RewardSelectionAdapter<RunState>;
   private routeData: RunRewardSelectionSceneData = {};
-  private cardHitAreas: Phaser.GameObjects.Rectangle[] = [];
   private transitionPointerGuard: RewardTransitionPointerGuard =
     createRewardTransitionPointerGuard();
 
   override init(data: RunRewardSelectionSceneData = {}): void {
     this.routeData = data;
-    this.cardHitAreas = [];
     this.transitionPointerGuard = createRewardTransitionPointerGuard(
       data.suppressPointerUntilRelease === true,
     );
@@ -85,11 +78,7 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
       runState: data.runState,
       nodeId: data.nodeId,
       nextNodeIds: data.nextNodeIds,
-      onContinue: (completedRun) => {
-        if (runSession.get()?.status === "active") {
-          runSession.update(() => completedRun);
-        }
-      },
+      onContinue: persistCompletedRunReward,
     });
     this.runAdapter = entry.adapter;
     this.routeData = {
@@ -106,64 +95,26 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
     super.create();
     if (this.runAdapter === undefined) return;
 
-    this.installCardInputLayer();
     if (!this.transitionPointerGuard.acceptsPointerDown()) {
       this.input.once(Phaser.Input.Events.POINTER_UP, this.releaseTransitionPointer, this);
     }
     this.routeData = { ...this.routeData, suppressPointerUntilRelease: false };
     this.input.keyboard?.on("keydown", this.handleRewardKeyDown, this);
-    this.scale.on(Phaser.Scale.Events.RESIZE, this.layoutCardHitAreas, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseRunInput, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseRunInput, this);
-  }
-
-  private installCardInputLayer(): void {
-    const candidates = this.runAdapter?.getViewState().candidates ?? [];
-    this.cardHitAreas = candidates.map((candidate) => {
-      const hitArea = this.add
-        .rectangle(0, 0, 1, 1, 0xffffff, 0.001)
-        .setOrigin(0)
-        .setDepth(80)
-        .setInteractive({ useHandCursor: true });
-      hitArea.on(Phaser.Input.Events.POINTER_DOWN, () => {
-        if (!this.transitionPointerGuard.acceptsPointerDown()) return;
-        this.selectReward(candidate.id);
-      });
-      return hitArea;
-    });
-    this.layoutCardHitAreas();
   }
 
   private releaseTransitionPointer(): void {
     this.transitionPointerGuard.release();
   }
 
-  private layoutCardHitAreas(): void {
-    const width = this.scale.gameSize.width;
-    const height = this.scale.gameSize.height;
-    const safeInset = clamp(Math.min(width, height) * 0.04, 16, 44);
-    const compact = width < 640;
-    const headerHeight = compact ? 72 : 78;
-    const footerHeight = compact ? 70 : 78;
-    const contentWidth = Math.max(0, width - safeInset * 2);
-    const introY = safeInset + headerHeight + (compact ? 20 : 28);
-    const cardsY = introY + (compact ? 58 : 74);
-    const footerY = height - safeInset - footerHeight;
-    const gap = compact ? 10 : 18;
-    const cardsBottom = Math.max(cardsY + 120, footerY - (compact ? 16 : 24));
-    const cardWidth = compact
-      ? contentWidth
-      : Math.max(220, (contentWidth - gap * 2) / 3);
-    const cardHeight = compact
-      ? clamp((cardsBottom - cardsY - gap * 2) / 3, 132, 176)
-      : clamp(cardsBottom - cardsY, 260, 360);
-
-    this.cardHitAreas.forEach((hitArea, index) => {
-      const x = compact ? safeInset : safeInset + index * (cardWidth + gap);
-      const y = compact ? cardsY + index * (cardHeight + gap) : cardsY;
-      hitArea.setPosition(x, y).setSize(cardWidth, cardHeight);
-      if (hitArea.input !== null) hitArea.input.hitArea.setSize(cardWidth, cardHeight);
-    });
+  protected override handleRewardSelection(rewardId: string): void {
+    if (this.runAdapter === undefined) {
+      super.handleRewardSelection(rewardId);
+      return;
+    }
+    if (!this.transitionPointerGuard.acceptsPointerDown()) return;
+    this.selectReward(rewardId);
   }
 
   private handleRewardKeyDown(event: KeyboardEvent): void {
@@ -206,6 +157,5 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
   private releaseRunInput(): void {
     this.input.off(Phaser.Input.Events.POINTER_UP, this.releaseTransitionPointer, this);
     this.input.keyboard?.off("keydown", this.handleRewardKeyDown, this);
-    this.scale.off(Phaser.Scale.Events.RESIZE, this.layoutCardHitAreas, this);
   }
 }

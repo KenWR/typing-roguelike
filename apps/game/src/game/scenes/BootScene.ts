@@ -1,9 +1,10 @@
 import Phaser from "phaser";
 import {
   RUNTIME_IMAGE_ASSETS,
+  RUNTIME_SPRITESHEET_ASSETS,
   TEXTURE_KEYS,
 } from "../assets/asset-catalog";
-import { setRuntimeAudioMuted } from "../audio/runtime-audio";
+import { setRuntimeAudioSettings } from "../audio/runtime-audio";
 import { runRemotePersistence } from "../run/run-remote-persistence";
 import { resolveRunResumeRoute } from "../run/run-resume-routing";
 import { runSession } from "../run/run-session";
@@ -57,13 +58,22 @@ export class BootScene extends Phaser.Scene {
     for (const asset of RUNTIME_IMAGE_ASSETS) {
       this.load.image(asset.key, asset.path);
     }
+    for (const asset of RUNTIME_SPRITESHEET_ASSETS) {
+      this.load.spritesheet(asset.key, asset.path, {
+        frameWidth: asset.frameWidth,
+        frameHeight: asset.frameHeight,
+      });
+    }
   }
 
   create(): void {
     const storage = typeof localStorage === "undefined" ? undefined : localStorage;
     const settings = loadMenuSettings(storage);
     applyMenuSettings(this, settings);
-    setRuntimeAudioMuted(!settings.soundEnabled);
+    setRuntimeAudioSettings({
+      muted: !settings.soundEnabled,
+      volume: settings.volume,
+    });
     this.createFoundationTextures();
 
     for (const key of this.failedAssetKeys) {

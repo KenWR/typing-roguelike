@@ -10,6 +10,8 @@ describe("enemy health view", () => {
       name: "먹물 슬라임",
       currentHp: 18,
       maxHp: 30,
+      shield: 0,
+      targeted: false,
       label: "먹물 슬라임  HP 18 / 30",
     });
   });
@@ -47,6 +49,26 @@ describe("enemy health view", () => {
         "먹물 슬라임  HP 0 / 30",
         "갈고리 촉수  HP 31 / 40",
         "붉은 필경사  HP 12 / 25",
+      ].join("\n"),
+    );
+  });
+
+  test("marks the current target and shows a shielded enemy's remaining shield", () => {
+    const enemies = [
+      { instanceId: "slime:1", name: "먹물 슬라임", hp: 30 },
+      { instanceId: "tentacle:1", name: "갈고리 촉수", hp: 40 },
+    ];
+
+    expect(
+      createEnemyHealthListLabel(
+        enemies,
+        { "slime:1": 24, "tentacle:1": 40 },
+        { targetId: "tentacle:1", enemyShield: { "tentacle:1": 18 } },
+      ),
+    ).toBe(
+      [
+        "  먹물 슬라임  HP 24 / 30",
+        "▶ 갈고리 촉수  HP 40 / 40  실드 18",
       ].join("\n"),
     );
   });

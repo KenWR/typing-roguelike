@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createCombatHudState,
   formatCombatHudResourceValue,
+  formatCombatHudShieldValue,
   updateCombatHudState,
 } from "../src/game/hud/combat-hud";
 
@@ -12,6 +13,7 @@ describe("combat HUD state", () => {
       maxHp: 100,
       ap: 30,
       maxAp: 50,
+      shield: 0,
     });
   });
 
@@ -23,7 +25,17 @@ describe("combat HUD state", () => {
       maxHp: 100,
       ap: 50,
       maxAp: 50,
+      shield: 0,
     });
+  });
+
+  test("tracks the shield granted on command completion alongside HP", () => {
+    const state = createCombatHudState({ hp: 80, maxHp: 100, ap: 3, maxAp: 6 });
+
+    expect(updateCombatHudState(state, { shield: 24 }).shield).toBe(24);
+    expect(updateCombatHudState(state, { shield: -5 }).shield).toBe(0);
+    expect(formatCombatHudShieldValue(24)).toBe(" +24");
+    expect(formatCombatHudShieldValue(0)).toBe("");
   });
 
   test("formats HUD resource values with at most one decimal place", () => {

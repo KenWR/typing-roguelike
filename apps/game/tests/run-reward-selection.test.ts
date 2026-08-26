@@ -26,7 +26,7 @@ describe("run reward equipment presentation", () => {
     expect(candidate?.imageKey).toBe(resolveEquipmentIconTextureKey(weapon!.id));
   });
 
-  test("keeps subweapon candidates on the emoji fallback", () => {
+  test("gives subweapon candidates the matching uploaded image", () => {
     const subweapon = EQUIPMENT_CONFIGS.find(
       (equipment) => equipment.slot === "subweapon",
     );
@@ -38,7 +38,8 @@ describe("run reward equipment presentation", () => {
     });
     const candidate = flow.adapter.getViewState().candidates[0];
 
-    expect(candidate?.imageKey).toBeUndefined();
+    expect(candidate?.imageKey).toBe(`equipment-icon:${subweapon!.id}`);
+    expect(candidate?.imageKey).toBe(resolveEquipmentIconTextureKey(subweapon!.id));
     expect(candidate?.icon).toBe("◇");
   });
 });
@@ -77,7 +78,7 @@ describe("run reward equipment flow", () => {
 
     runState = applyEquipmentReward(runState, second.id);
     expect(runState.loadout.subweaponId).toBe(second.id);
-    expect(runState.inventory.itemInstances).toContain(first.id);
+    expect(runState.inventory.itemInstances).not.toContain(first.id);
     expect(runState.inventory.itemInstances).toContain(second.id);
   });
 
@@ -123,7 +124,7 @@ describe("run reward relic candidates", () => {
       const candidates = flow.adapter.getViewState().candidates;
 
       expect(candidates).toHaveLength(3);
-      expect(candidates.some((candidate) => candidate.kind === "weapon")).toBe(true);
+      expect(candidates.filter((candidate) => candidate.kind === "relic")).toHaveLength(2);
       if (candidates.some((candidate) => candidate.kind === "relic")) sawRelic = true;
     }
 

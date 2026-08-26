@@ -21,17 +21,22 @@ describe("LobbyRunStarter", () => {
     expect(starter.isStarting).toBe(false);
   });
 
-  test("can start another run after the first run finishes", () => {
+  test("locks reentrant requests but allows a later run to start", () => {
     let calls = 0;
-    const starter = new LobbyRunStarter(
+    let nestedStart: ReturnType<LobbyRunStarter["start"]> | undefined;
+    let starter!: LobbyRunStarter;
+    starter = new LobbyRunStarter(
       (seed) => {
         calls += 1;
+        nestedStart = starter.start();
         return createInitialRunState({ seed });
       },
       () => 7,
     );
 
     expect(starter.start()).not.toBeNull();
+    expect(nestedStart).toBeNull();
+    expect(starter.isStarting).toBe(false);
     expect(starter.start()).not.toBeNull();
     expect(calls).toBe(2);
   });

@@ -18,9 +18,15 @@ export const RUNTIME_AUDIO_PATHS = Object.freeze({
   relicPickup: "/assets/audio/유물 줍는 소리.mp3",
   coin: "/assets/audio/동전.mp3",
   walk: "/assets/audio/걷는소리.mp3",
+  comboBreak: "/assets/audio/콤보 깨질때.mp3",
 });
 
 export type RuntimeBgmCue = "menu" | "tower" | "boss";
+
+export type RuntimeAudioSettings = Readonly<{
+  muted: boolean;
+  volume: number;
+}>;
 
 const BGM_PATH_BY_CUE: Readonly<Record<RuntimeBgmCue, string>> = Object.freeze({
   menu: RUNTIME_AUDIO_PATHS.menuBgm,
@@ -29,9 +35,15 @@ const BGM_PATH_BY_CUE: Readonly<Record<RuntimeBgmCue, string>> = Object.freeze({
 });
 
 let muted = false;
+let runtimeVolume = 1;
 let currentBgmCue: RuntimeBgmCue | null = null;
 let currentBgm: HTMLAudioElement | null = null;
 let unlockListenerInstalled = false;
+
+const normalizeRuntimeVolume = (volume: number): number =>
+  Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1;
+
+const scaledVolume = (volume: number): number => volume * runtimeVolume;
 
 const createAudio = (path: string): HTMLAudioElement | null => {
   if (typeof Audio === "undefined") return null;
@@ -57,7 +69,7 @@ const playSfx = (path: string, volume = 0.72): void => {
   if (muted) return;
   const audio = createAudio(path);
   if (audio === null) return;
-  audio.volume = volume;
+  audio.volume = scaledVolume(volume);
   void audio.play().catch(() => undefined);
 };
 
@@ -67,6 +79,16 @@ const pickRandom = <T>(values: readonly T[], random: () => number = Math.random)
 export const setRuntimeAudioMuted = (nextMuted: boolean): void => {
   muted = nextMuted;
   if (currentBgm !== null) currentBgm.muted = muted;
+};
+
+export const setRuntimeAudioVolume = (nextVolume: number): void => {
+  runtimeVolume = normalizeRuntimeVolume(nextVolume);
+  if (currentBgm !== null) currentBgm.volume = scaledVolume(0.35);
+};
+
+export const setRuntimeAudioSettings = (settings: RuntimeAudioSettings): void => {
+  setRuntimeAudioMuted(settings.muted);
+  setRuntimeAudioVolume(settings.volume);
 };
 
 export const playRuntimeBgm = (cue: RuntimeBgmCue): void => {
@@ -83,7 +105,7 @@ export const playRuntimeBgm = (cue: RuntimeBgmCue): void => {
   currentBgm = audio;
   if (audio === null) return;
   audio.loop = true;
-  audio.volume = 0.35;
+  audio.volume = scaledVolume(0.35);
   audio.muted = muted;
   void audio.play().catch(() => installAudioUnlockListener());
 };
@@ -132,3 +154,4 @@ export const playWeaponImpactSound = (equipmentIds: readonly string[]): void => 
 export const playRewardPickupSound = (): void => playSfx(RUNTIME_AUDIO_PATHS.relicPickup, 0.8);
 export const playCoinSound = (): void => playSfx(RUNTIME_AUDIO_PATHS.coin, 0.8);
 export const playWalkSound = (): void => playSfx(RUNTIME_AUDIO_PATHS.walk, 0.65);
+export const playComboBreakSound = (): void => playSfx(RUNTIME_AUDIO_PATHS.comboBreak, 0.78);

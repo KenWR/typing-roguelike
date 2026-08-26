@@ -1,9 +1,28 @@
-# Repository Agent Guidelines
+# Repository agent map
 
-## Frontend Pull Requests
+## Start here
 
-- `apps/game`의 사용자 화면에 영향을 주는 Pull Request에는 현재 커밋으로 실행한 화면의 스크린샷을 반드시 첨부합니다.
-- 스크린샷은 PR 본문의 `Screenshots or recordings` 섹션에서 바로 확인할 수 있어야 합니다.
-- 반응형 레이아웃을 변경하면 데스크톱 화면과 영향을 받는 주요 breakpoint 화면을 각각 첨부합니다.
-- 스크린샷을 첨부하기 전에 변경 범위에 맞는 타입 검사, 빌드, 브라우저 검증을 완료합니다.
-- 검증용 스크린샷 파일은 별도 요청이 없으면 저장소에 커밋하지 않습니다.
+- Read `README.md` for the product boundary and workspace layout.
+- Preserve unrelated user changes and keep each change within the requested scope.
+- Use Bun 1.3.14 and the committed `bun.lock`; install with `bun install --frozen-lockfile`.
+
+## Read by scope
+
+- `apps/game/**`: read `apps/game/AGENTS.md`.
+- `apps/api/**`: read `apps/api/AGENTS.md`.
+- `packages/shared/**`: read `packages/shared/AGENTS.md`.
+- `scripts/**` or `.codex/hooks/**`: read `scripts/AGENTS.md`.
+- Codex agents and skills: read `.codex/README.md` and the selected skill file.
+- Test selection and evidence: read `docs/agent/verification.md`.
+
+## Completion contract
+
+- Run focused tests while iterating, then run `bun run validate` on the final repository state.
+- A changed task is complete only when `bun run validate` passes. Report environmental blockers separately from test failures.
+- Keep `.github/workflows/pr-validation.yml` aligned with the same `bun run validate` command.
+
+## Frontend evidence
+
+- User-visible `apps/game` changes require typecheck, build, automated browser smoke verification, and a screenshot from the current commit.
+- Put PR evidence in `Screenshots or recordings`. Include desktop and affected breakpoint screenshots for responsive changes.
+- Keep verification screenshots out of Git unless the user requests committed artifacts.

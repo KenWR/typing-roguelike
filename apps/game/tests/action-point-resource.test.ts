@@ -4,7 +4,7 @@ import { ActionPointResource } from "../src/game/combat/action-point-resource";
 describe("ActionPointResource", () => {
   test("starts with the default maximum of six AP", () => {
     const resource = new ActionPointResource();
-    expect(resource.snapshot).toEqual({ currentAp: 6, maxAp: 6, regenerationPerSecond: 1, paused: false });
+    expect(resource.snapshot).toEqual({ currentAp: 6, maxAp: 6, regenerationPerSecond: 1, paused: false, timedEffects: [] });
   });
 
   test("spends AP when a skill can start", () => {
@@ -33,12 +33,20 @@ describe("ActionPointResource", () => {
     expect(resource.advance(2_000).currentAp).toBe(6);
   });
 
-  test("applies temporary AP regeneration and expires it", () => {
+  test("applies temporary AP regeneration, exposes its timer, and expires it", () => {
     const resource = new ActionPointResource({ initialAp: 0 });
     resource.addTemporaryRegeneration(0.5, 3_000);
-    expect(resource.advance(2_000)).toMatchObject({ currentAp: 3, regenerationPerSecond: 1.5 });
+    expect(resource.snapshot.timedEffects).toEqual([
+      { id: "temporary-ap-regeneration", amountPerSecond: 0.5, durationMs: 3_000, remainingMs: 3_000 },
+    ]);
+    expect(resource.advance(2_000)).toMatchObject({
+      currentAp: 3,
+      regenerationPerSecond: 1.5,
+      timedEffects: [{ durationMs: 3_000, remainingMs: 1_000 }],
+    });
     expect(resource.advance(1_000).currentAp).toBe(4.5);
     expect(resource.snapshot.regenerationPerSecond).toBe(1);
+    expect(resource.snapshot.timedEffects).toEqual([]);
     expect(resource.advance(1_000).currentAp).toBe(5.5);
   });
 

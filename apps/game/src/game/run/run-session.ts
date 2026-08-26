@@ -96,9 +96,12 @@ export class RunSession {
 
     const playable = ensurePlayableRunLoadout(restored);
     this.activeRun = playable;
-    this.resumeCheckpoint = loadRunResumeCheckpoint(this.storage);
     if (playable.status === "active") {
+      this.resumeCheckpoint = loadRunResumeCheckpoint(this.storage);
       saveRunState(playable, this.storage);
+    } else {
+      this.resumeCheckpoint = null;
+      clearRunResumeCheckpoint(this.storage);
     }
     return playable;
   }
@@ -106,10 +109,12 @@ export class RunSession {
   replace(runState: Readonly<RunState>): Readonly<RunState> {
     const next = ensurePlayableRunLoadout(runState);
     this.activeRun = next;
-    if (next.status === "active") saveRunState(next, this.storage);
-    else {
+    if (next.status === "abandoned") {
       clearSavedRun(this.storage);
       this.clearCheckpoint();
+    } else {
+      saveRunState(next, this.storage);
+      if (next.status !== "active") this.clearCheckpoint();
     }
     return next;
   }
@@ -147,10 +152,12 @@ export class RunSession {
 
     const next = ensurePlayableRunLoadout(updater(current));
     this.activeRun = next;
-    if (next.status === "active") saveRunState(next, this.storage);
-    else {
+    if (next.status === "abandoned") {
       clearSavedRun(this.storage);
       this.clearCheckpoint();
+    } else {
+      saveRunState(next, this.storage);
+      if (next.status !== "active") this.clearCheckpoint();
     }
     return next;
   }
@@ -162,7 +169,11 @@ export class RunSession {
     }
 
     this.activeRun = { ...current, status };
-    clearSavedRun(this.storage);
+    if (status === "abandoned") {
+      clearSavedRun(this.storage);
+    } else {
+      saveRunState(this.activeRun, this.storage);
+    }
     this.clearCheckpoint();
     return this.activeRun;
   }

@@ -49,11 +49,10 @@ export class CommandInputRecoveryController {
 
     this.mistakeCount += 1;
     const failedSnapshot = next;
-    const resetSnapshot = this.buffer.reset();
 
     return {
       outcome: "incorrect",
-      snapshot: resetSnapshot,
+      snapshot: next,
       failedSnapshot,
       mistakeCount: this.mistakeCount,
     };
@@ -76,7 +75,25 @@ export class CommandInputRecoveryController {
     };
   }
 
+  reset(): CommandInputRecoveryResult {
+    const snapshot = this.buffer.reset();
+    return {
+      outcome: snapshot.status,
+      snapshot,
+      failedSnapshot: null,
+      mistakeCount: this.mistakeCount,
+    };
+  }
+
   resetMistakes(): void {
     this.mistakeCount = 0;
   }
 }
+
+export const updateCommandInputElement = (
+  controller: CommandInputRecoveryController,
+  element: Pick<HTMLInputElement, "value">,
+  options: UpdateInputOptions = {},
+): CommandInputRecoveryResult => {
+  return controller.updateInput(element.value, options);
+};

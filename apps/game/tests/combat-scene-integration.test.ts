@@ -135,33 +135,35 @@ describe("combat scene runtime integration", () => {
     expect(after.enemyTimeline.events).toEqual([]);
   });
 
-  test("guard impact reduces enemy damage during its active window", () => {
-    const guarded = setup();
-    const guard = defineSkill({
-      id: "skill.test-guard",
-      name: "테스트 가드",
-      command: "가드",
-      kind: "defense",
-      category: "guard",
-      apCost: 1,
-      windupMs: 100,
-      recoveryMs: 100,
-      effects: [{ type: "guard", damageMultiplier: 0.25, durationMs: 20_000 }],
-      description: "test guard",
-    });
-    guarded.combat.startAction({
-      id: "player:guard",
+  const shieldSkill = defineSkill({
+    id: "skill.test-shield",
+    name: "테스트 실드",
+    command: "실드",
+    kind: "defense",
+    category: "guard",
+    apCost: 1,
+    windupMs: 100,
+    recoveryMs: 100,
+    effects: [{ type: "shield", amount: 40, durationMs: 20_000 }],
+    description: "test shield",
+  });
+
+  test("a shield absorbs enemy damage from the moment the command completes", () => {
+    const shielded = setup();
+    shielded.combat.startAction({
+      id: "player:shield",
       actorId: "player",
       targetId: "player",
-      windupMs: guard.windupMs,
-      recoveryMs: guard.recoveryMs,
+      windupMs: shieldSkill.windupMs,
+      recoveryMs: shieldSkill.recoveryMs,
     });
-    guarded.runtime.registerAction("player:guard", guard);
-    guarded.runtime.advance(guard.windupMs + guard.recoveryMs);
-    const guardedAction = startEnemyAttack(guarded, "enemy:guarded");
-    const guardedHp = guarded.runtime.playerHp;
-    const guardedUpdate = guarded.runtime.advance(guardedAction.windupMs + guardedAction.recoveryMs);
-    const guardedDamage = guardedHp - guarded.runtime.playerHp;
+    shielded.runtime.registerAction("player:shield", shieldSkill);
+    expect(shielded.runtime.playerShield).toBe(40);
+
+    const shieldedAction = startEnemyAttack(shielded, "enemy:shielded");
+    const shieldedHp = shielded.runtime.playerHp;
+    shielded.runtime.advance(shieldedAction.windupMs + shieldedAction.recoveryMs);
+    const shieldedDamage = shieldedHp - shielded.runtime.playerHp;
 
     const plain = setup();
     const plainAction = startEnemyAttack(plain, "enemy:plain");
@@ -169,6 +171,24 @@ describe("combat scene runtime integration", () => {
     plain.runtime.advance(plainAction.windupMs + plainAction.recoveryMs);
     const plainDamage = plainHp - plain.runtime.playerHp;
 
-    expect(guardedDamage).toBeLessThan(plainDamage);
+    expect(plainDamage).toBeGreaterThan(0);
+    expect(shieldedDamage).toBe(0);
+    expect(shielded.runtime.playerShield).toBe(40 - plainDamage);
+  });
+
+  test("the shield is already up before the skill would have finished its windup", () => {
+    const ctx = setup();
+    ctx.combat.startAction({
+      id: "player:shield-early",
+      actorId: "player",
+      targetId: "player",
+      windupMs: shieldSkill.windupMs,
+      recoveryMs: shieldSkill.recoveryMs,
+    });
+    ctx.runtime.registerAction("player:shield-early", shieldSkill);
+
+    ctx.runtime.advance(shieldSkill.windupMs - 1);
+
+    expect(ctx.runtime.playerShield).toBe(40);
   });
 });

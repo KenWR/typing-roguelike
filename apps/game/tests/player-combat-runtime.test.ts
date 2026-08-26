@@ -94,9 +94,11 @@ describe("PlayerCombatRuntime", () => {
       runState,
       initialization: multiInitialization,
       nextNodeIds: firstCombatNode.nextNodeKeys,
+      random: () => 0,
     });
     const skillConfig = initialization.player.skills.find((candidate) => candidate.kind === "attack")!;
     const skill = defineSkill(skillConfig);
+    runtime.start();
 
     let sequence = 1;
     while ((runtime.enemyHp[firstEnemy.instanceId] ?? 0) > 0) {
@@ -126,6 +128,9 @@ describe("PlayerCombatRuntime", () => {
 
     expect(runtime.enemyHp[firstEnemy.instanceId]).toBe(0);
     expect(runtime.enemyHp[secondEnemy.instanceId]).toBeLessThan(secondHpBefore);
+    expect(enemyTimeline.snapshot.attacks).not.toContainEqual(
+      expect.objectContaining({ enemyId: firstEnemy.instanceId }),
+    );
     expect(combat.snapshot.status).toBe("active");
   });
 

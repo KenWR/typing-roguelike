@@ -1,8 +1,12 @@
-import { EQUIPMENT_CONFIGS, type RunState } from "@typing-roguelike/shared";
+import type { RunState } from "@typing-roguelike/shared";
 import {
   applySettlementCurrency,
   type PersistentWalletSnapshot,
 } from "./persistent-wallet";
+import {
+  calculateRunEquipmentExchangeValue,
+  getRunEquipmentForExchange,
+} from "./equipment-exchange";
 
 export type DeathSettlementItem = Readonly<{
   equipmentId: string;
@@ -19,10 +23,6 @@ export type DeathSettlementResult = Readonly<{
   wallet: PersistentWalletSnapshot;
 }>;
 
-const EQUIPMENT_BY_ID = new Map(
-  EQUIPMENT_CONFIGS.map((equipment) => [equipment.id, equipment] as const),
-);
-
 export const settleDeadRun = (
   runState: Readonly<RunState>,
   wallet: PersistentWalletSnapshot,
@@ -31,21 +31,11 @@ export const settleDeadRun = (
     throw new Error("Death settlement requires a dead run.");
   }
 
-  const items = runState.inventory.itemInstances.map((equipmentId) => {
-    const equipment = EQUIPMENT_BY_ID.get(equipmentId);
-    if (!equipment) {
-      throw new Error(`Unknown equipment in death settlement: ${equipmentId}`);
-    }
-    return { equipmentId, sellValue: equipment.sellValue } as const;
-  });
-
-  const itemExchangeCurrency = items.reduce(
-    (total, item) => total + item.sellValue,
-    0,
-  );
-  if (!Number.isSafeInteger(itemExchangeCurrency)) {
-    throw new RangeError("Death settlement total must be a safe integer.");
-  }
+  const items = getRunEquipmentForExchange(runState).map((equipment) => ({
+    equipmentId: equipment.id,
+    sellValue: equipment.sellValue,
+  }));
+  const itemExchangeCurrency = calculateRunEquipmentExchangeValue(runState);
 
   const payout = applySettlementCurrency(
     wallet,

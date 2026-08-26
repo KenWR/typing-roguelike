@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Galmuri9";
+  src: url("/assets/fonts/Galmuri9.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
   font-family: Galmuri9, "Apple SD Gothic Neo", monospace;

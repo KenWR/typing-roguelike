@@ -4,33 +4,16 @@ import {
   type RunState,
   type SkillDefinition,
 } from "@typing-roguelike/shared";
-import {
-  playPlayerHitSound,
-  playRuntimeBgm,
-  playWeaponImpactSound,
-} from "../audio/runtime-audio";
+import { playPlayerHitSound, playRuntimeBgm, playWeaponImpactSound } from "../audio/runtime-audio";
 import { ActionPointResource } from "./action-point-resource";
 import { CombatApEffectController } from "./combat-ap-effects";
-import type {
-  CombatEnemyInitialization,
-  CombatEncounterInitialization,
-} from "./encounter-initializer";
-import { CombatState, type CombatUpdate } from "./combat-state";
-import { DefenseWindowTracker } from "./defense-window";
-import {
-  EnemyAttackTimeline,
-  type EnemyAttackEvent,
-  type EnemyAttackTimelineUpdate,
-} from "./enemy-attack-timeline";
+import type { CombatEnemyInitialization, CombatEncounterInitialization } from "./encounter-initializer";
+import type { CombatState, CombatUpdate } from "./combat-state";
+import { ShieldPool, type ShieldInstance } from "./shield-pool";
+import type { EnemyAttackEvent, EnemyAttackTimeline, EnemyAttackTimelineUpdate } from "./enemy-attack-timeline";
 import { EnemyImpactResolver } from "./enemy-impact-resolver";
-import {
-  SkillCombatantState,
-  SkillImpactResolver,
-} from "./skill-impact-resolver";
-import {
-  finalizeCombatOutcome,
-  type CombatOutcomeRoute,
-} from "./combat-outcome-routing";
+import { SkillCombatantState, SkillImpactResolver, type TimedStatusEffect } from "./skill-impact-resolver";
+import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome-routing";
 
 export type PlayerCombatRuntimeConfig = Readonly<{
   combat: CombatState;
@@ -50,15 +33,35 @@ export type PlayerCombatRuntimeUpdate = Readonly<{
   playerHp: number;
   playerAp: number;
   enemyHp: Readonly<Record<string, number>>;
+  playerShield: number;
+  enemyShield: Readonly<Record<string, number>>;
+  playerStatuses: readonly TimedStatusEffect[];
+  enemyStatuses: Readonly<Record<string, readonly TimedStatusEffect[]>>;
+  playerShields: readonly ShieldInstance[];
+  enemyShields: Readonly<Record<string, readonly ShieldInstance[]>>;
   route: CombatOutcomeRoute | null;
 }>;
 
-const resolveAttackPower = (
-  initialization: CombatEncounterInitialization,
-): number => {
+type PlayerImpactEvent = CombatUpdate["events"][number];
+type ResolvedEnemyImpactEvent = EnemyAttackEvent;
+type OrderedRuntimeImpact =
+  | Readonly<{
+      source: "player";
+      event: PlayerImpactEvent;
+      priority: 1;
+      sequence: number;
+    }>
+  | Readonly<{
+      source: "enemy";
+      event: ResolvedEnemyImpactEvent;
+      priority: 0 | 2;
+      sequence: number;
+    }>;
+
+const resolveAttackPower = (initialization: CombatEncounterInitialization): number => {
   const total = initialization.player.equipmentIds.reduce((sum, equipmentId) => {
     const equipment = EQUIPMENT_CONFIGS.find(({ id }) => id === equipmentId);
-    return sum + (equipment?.baseAttack ?? 10);
+    return sum + (equipment?.baseAttack ?? 0);
   }, 0);
 
   return Math.max(1, total);
@@ -84,11 +87,12 @@ export class PlayerCombatRuntime {
   private readonly random: () => number;
   private readonly impactResolver = new SkillImpactResolver();
   private readonly enemyImpactResolver = new EnemyImpactResolver();
-  private readonly defenseWindows = new DefenseWindowTracker();
-  private readonly defenseMultiplierByWindowId = new Map<string, number>();
+  private readonly shields = new ShieldPool();
+  private readonly enemyTimelineByShieldId = new Map<string, string>();
+  private readonly enemyShieldIdByTimelineId = new Map<string, string>();
   private readonly player: SkillCombatantState;
   private readonly enemies = new Map<string, SkillCombatantState>();
-  private readonly skillsByActionId = new Map<string, SkillDefinition>();
+  private readonly skillsByActionId = new Map<string, Readonly<{ skill: SkillDefinition; damageMultiplier: number }>>();
   private route: CombatOutcomeRoute | null = null;
   private nextEnemyTimelineSequence = 1;
 
@@ -139,9 +143,10 @@ export class PlayerCombatRuntime {
     }
   }
 
-  registerAction(actionId: string, skill: SkillDefinition): void {
+  registerAction(actionId: string, skill: SkillDefinition, damageMultiplier = 1): void {
     if (this.route !== null) return;
-    this.skillsByActionId.set(actionId, skill);
+    this.skillsByActionId.set(actionId, { skill, damageMultiplier });
+    this.grantSkillShields(actionId, skill);
   }
 
   setRunState(runState: Readonly<RunState>): void {
@@ -159,134 +164,214 @@ export class PlayerCombatRuntime {
 
   get enemyHp(): Readonly<Record<string, number>> {
     return Object.fromEntries(
-      Array.from(this.enemies, ([enemyId, enemy]) => [
-        enemyId,
-        enemy.snapshot.health.currentHp,
-      ]),
+      Array.from(this.enemies, ([enemyId, enemy]) => [enemyId, enemy.snapshot.health.currentHp]),
     );
   }
 
+  get playerStatuses(): readonly TimedStatusEffect[] {
+    return this.player.timedStatuses;
+  }
+
+  get enemyStatuses(): Readonly<Record<string, readonly TimedStatusEffect[]>> {
+    return Object.fromEntries(Array.from(this.enemies, ([enemyId, enemy]) => [enemyId, enemy.timedStatuses]));
+  }
+
+  get playerShield(): number {
+    return this.shields.totalAmount(this.player.id, this.elapsedMs);
+  }
+
+  get playerShields(): readonly ShieldInstance[] {
+    return this.shields.activeShields(this.player.id, this.elapsedMs);
+  }
+
+  get enemyShield(): Readonly<Record<string, number>> {
+    const atMs = this.elapsedMs;
+    return Object.fromEntries(
+      Array.from(this.enemies.keys(), (enemyId) => [enemyId, this.shields.totalAmount(enemyId, atMs)]),
+    );
+  }
+
+  get enemyShields(): Readonly<Record<string, readonly ShieldInstance[]>> {
+    const atMs = this.elapsedMs;
+    return Object.fromEntries(
+      Array.from(this.enemies.keys(), (enemyId) => [enemyId, this.shields.activeShields(enemyId, atMs)]),
+    );
+  }
+
+  private get elapsedMs(): number {
+    return this.enemyTimeline.snapshot.elapsedMs;
+  }
+
   advance(deltaMs: number): PlayerCombatRuntimeUpdate {
+    this.player.advanceStatuses(deltaMs);
+    for (const enemy of this.enemies.values()) enemy.advanceStatuses(deltaMs);
+
     const combatUpdate = this.combat.advance(deltaMs);
     const enemyTimelineUpdate = this.enemyTimeline.advance(deltaMs);
 
     if (this.route === null) {
-      this.resolvePlayerImpacts(combatUpdate);
-      this.resolveOutcome();
-
-      if (this.route === null) {
-        this.resolveEnemyImpacts(enemyTimelineUpdate.events);
-        this.resolveOutcome();
-      }
+      this.releaseFinishedWindupShields(enemyTimelineUpdate.snapshot);
+      this.resolveImpactsChronologically(combatUpdate, enemyTimelineUpdate.events);
     }
 
     return {
       combat: this.route === null ? combatUpdate : this.combat.advance(0),
       enemyTimeline:
         this.route === null
-          ? enemyTimelineUpdate
+          ? { ...enemyTimelineUpdate, snapshot: this.enemyTimeline.snapshot }
           : this.enemyTimeline.advance(0),
       playerHp: this.playerHp,
       playerAp: this.actionPoints.snapshot.currentAp,
       enemyHp: this.enemyHp,
+      playerShield: this.playerShield,
+      enemyShield: this.enemyShield,
+      playerStatuses: this.playerStatuses,
+      enemyStatuses: this.enemyStatuses,
+      playerShields: this.playerShields,
+      enemyShields: this.enemyShields,
       route: this.route,
     };
   }
 
-  private resolvePlayerImpacts(combatUpdate: CombatUpdate): void {
-    for (const event of combatUpdate.events) {
-      if (event.type !== "impact-resolved") continue;
-      const skill = this.skillsByActionId.get(event.actionId);
-      if (skill === undefined) continue;
+  private resolveImpactsChronologically(combatUpdate: CombatUpdate, enemyEvents: readonly EnemyAttackEvent[]): void {
+    const playerImpacts: OrderedRuntimeImpact[] = combatUpdate.events
+      .filter((event) => event.type === "impact-resolved")
+      .map((event, sequence) => ({ source: "player", event, priority: 1, sequence }));
+    const enemyImpacts: OrderedRuntimeImpact[] = enemyEvents
+      .filter((event) => event.type === "impact-resolved")
+      .map((event, sequence) => ({
+        source: "enemy",
+        event,
+        priority: this.isEnemyDefenseImpact(event) ? 0 : 2,
+        sequence: playerImpacts.length + sequence,
+      }));
+    const orderedImpacts = [...playerImpacts, ...enemyImpacts].sort(
+      (left, right) =>
+        left.event.atMs - right.event.atMs || left.priority - right.priority || left.sequence - right.sequence,
+    );
 
-      const target = event.targetId === "player"
-        ? this.player
-        : this.resolveLivingEnemyTarget(event.targetId);
-      if (target === undefined) continue;
+    for (const impact of orderedImpacts) {
+      if (impact.source === "player") this.resolvePlayerImpact(impact.event);
+      else this.resolveEnemyImpact(impact.event);
+      this.resolveOutcome();
+      if (this.route !== null) break;
+    }
 
-      const impactEvent = target.id === event.targetId
-        ? event
-        : { ...event, targetId: target.id };
-      const result = this.impactResolver.resolve({
-        event: impactEvent,
-        skill,
-        actor: this.player,
-        target,
-      });
-      if (!result.applied) continue;
+    if (orderedImpacts.length === 0) this.resolveOutcome();
+    this.shields.pruneExpired(this.elapsedMs);
+  }
 
-      this.apEffects.onSkillImpact(skill);
+  private releaseFinishedWindupShields(timeline: Readonly<EnemyAttackTimeline["snapshot"]>): void {
+    const activeWindupTimelineIds = new Set(
+      timeline.attacks.filter((attack) => attack.phase === "windup").map((attack) => attack.timelineId),
+    );
 
-      if (result.damageApplied > 0 && target.id !== this.player.id) {
-        playWeaponImpactSound(this.initialization.player.equipmentIds);
-      }
-
-      for (const [index, effect] of skill.effects.entries()) {
-        if (effect.type !== "guard") continue;
-        const windowId = `${event.actionId}:guard:${index}`;
-        this.defenseWindows.openWindow(
-          windowId,
-          this.player.id,
-          event.atMs,
-          effect.durationMs,
-        );
-        this.defenseMultiplierByWindowId.set(windowId, effect.damageMultiplier);
-      }
+    for (const timelineId of this.enemyShieldIdByTimelineId.keys()) {
+      if (!activeWindupTimelineIds.has(timelineId)) this.releaseEnemyShield(timelineId);
     }
   }
 
-  private resolveEnemyImpacts(events: readonly EnemyAttackEvent[]): void {
-    for (const event of events) {
-      if (event.type !== "impact-resolved" || event.targetId !== this.player.id) {
-        continue;
-      }
+  private releaseEnemyShield(timelineId: string): void {
+    const shieldId = this.enemyShieldIdByTimelineId.get(timelineId);
+    if (shieldId === undefined) return;
+    this.enemyShieldIdByTimelineId.delete(timelineId);
+    this.enemyTimelineByShieldId.delete(shieldId);
+    this.shields.release(shieldId);
+  }
 
-      const enemyState = this.enemies.get(event.enemyId);
-      if (enemyState === undefined || enemyState.snapshot.health.isDead) {
-        continue;
-      }
+  private resolvePlayerImpact(event: PlayerImpactEvent): void {
+    const entry = this.skillsByActionId.get(event.actionId);
+    if (entry === undefined) return;
+    const { skill, damageMultiplier } = entry;
 
-      const enemy = this.findEnemy(event.enemyId);
-      const action = enemy?.actions.find(
-        (candidate) => candidate.id === event.attackId,
-      );
-      if (enemy === undefined || action === undefined) continue;
+    const target = event.targetId === "player" ? this.player : this.resolveLivingEnemyTarget(event.targetId);
+    if (target === undefined) return;
 
-      const defense = this.defenseWindows.resolveImpact(this.player.id, event.atMs);
-      const defendedDamageMultiplier = defense.window === null
-        ? 1
-        : (this.defenseMultiplierByWindowId.get(defense.window.id) ?? 1);
-      const result = this.enemyImpactResolver.resolve({
-        event,
-        damage: action.damage,
-        target: this.player,
-        defenseWindows: this.defenseWindows,
-        defendedDamageMultiplier,
-      });
-      if (!result.applied) continue;
+    const impactEvent = target.id === event.targetId ? event : { ...event, targetId: target.id };
+    const result = this.impactResolver.resolve({
+      event: impactEvent,
+      skill,
+      actor: this.player,
+      target,
+      shields: this.shields,
+      damageMultiplier,
+    });
+    if (!result.applied) return;
 
-      if (action.apDelta !== undefined) {
-        this.actionPoints.adjust(action.apDelta);
-      }
+    this.apEffects.onSkillImpact(skill);
 
-      playPlayerHitSound({
-        defended: result.defended,
-        special: action.kind === "special",
-      });
-      this.runState = {
-        ...this.runState,
-        character: {
-          ...this.runState.character,
-          currentHp: this.playerHp,
-        },
-      };
-
-      if (!this.player.snapshot.health.isDead) {
-        this.startNextEnemyAttack(enemy.instanceId);
-      }
+    if (target.id !== this.player.id && (result.damageApplied > 0 || result.shieldAbsorbedDamage > 0)) {
+      playWeaponImpactSound(this.initialization.player.equipmentIds);
     }
 
-    this.defenseWindows.pruneExpired(this.enemyTimeline.snapshot.elapsedMs);
+    if (target.id !== this.player.id && target.snapshot.health.isDead) {
+      this.cancelEnemyAttacks(target.id);
+    }
+
+    for (const shieldId of result.brokenShieldIds) this.cancelAttackOnBrokenShield(shieldId);
+  }
+
+  private cancelEnemyAttacks(enemyId: string): void {
+    const attacks = this.enemyTimeline.snapshot.attacks.filter((attack) => attack.enemyId === enemyId);
+    for (const attack of attacks) {
+      this.releaseEnemyShield(attack.timelineId);
+      this.enemyTimeline.cancelAttack(attack.timelineId);
+    }
+  }
+
+  private cancelAttackOnBrokenShield(shieldId: string): void {
+    const timelineId = this.enemyTimelineByShieldId.get(shieldId);
+    if (timelineId === undefined) return;
+    this.enemyTimelineByShieldId.delete(shieldId);
+    this.enemyShieldIdByTimelineId.delete(timelineId);
+
+    const attack = this.enemyTimeline.snapshot.attacks.find((candidate) => candidate.timelineId === timelineId);
+    if (attack === undefined || attack.phase !== "windup") return;
+
+    this.enemyTimeline.cancelAttack(timelineId);
+    this.startNextEnemyAttack(attack.enemyId);
+  }
+
+  private resolveEnemyImpact(event: ResolvedEnemyImpactEvent): void {
+    if (event.targetId !== this.player.id) return;
+
+    const enemyState = this.enemies.get(event.enemyId);
+    if (enemyState === undefined || enemyState.snapshot.health.isDead) return;
+
+    const enemy = this.findEnemy(event.enemyId);
+    const action = enemy?.actions.find((candidate) => candidate.id === event.attackId);
+    if (enemy === undefined || action === undefined) return;
+
+    if (action.kind === "defense") {
+      this.startNextEnemyAttack(enemy.instanceId);
+      return;
+    }
+
+    const result = this.enemyImpactResolver.resolve({
+      event,
+      damage: action.damage,
+      target: this.player,
+      shields: this.shields,
+    });
+    if (!result.applied) return;
+
+    if (action.apDelta !== undefined) this.actionPoints.adjust(action.apDelta);
+
+    playPlayerHitSound({ defended: result.defended, special: action.kind === "special" });
+    this.runState = {
+      ...this.runState,
+      character: { ...this.runState.character, currentHp: this.playerHp },
+    };
+
+    if (!this.player.snapshot.health.isDead) this.startNextEnemyAttack(enemy.instanceId);
+  }
+
+  private isEnemyDefenseImpact(event: ResolvedEnemyImpactEvent): boolean {
+    return (
+      this.findEnemy(event.enemyId)?.actions.some(
+        (action) => action.id === event.attackId && action.kind === "defense",
+      ) ?? false
+    );
   }
 
   private startNextEnemyAttack(enemyId: string): void {
@@ -294,9 +379,8 @@ export class PlayerCombatRuntime {
       this.route !== null ||
       this.combat.snapshot.status !== "active" ||
       this.enemyTimeline.snapshot.status !== "active"
-    ) {
+    )
       return;
-    }
 
     const enemyState = this.enemies.get(enemyId);
     if (enemyState?.snapshot.health.isDead !== false) return;
@@ -310,15 +394,13 @@ export class PlayerCombatRuntime {
     if (hasActiveAttack) return;
 
     const randomValue = validateRandomValue(this.random());
-    const actionIndex = Math.min(
-      Math.floor(randomValue * enemy.actions.length),
-      enemy.actions.length - 1,
-    );
+    const actionIndex = Math.min(Math.floor(randomValue * enemy.actions.length), enemy.actions.length - 1);
     const action = enemy.actions[actionIndex];
     if (action === undefined) return;
 
+    const timelineId = `${enemy.instanceId}:${action.id}:runtime:${this.nextEnemyTimelineSequence++}`;
     this.enemyTimeline.startAttack({
-      timelineId: `${enemy.instanceId}:${action.id}:runtime:${this.nextEnemyTimelineSequence++}`,
+      timelineId,
       enemyId: enemy.instanceId,
       targetId: this.player.id,
       attackId: action.id,
@@ -327,25 +409,58 @@ export class PlayerCombatRuntime {
       windupMs: action.windupMs,
       recoveryMs: action.recoveryMs,
     });
+    this.grantEnemyWindupShield(timelineId, enemy.instanceId, action);
+  }
+
+  private grantEnemyWindupShield(
+    timelineId: string,
+    enemyId: string,
+    action: CombatEnemyInitialization["actions"][number],
+  ): void {
+    if (action.kind !== "defense") return;
+    const amount = action.shieldAmount ?? 0;
+    if (amount <= 0 || action.windupMs <= 0) return;
+
+    const shieldId = `${timelineId}:shield`;
+    this.shields.grant({
+      id: shieldId,
+      ownerId: enemyId,
+      amount,
+      durationMs: action.windupMs,
+      atMs: this.elapsedMs,
+    });
+    this.enemyTimelineByShieldId.set(shieldId, timelineId);
+    this.enemyShieldIdByTimelineId.set(timelineId, shieldId);
+  }
+
+  private grantSkillShields(actionId: string, skill: SkillDefinition): void {
+    const atMs = this.elapsedMs;
+    skill.effects.forEach((effect, index) => {
+      if (effect.type !== "shield") return;
+      const amount = this.apEffects.resolveShieldAmount(effect.amount);
+      const durationMs = this.apEffects.resolveShieldDuration(effect.durationMs);
+      if (amount <= 0 || durationMs <= 0) return;
+      this.shields.grant({
+        id: `${actionId}:shield:${index}`,
+        ownerId: this.player.id,
+        amount,
+        durationMs,
+        atMs,
+      });
+      this.apEffects.onShieldGranted();
+    });
   }
 
   private findEnemy(instanceId: string): CombatEnemyInitialization | undefined {
-    return this.initialization.enemies.find(
-      (enemy) => enemy.instanceId === instanceId,
-    );
+    return this.initialization.enemies.find((enemy) => enemy.instanceId === instanceId);
   }
 
-  private resolveLivingEnemyTarget(
-    targetId: string,
-  ): SkillCombatantState | undefined {
+  private resolveLivingEnemyTarget(targetId: string): SkillCombatantState | undefined {
     const requestedTarget = this.enemies.get(targetId);
     if (requestedTarget !== undefined && !requestedTarget.snapshot.health.isDead) {
       return requestedTarget;
     }
-
-    return Array.from(this.enemies.values()).find(
-      (enemy) => !enemy.snapshot.health.isDead,
-    );
+    return Array.from(this.enemies.values()).find((enemy) => !enemy.snapshot.health.isDead);
   }
 
   private resolveOutcome(): void {
@@ -356,12 +471,7 @@ export class PlayerCombatRuntime {
       return;
     }
 
-    if (
-      this.enemies.size > 0 &&
-      Array.from(this.enemies.values()).every(
-        (enemy) => enemy.snapshot.health.isDead,
-      )
-    ) {
+    if (this.enemies.size > 0 && Array.from(this.enemies.values()).every((enemy) => enemy.snapshot.health.isDead)) {
       this.route = this.finalize("victory");
     }
   }
@@ -374,10 +484,7 @@ export class PlayerCombatRuntime {
       outcome,
       nextNodeIds: this.nextNodeIds,
       bossNode: this.bossNode,
-      rewardTier:
-        this.initialization.rewardPolicy === "standard"
-          ? "normal"
-          : this.initialization.rewardPolicy,
+      rewardTier: this.initialization.rewardPolicy === "standard" ? "normal" : this.initialization.rewardPolicy,
     });
     this.runState = route.runState;
     return route;

@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { ENEMY_HEALTH_BAR_TRACK_WIDTH } from "../combat/enemy-health-bar";
 import type {
   EnemyAttackPhase,
   EnemyAttackSnapshot,
@@ -67,6 +68,7 @@ export type EnemyAttackGaugeAttackState = Readonly<{
   typeLabel: string;
   color: string;
   accent: number;
+  targeted: boolean;
 }>;
 
 export type EnemyAttackGaugeState = Readonly<{
@@ -74,6 +76,8 @@ export type EnemyAttackGaugeState = Readonly<{
   elapsedMs: number;
   attacks: readonly EnemyAttackGaugeAttackState[];
 }>;
+
+export const ENEMY_ATTACK_GAUGE_TRACK_WIDTH = ENEMY_HEALTH_BAR_TRACK_WIDTH;
 
 const clampProgress = (value: number): number =>
   Math.min(Math.max(0, value), 1);
@@ -89,6 +93,7 @@ export function getEnemyAttackTypePresentation(
 
 export function createEnemyAttackGaugeState(
   snapshot: EnemyAttackTimelineSnapshot,
+  targetedEnemyId?: string,
 ): EnemyAttackGaugeState {
   return {
     status: snapshot.status,
@@ -115,6 +120,7 @@ export function createEnemyAttackGaugeState(
           typeLabel: presentation.label,
           color: presentation.color,
           accent: presentation.accent,
+          targeted: targetedEnemyId !== undefined && attack.enemyId === targetedEnemyId,
         };
       }),
   };
@@ -141,6 +147,8 @@ export class EnemyAttackGauge {
   private readonly emptyText: Phaser.GameObjects.Text;
   private readonly rows = new Map<string, EnemyAttackGaugeRow>();
   private state: EnemyAttackGaugeState;
+  private lastSnapshot: EnemyAttackTimelineSnapshot;
+  private targetedEnemyId?: string;
   private panelWidth = 420;
   private panelHeight = 132;
 
@@ -148,6 +156,7 @@ export class EnemyAttackGauge {
     scene: Phaser.Scene,
     initialSnapshot: EnemyAttackTimelineSnapshot,
   ) {
+    this.lastSnapshot = initialSnapshot;
     this.state = createEnemyAttackGaugeState(initialSnapshot);
     this.container = scene.add.container(0, 0);
 
@@ -194,7 +203,14 @@ export class EnemyAttackGauge {
   }
 
   update(snapshot: EnemyAttackTimelineSnapshot): void {
-    this.state = createEnemyAttackGaugeState(snapshot);
+    this.lastSnapshot = snapshot;
+    this.state = createEnemyAttackGaugeState(snapshot, this.targetedEnemyId);
+    this.refresh();
+  }
+
+  setTargetedEnemy(enemyId: string | undefined): void {
+    this.targetedEnemyId = enemyId;
+    this.state = createEnemyAttackGaugeState(this.lastSnapshot, enemyId);
     this.refresh();
   }
 
@@ -324,15 +340,20 @@ export class EnemyAttackGauge {
     const bodyHeight = Math.max(24, rowHeight - 3);
     const labelY = Math.max(2, bodyHeight * 0.08);
     const trackY = bodyHeight - 8;
-    const trackWidth = Math.max(24, this.panelWidth - 84);
+    const trackWidth = ENEMY_ATTACK_GAUGE_TRACK_WIDTH;
     const typeX = Math.max(112, this.panelWidth - 156);
     const phaseX = Math.max(162, this.panelWidth - 82);
     const progressX = Math.max(174, this.panelWidth - 44);
 
     row.panel
       .setSize(this.panelWidth, bodyHeight)
-      .setFillStyle(0x111c2d, 0.9)
-      .setStrokeStyle(1, attack.accent, 0.9);
+      .setFillStyle(attack.targeted ? 0x3b2f12 : 0x111c2d, 0.9)
+      .setStrokeStyle(
+        attack.targeted ? 2 : 1,
+        attack.targeted ? 0xffd166 : attack.accent,
+        0.9,
+      );
+    row.container.setAlpha(attack.targeted ? 1 : 0.78);
     row.icon.setPosition(8, labelY).setText(attack.icon).setColor(attack.color);
     row.attackName
       .setPosition(34, labelY)

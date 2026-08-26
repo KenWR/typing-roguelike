@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { EnemyAttackTimeline } from "../src/game/combat/enemy-attack-timeline";
+import { ENEMY_HEALTH_BAR_TRACK_WIDTH } from "../src/game/combat/enemy-health-bar";
 import {
   createEnemyAttackGaugeState,
+  ENEMY_ATTACK_GAUGE_TRACK_WIDTH,
   getEnemyAttackTypePresentation,
 } from "../src/game/hud/enemy-attack-gauge";
 
@@ -17,6 +19,10 @@ const createAttack = () => ({
 });
 
 describe("enemy attack gauge state", () => {
+  test("uses the enemy health bar track width", () => {
+    expect(ENEMY_ATTACK_GAUGE_TRACK_WIDTH).toBe(ENEMY_HEALTH_BAR_TRACK_WIDTH);
+  });
+
   test("maps wind-up progress to the horizontal gauge ratio", () => {
     const timeline = new EnemyAttackTimeline();
     timeline.startAttack(createAttack());
@@ -69,6 +75,23 @@ describe("enemy attack gauge state", () => {
       },
     ]);
     expect(state.attacks).toHaveLength(2);
+  });
+
+  test("marks the telegraph belonging to the selected enemy", () => {
+    const timeline = new EnemyAttackTimeline();
+    timeline.startAttack(createAttack());
+    timeline.startAttack({
+      ...createAttack(),
+      timelineId: "bat-cry-1",
+      enemyId: "reverse-bat",
+    });
+
+    const state = createEnemyAttackGaugeState(
+      timeline.advance(100).snapshot,
+      "reverse-bat",
+    );
+
+    expect(state.attacks.map(({ targeted }) => targeted)).toEqual([false, true]);
   });
 
   test("keeps recovery visible but removes resolved attacks immediately", () => {

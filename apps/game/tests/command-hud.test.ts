@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { CommandInputBuffer } from "../src/game/input/command-input-buffer";
 import {
   createCommandHudState,
+  createSkillCommandEffects,
+  createTimedApCommandEffects,
+  formatEffectRemainingTime,
   getCommandHudCharacters,
+  getEffectDarknessRatio,
   markSkillStarted,
   updateCommandHudState,
 } from "../src/game/hud/command-hud";
@@ -82,5 +86,57 @@ describe("command HUD state", () => {
     expect(updateCommandHudState(started, completed).feedback).toEqual(
       started.feedback,
     );
+  });
+
+  test("selects effect icons for guard, shield, and status command effects", () => {
+    expect(createSkillCommandEffects({
+      id: "skill.test",
+      name: "수호 베기",
+      command: "수호베기",
+      description: "test",
+      effects: [
+        { type: "damage", coefficient: 1 },
+        { type: "guard", damageMultiplier: 0.6, durationMs: 2_000 },
+        { type: "shield", amount: 20, durationMs: 1_000 },
+        { type: "status", statusId: "bleed", durationMs: 3_000, stacks: 2 },
+      ],
+    })).toEqual([
+      {
+        id: "skill.test:guard:1",
+        name: "피해 감소",
+        description: "수호 베기: 받는 피해 40% 감소 · 2초",
+        durationMs: 2_000,
+        remainingMs: null,
+        textureKey: "effect:guard",
+      },
+      {
+        id: "skill.test:shield:2",
+        name: "실드",
+        description: "수호 베기: 실드 20 · 1초",
+        durationMs: 1_000,
+        remainingMs: null,
+        textureKey: "effect:shield",
+      },
+      {
+        id: "skill.test:status:bleed:3",
+        name: "bleed",
+        description: "수호 베기: bleed 2중첩 · 3초",
+        durationMs: 3_000,
+        remainingMs: null,
+        textureKey: "effect:bleed",
+      },
+    ]);
+  });
+
+  test("fills the dark overlay from bottom to top as timed effects expire", () => {
+    const [effect] = createTimedApCommandEffects([
+      { id: "temporary-ap-regeneration", amountPerSecond: 0.5, durationMs: 3_000, remainingMs: 750 },
+    ]);
+    expect(effect).toMatchObject({ name: "AP 재생 증가", textureKey: "effect:ap-regen-up" });
+    expect(getEffectDarknessRatio(effect!)).toBe(0.75);
+    expect(getEffectDarknessRatio({ durationMs: 3_000, remainingMs: 3_000 })).toBe(0);
+    expect(getEffectDarknessRatio({ durationMs: 3_000, remainingMs: 0 })).toBe(1);
+    expect(formatEffectRemainingTime(750)).toBe("남은 시간: 750ms");
+    expect(formatEffectRemainingTime(1_250)).toBe("남은 시간: 1.3초");
   });
 });
