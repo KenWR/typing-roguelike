@@ -11,10 +11,7 @@ import type { ComboSnapshot } from "../combat/combo-tracker";
 import { CombatState } from "../combat/combat-state";
 import { CombatTargetingController } from "../combat/combat-targeting";
 import { CombatPauseController, type PauseDocument, type PauseWindow } from "../combat/combat-pause-controller";
-import type {
-  CombatEnemyInitialization,
-  CombatEncounterInitialization,
-} from "../combat/encounter-initializer";
+import type { CombatEnemyInitialization, CombatEncounterInitialization } from "../combat/encounter-initializer";
 import { EnemyHealthBar } from "../combat/enemy-health-bar";
 import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
@@ -33,13 +30,8 @@ import { persistCombatRunTransition } from "../run/persist-terminal-run";
 import { MENU_SETTINGS_REGISTRY_KEYS } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
 
-const resolveEnemyMaxShield = (
-  enemy: CombatEnemyInitialization,
-): number =>
-  enemy.actions.reduce(
-    (maximum, action) => Math.max(maximum, action.shieldAmount ?? 0),
-    0,
-  );
+const resolveEnemyMaxShield = (enemy: CombatEnemyInitialization): number =>
+  enemy.actions.reduce((maximum, action) => Math.max(maximum, action.shieldAmount ?? 0), 0);
 
 const MAGIC_SHIELD = defineSkill({
   id: "skill.magic-shield",

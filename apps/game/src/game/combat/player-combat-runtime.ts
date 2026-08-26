@@ -8,9 +8,9 @@ import { playPlayerHitSound, playRuntimeBgm, playWeaponImpactSound } from "../au
 import { ActionPointResource } from "./action-point-resource";
 import { CombatApEffectController } from "./combat-ap-effects";
 import type { CombatEnemyInitialization, CombatEncounterInitialization } from "./encounter-initializer";
-import { CombatState, type CombatUpdate } from "./combat-state";
+import type { CombatState, CombatUpdate } from "./combat-state";
 import { ShieldPool, type ShieldInstance } from "./shield-pool";
-import { EnemyAttackTimeline, type EnemyAttackEvent, type EnemyAttackTimelineUpdate } from "./enemy-attack-timeline";
+import type { EnemyAttackEvent, EnemyAttackTimeline, EnemyAttackTimelineUpdate } from "./enemy-attack-timeline";
 import { EnemyImpactResolver } from "./enemy-impact-resolver";
 import { SkillCombatantState, SkillImpactResolver, type TimedStatusEffect } from "./skill-impact-resolver";
 import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome-routing";

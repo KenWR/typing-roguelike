@@ -107,7 +107,8 @@ export class SkillCombatantState {
   advanceStatuses(deltaMs: number): void {
     const delta = validateNonNegative("Status delta", deltaMs);
     for (let index = this.statuses.length - 1; index >= 0; index -= 1) {
-      const status = this.statuses[index]!;
+      const status = this.statuses[index];
+      if (status === undefined) continue;
       status.remainingMs = Math.max(0, status.remainingMs - delta);
       if (status.remainingMs === 0) this.statuses.splice(index, 1);
     }

@@ -389,7 +389,8 @@ export class CommandHud {
   private refreshEffects(): void {
     const effects = this.resolveEffects();
     for (let index = 0; index < effects.length; index += 1) {
-      const effect = effects[index]!;
+      const effect = effects[index];
+      if (effect === undefined) continue;
       const visual = this.getOrCreateEffectVisual(index);
       const x = EFFECT_LEFT + index * (EFFECT_SIZE + EFFECT_GAP);
       const darknessHeight = EFFECT_SIZE * getEffectDarknessRatio(effect);
@@ -401,7 +402,7 @@ export class CommandHud {
       visual.hitArea.setData("effect", effect);
     }
     for (let index = effects.length; index < this.effectVisuals.length; index += 1) {
-      this.effectVisuals[index]!.container.setVisible(false).setActive(false);
+      this.effectVisuals[index]?.container.setVisible(false).setActive(false);
     }
 
     const hovered = effects.find((effect) => effect.id === this.hoveredEffectId);
