@@ -31,16 +31,25 @@ const withRunPersistence = (
   const cached = persistedAdapters.get(adapter as object);
   if (cached !== undefined) return cached;
 
+  const persistRun = (): void => {
+    const completedRun = adapter.getRunState() as RunState;
+    if (runSession.get()?.status === "active") {
+      runSession.update(() => completedRun);
+    }
+  };
+
   const wrapped: RewardSelectionAdapter<unknown> = {
     getViewState: adapter.getViewState,
     getRunState: adapter.getRunState,
     selectReward: adapter.selectReward,
     continue: () => {
       const state = adapter.continue();
-      const completedRun = adapter.getRunState() as RunState;
-      if (runSession.get()?.status === "active") {
-        runSession.update(() => completedRun);
-      }
+      persistRun();
+      return state;
+    },
+    skip: () => {
+      const state = adapter.skip();
+      persistRun();
       return state;
     },
   };
