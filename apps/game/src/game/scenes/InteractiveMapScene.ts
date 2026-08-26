@@ -54,6 +54,40 @@ export class InteractiveMapScene extends MapScene {
     const { width, height } = this.scale.gameSize;
     const view = createMapHudView(activeRun);
     const centerX = width / 2;
+
+    // MapScene is retained as the legacy base scene, but its old right-side
+    // NODE STATUS panel is no longer part of the map UI. Cover both legacy
+    // side panels here so the interactive map has a clean HUD without them.
+    const hudSideMargin = width < 960 ? 16 : 28;
+    const hudPanelWidth = Phaser.Math.Clamp(Math.floor((width - 360) / 2), 220, 300);
+    const leftHudX = hudSideMargin;
+    const rightHudX = width - hudSideMargin - hudPanelWidth;
+    const hudDepth = 110;
+    this.add.rectangle(leftHudX, 92, hudPanelWidth, 190, 0x111827).setOrigin(0).setDepth(hudDepth);
+    this.add.rectangle(rightHudX, 92, hudPanelWidth, 190, 0x111827).setOrigin(0).setDepth(hudDepth);
+    this.add.rectangle(leftHudX, 92, hudPanelWidth, 190, 0x1f2937).setOrigin(0).setDepth(hudDepth + 1);
+    this.add.text(leftHudX + 22, 110, "RUN HUD", {
+      fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
+      fontSize: "22px",
+      color: "#f9fafb",
+    }).setDepth(hudDepth + 2);
+    this.add.text(leftHudX + 22, 150, `HP  ${view.hpText}`, {
+      fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
+      fontSize: "20px",
+      color: "#f9fafb",
+    }).setDepth(hudDepth + 2);
+    this.add.text(leftHudX + 22, 184, `골드  ${view.currencyText}`, {
+      fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
+      fontSize: "20px",
+      color: "#f9fafb",
+    }).setDepth(hudDepth + 2);
+    this.add.text(leftHudX + 22, 218, `장비  ${view.equipmentText}`, {
+      fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
+      fontSize: "18px",
+      color: "#d1d5db",
+      wordWrap: { width: hudPanelWidth - 50 },
+    }).setDepth(hudDepth + 2);
+
     const mapLeft = MAP_VIEW_SIDE_PADDING;
     const mapRight = width - MAP_VIEW_SIDE_PADDING;
     const mapWidth = Math.max(1, mapRight - mapLeft);
