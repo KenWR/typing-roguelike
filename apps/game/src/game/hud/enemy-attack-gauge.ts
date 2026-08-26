@@ -78,6 +78,7 @@ export type EnemyAttackGaugeState = Readonly<{
 }>;
 
 export const ENEMY_ATTACK_GAUGE_TRACK_WIDTH = ENEMY_HEALTH_BAR_TRACK_WIDTH;
+export const ENEMY_ATTACK_GAUGE_VISIBLE = false;
 
 const clampProgress = (value: number): number =>
   Math.min(Math.max(0, value), 1);
@@ -161,7 +162,7 @@ export class EnemyAttackGauge {
     // The active combat HUD now renders telegraphs per enemy on the HP bar.
     // Keep this legacy gauge stateful for compatibility, but never render the
     // old global overlay on top of the encounter.
-    this.container = scene.add.container(0, 0).setVisible(false);
+    this.container = scene.add.container(0, 0).setVisible(ENEMY_ATTACK_GAUGE_VISIBLE);
 
     this.panel = scene.add
       .rectangle(0, 0, this.panelWidth, this.panelHeight, 0x0b1220, 0.94)
