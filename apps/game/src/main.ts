@@ -1,6 +1,17 @@
 import Phaser from "phaser";
 import { BootScene } from "./game/scenes/BootScene";
 import { CombatFoundationScene } from "./game/scenes/CombatFoundationScene";
+import {
+  LobbyScene,
+  MapScene,
+  RestScene,
+  SettingsScene,
+  ShopScene,
+  StartScene,
+} from "./game/scenes/CoreFlowScenes";
+import { EquipmentScene } from "./game/scenes/EquipmentScene";
+import { RewardSelectionScene } from "./game/scenes/RewardSelectionScene";
+import { RunResultScene } from "./game/scenes/RunResultScene";
 import "./styles/global.css";
 
 const game = new Phaser.Game({
@@ -17,7 +28,19 @@ const game = new Phaser.Game({
     autoCenter: Phaser.Scale.NO_CENTER,
     parent: "game-root",
   },
-  scene: [BootScene, CombatFoundationScene],
+  scene: [
+    BootScene,
+    StartScene,
+    SettingsScene,
+    LobbyScene,
+    MapScene,
+    CombatFoundationScene,
+    RewardSelectionScene,
+    EquipmentScene,
+    ShopScene,
+    RestScene,
+    RunResultScene,
+  ],
 });
 
 if (import.meta.hot) {
