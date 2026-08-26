@@ -10,7 +10,7 @@ describe("shop offer hover details", () => {
 
     expect(details.name).toBe("강철 조각");
     expect(details.kindLabel).toBe("유물");
-    expect(details.description).toContain("방어력");
+    expect(details.description).toContain("실드량 +8");
     expect(details.textureKey).toBe("relic-icon:relic_steel_fragment");
   });
 

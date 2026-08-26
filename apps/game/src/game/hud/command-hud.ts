@@ -277,7 +277,8 @@ export class CommandHud {
     frame.lineStyle(2, 0x94a3b8, 0.95);
     frame.strokeRoundedRect(0, 0, EFFECT_SIZE, EFFECT_SIZE, EFFECT_RADIUS);
 
-    const maskShape = this.scene.make.graphics({ x: 0, y: 0, add: false });
+    const maskShape = this.scene.make.graphics({ x: 0, y: 0 });
+    maskShape.setVisible(false);
     maskShape.fillStyle(0xffffff, 1);
     maskShape.fillRoundedRect(0, 0, EFFECT_SIZE, EFFECT_SIZE, EFFECT_RADIUS);
     const darknessMask = maskShape.createGeometryMask();
