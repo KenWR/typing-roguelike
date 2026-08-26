@@ -43,8 +43,11 @@ export const completeFinalBossVictory = (
 	if (runState.status !== "active") {
 		throw new Error("Only an active run can be cleared by a boss victory.");
 	}
-	if (runState.map.currentNodeId !== bossNode.key || bossStatus !== "in_progress") {
-		throw new Error("The final boss must be the current in-progress map node.");
+	if (
+		runState.map.currentNodeId !== bossNode.key ||
+		(bossStatus !== "available" && bossStatus !== "in_progress")
+	) {
+		throw new Error("The final boss must be the current in-progress or available map node.");
 	}
 
 	return {

@@ -39,7 +39,7 @@ describe("final boss routing", () => {
     const route = routeMapNodeSelection(run, boss.key);
     expect(route.applied).toBe(true);
     expect(route.sceneKey).toBe(SCENE_KEYS.combat);
-    expect(route.runState.map.nodeStatuses[boss.key]).toBe("in_progress");
+    expect(route.runState.map.nodeStatuses[boss.key]).toBe("available");
     expect(route.payload.bossNode).toEqual(boss);
   });
 
@@ -56,6 +56,7 @@ describe("final boss routing", () => {
     expect(result.runState.status).toBe("cleared");
     expect(result.sceneKey).toBe(SCENE_KEYS.runResult);
     expect(result.payload.result).toBe("clear");
+    expect(result.runState.map.nodeStatuses[boss.key]).toBe("cleared");
   });
 
   test("ordinary victory cannot clear the run", () => {
