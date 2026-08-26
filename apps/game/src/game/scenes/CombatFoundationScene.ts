@@ -21,7 +21,7 @@ import {
   type PauseWindow,
 } from "../combat/combat-pause-controller";
 import type { CombatEncounterInitialization } from "../combat/encounter-initializer";
-import { createEnemyHealthListLabel } from "../combat/enemy-health-view";
+import { EnemyHealthBar } from "../combat/enemy-health-bar";
 import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
 import {
@@ -73,10 +73,10 @@ export class CombatFoundationScene extends Phaser.Scene {
   private enemyPlaceholders: Phaser.GameObjects.Container[] = [];
   private enemyActorImages = new Map<string, Phaser.GameObjects.Image>();
   private enemyTargetMarkers = new Map<string, Phaser.GameObjects.Rectangle>();
+  private enemyHealthBars = new Map<string, EnemyHealthBar>();
   private displayedEnemyHp = new Map<string, number>();
   private displayedEnemyShield: Readonly<Record<string, number>> = {};
   private enemyHitRemainingMs = new Map<string, number>();
-  private enemyHealthText!: Phaser.GameObjects.Text;
   private encounterLabel!: Phaser.GameObjects.Text;
   private combatHud!: CombatHud;
   private relicHud!: RelicHud;
@@ -120,6 +120,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.enemyPlaceholders = [];
     this.enemyActorImages.clear();
     this.enemyTargetMarkers.clear();
+    this.enemyHealthBars.clear();
     this.displayedEnemyHp.clear();
     this.displayedEnemyShield = {};
     this.enemyHitRemainingMs.clear();
@@ -170,6 +171,10 @@ export class CombatFoundationScene extends Phaser.Scene {
       if (actor instanceof Phaser.GameObjects.Image) {
         this.enemyActorImages.set(enemy.instanceId, actor);
       }
+      const healthBar = new EnemyHealthBar(this, enemy.hp, enemy.hp);
+      healthBar.container.setPosition(0, -158);
+      placeholder.add(healthBar.container);
+      this.enemyHealthBars.set(enemy.instanceId, healthBar);
       const marker = this.add
         .rectangle(0, 0, 200, 250, 0x000000, 0)
         .setStrokeStyle(3, 0xffd166, 0.95)
@@ -196,30 +201,6 @@ export class CombatFoundationScene extends Phaser.Scene {
       )
       .setOrigin(1, 0);
     this.uiLayer.add(this.encounterLabel);
-
-    const initialEnemyHp = Object.fromEntries(
-      initialization.enemies.map((enemy) => [enemy.instanceId, enemy.hp]),
-    );
-    this.enemyHealthText = this.add
-      .text(
-        0,
-        0,
-        createEnemyHealthListLabel(initialization.enemies, initialEnemyHp, {
-          ...(this.targeting?.targetId === undefined
-            ? {}
-            : { targetId: this.targeting.targetId }),
-        }),
-        {
-          color: "#f4d7da",
-          fontFamily: "Galmuri9, monospace",
-          fontSize: "18px",
-          backgroundColor: "#301b22",
-          padding: { x: 12, y: 7 },
-          align: "left",
-        },
-      )
-      .setOrigin(0.5);
-    this.uiLayer.add(this.enemyHealthText);
 
     this.actionPoints = new ActionPointResource();
     this.apEffects = new CombatApEffectController({
@@ -449,18 +430,18 @@ export class CombatFoundationScene extends Phaser.Scene {
     }
   }
   private updateEnemyHealth(enemyHp: Readonly<Record<string, number>>): void {
-    this.enemyHealthText.setText(
-      createEnemyHealthListLabel(
-        this.combatInitialization?.enemies ?? [],
-        enemyHp,
+    for (const enemy of this.combatInitialization?.enemies ?? []) {
+      this.enemyHealthBars.get(enemy.instanceId)?.update(
+        enemyHp[enemy.instanceId] ?? enemy.hp,
+        enemy.hp,
         {
-          enemyShield: this.displayedEnemyShield,
+          shield: this.displayedEnemyShield[enemy.instanceId] ?? 0,
           ...(this.targeting?.targetId === undefined
             ? {}
-            : { targetId: this.targeting.targetId }),
+            : { targeted: this.targeting.targetId === enemy.instanceId }),
         },
-      ),
-    );
+      );
+    }
   }
 
   private createTargetHandling(): void {
@@ -479,6 +460,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     for (const [enemyId, marker] of this.enemyTargetMarkers) {
       const alive = (this.displayedEnemyHp.get(enemyId) ?? 0) > 0;
       marker.setVisible(alive && enemyId === targetId);
+      this.enemyHealthBars.get(enemyId)?.setTargeted(alive && enemyId === targetId);
       this.enemyActorImages
         .get(enemyId)
         ?.setAlpha(!alive || enemyId === targetId ? 1 : 0.62);
@@ -561,11 +543,6 @@ export class CombatFoundationScene extends Phaser.Scene {
         )
         .setScale(layout.actorScale);
     });
-    this.enemyHealthText.setPosition(
-      layout.enemy.x,
-      layout.enemy.y - 135 * layout.actorScale,
-    );
-
     this.relicHud.setPosition(
       layout.relicHudReservation.x,
       layout.relicHudReservation.y,
@@ -677,7 +654,8 @@ export class CombatFoundationScene extends Phaser.Scene {
     if (silhouette instanceof Phaser.GameObjects.Image) {
       const scale = Math.min(220 / silhouette.width, 260 / silhouette.height);
       silhouette.setScale(scale);
-    }    const name = this.add
+    }
+    const name = this.add
       .text(0, 128, label, {
         color: "#e5edf5",
         fontFamily: "Galmuri9, monospace",
