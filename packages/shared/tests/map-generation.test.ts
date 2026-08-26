@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { ENCOUNTER_CONFIGS } from "../src/content/encounters";
 import {
 	generateMap,
 	generateNodeChoices,
@@ -43,6 +44,31 @@ describe("map generation", () => {
 		expect(bossRound[0]?.type).toBe("boss");
 		expect(bossRound[0]?.iconType).toBe("boss");
 		expect(recoveryRound.every(({ nextNodeKeys }) => nextNodeKeys.length === 1)).toBe(true);
+	});
+
+	test("only offers elite nodes on floors with an elite encounter", () => {
+		const eliteFloors = new Set(
+			ENCOUNTER_CONFIGS.filter(({ nodeType }) => nodeType === "elite").map(({ floor }) => floor),
+		);
+		const generatedEliteFloors = new Set<number>();
+
+		for (let round = 1; round < MAP_ROUND_COUNT; round += 1) {
+			if (round === 9) continue;
+			const nodes = Array.from({ length: 64 }, (_, seed) =>
+				generateNodeChoices(seed, round, pathForRound(round)),
+			).flat();
+
+			if (!eliteFloors.has(round)) {
+				expect(nodes.some(({ type }) => type === "elite")).toBe(false);
+				continue;
+			}
+
+			if (nodes.some(({ type }) => type === "elite")) {
+				generatedEliteFloors.add(round);
+			}
+		}
+
+		expect(generatedEliteFloors).toEqual(eliteFloors);
 	});
 
 	test("exposes reward and semantic icon values", () => {
