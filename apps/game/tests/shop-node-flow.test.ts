@@ -1,15 +1,24 @@
 import { describe, expect, test } from "bun:test";
-import type { RunState, ShopOffer } from "@typing-roguelike/shared";
+import { RUN_STATE_SCHEMA_VERSION, type RunState, type ShopOffer } from "@typing-roguelike/shared";
 import { completeShopNode, createShopNodeFlow, purchaseShopOffer } from "../src/game/shop/shop-node-flow";
 
 const run = (): RunState => ({
+  schemaVersion: RUN_STATE_SCHEMA_VERSION,
   status: "active",
-  seed: 1,
-  player: { currentHp: 80, maxHp: 100 },
+  character: { currentHp: 80, maxHp: 100 },
   runCurrency: 100,
   acquiredItemValue: 0,
-  inventory: { itemInstances: [], relicIds: [], equipment: { weaponId: null, subweaponId: null } },
-  map: { mapId: "map", currentNodeId: "shop", nodeStatuses: { shop: "in_progress", next: "locked" } },
+  inventory: { itemInstances: [], relicInstances: [] },
+  loadout: { weaponId: null, subweaponId: null, ring1Id: null, ring2Id: null },
+  build: { equippedRelicIds: [] },
+  map: {
+    mapId: "map",
+    seed: 1,
+    currentNodeId: "shop",
+    currentRound: 1,
+    choicePath: [],
+    nodeStatuses: { shop: "in_progress", next: "locked" },
+  },
 });
 
 const offers: readonly ShopOffer[] = [{ id: "offer", equipmentId: "ember-blade", price: 25 }];
