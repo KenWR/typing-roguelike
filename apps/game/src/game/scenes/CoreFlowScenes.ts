@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { MapNodeStatus, RunState } from "@typing-roguelike/shared";
 import { createMapHudView } from "../run/map-hud-view";
+import { runRemotePersistence } from "../run/run-remote-persistence";
 import { runSession } from "../run/run-session";
 import { LobbyRunStarter } from "./lobby-run-start";
 import {
@@ -145,18 +146,22 @@ export class LobbyScene extends EmptyCoreScene {
       width / 2,
       height * 0.62,
       "새 런 시작",
-      () => {
-        const runState = this.runStarter.start();
-        if (runState === null) {
-          return;
-        }
-
+      async () => {
         startRunButton.disableInteractive();
         startRunButton.setText("런 시작 중...");
         startRunButton.setStyle({ backgroundColor: "#4b5563" });
 
-        const transition = resolveSceneTransition(SCENE_KEYS.map, { runState });
-        this.scene.start(transition.key, transition.payload);
+        try {
+          const runState = await this.runStarter.startPersisted();
+          if (runState === null) return;
+
+          const transition = resolveSceneTransition(SCENE_KEYS.map, { runState });
+          this.scene.start(transition.key, transition.payload);
+        } catch {
+          startRunButton.setText("새 런 시작 · 다시 시도");
+          startRunButton.setStyle({ backgroundColor: "#1f2937" });
+          startRunButton.setInteractive({ useHandCursor: true });
+        }
       },
     );
   }
@@ -198,12 +203,20 @@ export class MapScene extends EmptyCoreScene {
 
     const view = createMapHudView(activeRun);
     const fontFamily = 'Galmuri9, "Apple SD Gothic Neo", monospace';
+    const syncStatus = runRemotePersistence.syncStatus;
 
     this.add
       .text(width / 2, 42, `MAP · ${view.floor}F`, {
         fontFamily,
         fontSize: "36px",
         color: "#f9fafb",
+      })
+      .setOrigin(0.5);
+    this.add
+      .text(width / 2, 78, syncStatus.message, {
+        fontFamily,
+        fontSize: "14px",
+        color: syncStatus.mode === "local_fallback" ? "#fbbf24" : "#9ca3af",
       })
       .setOrigin(0.5);
 
