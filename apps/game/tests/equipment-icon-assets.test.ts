@@ -4,6 +4,7 @@ import { RUNTIME_IMAGE_ASSETS } from "../src/game/assets/asset-catalog";
 import {
   EQUIPMENT_ICON_ASSETS,
   EQUIPMENT_IDS_WITHOUT_ICON,
+  SUBWEAPON_ICON_ASSETS,
   getEquipmentIconTextureKey,
   resolveEquipmentIconTextureKey,
 } from "../src/game/assets/equipment-icon-assets";
@@ -15,6 +16,9 @@ const publicFile = (publicPath: string) =>
 const WEAPON_SLOT_EQUIPMENT = EQUIPMENT_CONFIGS.filter(
   (equipment) => equipment.slot === "weapon",
 );
+const SUBWEAPON_SLOT_EQUIPMENT = EQUIPMENT_CONFIGS.filter(
+  (equipment) => equipment.slot === "subweapon",
+);
 
 describe("equipment icon assets", () => {
   test("covers every weapon slot equipment", () => {
@@ -25,17 +29,25 @@ describe("equipment icon assets", () => {
     ).map((equipment) => equipment.id);
 
     expect(uncovered).toEqual([]);
-    expect(EQUIPMENT_ICON_ASSETS).toHaveLength(WEAPON_SLOT_EQUIPMENT.length);
+    expect(EQUIPMENT_ICON_ASSETS).toHaveLength(
+      WEAPON_SLOT_EQUIPMENT.length + SUBWEAPON_SLOT_EQUIPMENT.length,
+    );
   });
 
-  test("leaves subweapons without an icon so the caller can fall back", () => {
-    // 아이콘 세트는 무기 8종만 다룬다. 보조무기는 이모지 표현을 유지한다.
-    expect(EQUIPMENT_IDS_WITHOUT_ICON.length).toBeGreaterThan(0);
+  test("covers every subweapon with its uploaded image", async () => {
+    // 업로드된 보조무기 이미지가 장비 설정 전체와 일치하는지 확인한다.
+    expect(SUBWEAPON_SLOT_EQUIPMENT).toHaveLength(24);
+    expect(SUBWEAPON_ICON_ASSETS).toHaveLength(SUBWEAPON_SLOT_EQUIPMENT.length);
+    expect(EQUIPMENT_IDS_WITHOUT_ICON).toEqual([]);
 
-    for (const equipmentId of EQUIPMENT_IDS_WITHOUT_ICON) {
-      const equipment = EQUIPMENT_CONFIGS.find((item) => item.id === equipmentId);
-      expect(equipment?.slot).toBe("subweapon");
-      expect(resolveEquipmentIconTextureKey(equipmentId)).toBeUndefined();
+    for (const equipment of SUBWEAPON_SLOT_EQUIPMENT) {
+      expect(resolveEquipmentIconTextureKey(equipment.id)).toBe(
+        `equipment-icon:${equipment.id}`,
+      );
+    }
+
+    for (const asset of SUBWEAPON_ICON_ASSETS) {
+      expect(await publicFile(asset.path).exists()).toBe(true);
     }
   });
 
@@ -54,7 +66,9 @@ describe("equipment icon assets", () => {
   test("ships a 96px file for every mapped icon", async () => {
     const missing: string[] = [];
 
-    for (const asset of EQUIPMENT_ICON_ASSETS) {
+    for (const asset of EQUIPMENT_ICON_ASSETS.filter((item) =>
+      item.path.includes("/weapon_icons_pixel/"),
+    )) {
       const file = publicFile(asset.path);
       if (!(await file.exists())) {
         missing.push(asset.path);
