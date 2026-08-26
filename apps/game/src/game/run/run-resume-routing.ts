@@ -1,17 +1,8 @@
-import {
-  generateNodeChoices,
-  type GeneratedMapNode,
-  type RunState,
-} from "@typing-roguelike/shared";
+import { type RunState } from "@typing-roguelike/shared";
 import { SCENE_KEYS } from "../scenes/scene-contract";
 
 export type RunResumeRoute = Readonly<{
-  sceneKey:
-    | typeof SCENE_KEYS.map
-    | typeof SCENE_KEYS.combat
-    | typeof SCENE_KEYS.shop
-    | typeof SCENE_KEYS.rest
-    | typeof SCENE_KEYS.reward;
+  sceneKey: typeof SCENE_KEYS.map;
   payload: Readonly<Record<string, unknown>>;
   recovered: boolean;
 }>;
