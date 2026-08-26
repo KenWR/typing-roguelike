@@ -1,6 +1,9 @@
 import Phaser from "phaser";
 import type { GeneratedMapNode, RunState } from "@typing-roguelike/shared";
 import { playWalkSound } from "../audio/runtime-audio";
+import { InventoryModal } from "../inventory/inventory-modal";
+import { createInventoryBagIcon } from "../inventory/inventory-icons";
+import { resolveInventoryModalKey } from "../inventory/inventory-modal-state";
 import { createMapHudView } from "../run/map-hud-view";
 import { routeMapNodeSelection } from "../run/map-node-routing";
 import { runRemotePersistence } from "../run/run-remote-persistence";
@@ -20,6 +23,32 @@ const MAP_LANE_SIDE_PADDING = 24;
 const MAP_MIN_LANE_GAP = 40;
 const MAP_MAX_LANE_GAP = 220;
 const MAP_CURRENT_NODE_BOTTOM_GAP = 14;
+const INVENTORY_BUTTON_ICON_BASE_SIZE = 22;
+
+type InventoryButtonMetrics = Readonly<{
+  width: number;
+  height: number;
+  centerY: number;
+  sideMargin: number;
+  iconX: number;
+  iconSize: number;
+  labelX: number;
+  fontSize: string;
+}>;
+
+const getInventoryButtonMetrics = (width: number): InventoryButtonMetrics => {
+  const compact = width < 640;
+  return {
+    width: compact ? 160 : 184,
+    height: compact ? 36 : 42,
+    centerY: compact ? 242 : 42,
+    sideMargin: width < 960 ? 16 : 28,
+    iconX: compact ? 20 : 23,
+    iconSize: compact ? 18 : INVENTORY_BUTTON_ICON_BASE_SIZE,
+    labelX: compact ? 42 : 48,
+    fontSize: compact ? "14px" : "16px",
+  };
+};
 
 const NODE_FILL: Record<string, number> = {
   locked: 0x374151,
@@ -39,6 +68,11 @@ export class InteractiveMapScene extends MapScene {
   protected override readonly renderLegacyMapChoices = false;
   private routeRunState?: Readonly<RunState>;
   private selectionLocked = false;
+  private inventoryModal?: InventoryModal;
+  private inventoryButton?: Phaser.GameObjects.Container;
+  private inventoryButtonBackground?: Phaser.GameObjects.Rectangle;
+  private inventoryButtonIcon?: Phaser.GameObjects.Graphics;
+  private inventoryButtonLabel?: Phaser.GameObjects.Text;
 
   init(data: { runState?: Readonly<RunState> }): void {
     this.routeRunState = data.runState;
@@ -54,6 +88,11 @@ export class InteractiveMapScene extends MapScene {
 
     const { width, height } = this.scale.gameSize;
     const view = createMapHudView(activeRun);
+    this.inventoryButton = this.createInventoryButton(width);
+    this.input.keyboard?.on("keydown", this.handleInventoryKeyDown, this);
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.handleInventoryResize, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseInventoryInput, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseInventoryInput, this);
     const centerX = width / 2;
     const mapLeft = MAP_VIEW_SIDE_PADDING;
     const mapRight = width - MAP_VIEW_SIDE_PADDING;
@@ -139,7 +178,7 @@ export class InteractiveMapScene extends MapScene {
       hitArea.on("pointerover", () => hitArea.setFillStyle(0xffffff, 0.08));
       hitArea.on("pointerout", () => hitArea.setFillStyle(0xffffff, 0.001));
       hitArea.once("pointerdown", () => {
-        if (this.selectionLocked) return;
+        if (this.selectionLocked || this.inventoryModal !== undefined) return;
 
         const route = routeMapNodeSelection(activeRun, node.id);
         if (!route.applied) return;
@@ -174,17 +213,29 @@ export class InteractiveMapScene extends MapScene {
     const currentY = floorY(Math.min(10, Math.max(1, activeRun.map.currentRound)));
     mapContainer.y = Phaser.Math.Clamp(currentNodeViewportY - currentY, minY, maxY);
 
+    const handleMapWheel = (
+      _pointer: Phaser.Input.Pointer,
+      _gameObjects: Phaser.GameObjects.GameObject[],
+      _deltaX: number,
+      deltaY: number,
+    ): void => {
+      if (this.inventoryModal !== undefined) {
+        this.inventoryModal.scroll(deltaY);
+        return;
+      }
+
+      mapContainer.y = Phaser.Math.Clamp(mapContainer.y - deltaY * 0.65, minY, maxY);
+    };
     this.input.on(
       "wheel",
-      (
-        _pointer: Phaser.Input.Pointer,
-        _gameObjects: Phaser.GameObjects.GameObject[],
-        _deltaX: number,
-        deltaY: number,
-      ) => {
-        mapContainer.y = Phaser.Math.Clamp(mapContainer.y - deltaY * 0.65, minY, maxY);
-      },
+      handleMapWheel,
+      this,
     );
+    const releaseMapWheel = (): void => {
+      this.input.off("wheel", handleMapWheel, this);
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, releaseMapWheel);
+    this.events.once(Phaser.Scenes.Events.DESTROY, releaseMapWheel);
 
     this.add
       .text(centerX, height - 8, "마우스 휠로 전체 경로 스크롤", {
@@ -194,5 +245,120 @@ export class InteractiveMapScene extends MapScene {
       })
       .setOrigin(0.5, 1)
       .setDepth(100);
+  }
+
+  private createInventoryButton(width: number): Phaser.GameObjects.Container {
+    const metrics = getInventoryButtonMetrics(width);
+    const button = this.add
+      .container(
+        width - metrics.sideMargin - metrics.width,
+        metrics.centerY - metrics.height / 2,
+      )
+      .setDepth(120);
+    const background = this.add
+      .rectangle(0, 0, metrics.width, metrics.height, 0x263449, 1)
+      .setOrigin(0)
+      .setInteractive({ useHandCursor: true });
+    const icon = createInventoryBagIcon(
+      this,
+      metrics.iconX,
+      metrics.height / 2,
+      INVENTORY_BUTTON_ICON_BASE_SIZE,
+    ).setScale(metrics.iconSize / INVENTORY_BUTTON_ICON_BASE_SIZE);
+    const label = this.add
+      .text(metrics.labelX, metrics.height / 2, "Inventory [I]", {
+        fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
+        fontSize: metrics.fontSize,
+        color: "#f8fafc",
+      })
+      .setOrigin(0, 0.5);
+
+    button.add([background, icon, label]);
+    background.on(Phaser.Input.Events.POINTER_DOWN, () => this.toggleInventoryModal());
+    background.on(Phaser.Input.Events.POINTER_OVER, () => {
+      background.setFillStyle(0x3b4d66, 1);
+    });
+    background.on(Phaser.Input.Events.POINTER_OUT, () => {
+      background.setFillStyle(0x263449, 1);
+    });
+    this.inventoryButtonBackground = background;
+    this.inventoryButtonIcon = icon;
+    this.inventoryButtonLabel = label;
+    return button;
+  }
+
+  private handleInventoryKeyDown(event: KeyboardEvent): void {
+    if (event.repeat) return;
+
+    const action = resolveInventoryModalKey(
+      event.key,
+      this.inventoryModal !== undefined,
+    );
+    if (action === "ignore") return;
+
+    event.preventDefault();
+    if (action === "toggle") {
+      this.toggleInventoryModal();
+      return;
+    }
+
+    this.closeInventoryModal();
+  }
+
+  private toggleInventoryModal(): void {
+    if (this.inventoryModal !== undefined) {
+      this.closeInventoryModal();
+      return;
+    }
+
+    const activeRun = this.routeRunState ?? runSession.get();
+    if (activeRun === null || activeRun === undefined) return;
+
+    this.inventoryModal = new InventoryModal(
+      this,
+      activeRun,
+      () => this.closeInventoryModal(),
+    );
+  }
+
+  private closeInventoryModal(): void {
+    const modal = this.inventoryModal;
+    if (modal === undefined) return;
+
+    this.inventoryModal = undefined;
+    modal.destroy();
+  }
+
+  private handleInventoryResize(gameSize: Phaser.Structs.Size): void {
+    const button = this.inventoryButton;
+    if (button !== undefined) {
+      const metrics = getInventoryButtonMetrics(gameSize.width);
+      button
+        .setPosition(
+          gameSize.width - metrics.sideMargin - metrics.width,
+          metrics.centerY - metrics.height / 2,
+        );
+      this.inventoryButtonBackground
+        ?.setSize(metrics.width, metrics.height)
+        .setPosition(0, 0);
+      this.inventoryButtonIcon
+        ?.setPosition(metrics.iconX, metrics.height / 2)
+        .setScale(metrics.iconSize / INVENTORY_BUTTON_ICON_BASE_SIZE);
+      this.inventoryButtonLabel
+        ?.setPosition(metrics.labelX, metrics.height / 2)
+        .setFontSize(metrics.fontSize);
+    }
+    this.inventoryModal?.layout(gameSize.width, gameSize.height);
+  }
+
+  private releaseInventoryInput(): void {
+    this.input.keyboard?.off("keydown", this.handleInventoryKeyDown, this);
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.handleInventoryResize, this);
+    this.closeInventoryModal();
+    this.inventoryButton?.destroy();
+    this.inventoryButton = undefined;
+    this.inventoryButtonBackground = undefined;
+    this.inventoryButtonIcon = undefined;
+    this.inventoryButtonLabel = undefined;
   }
 }
