@@ -15,11 +15,12 @@ export type EnemyHealthBarState = Readonly<{
   telegraphProgress: number;
 }>;
 
-export type EnemyTelegraphEffectLabel = "BUFF" | "DEBUFF" | "";
+/** Status effects are shown by the actor effect HUD, never over the attack name. */
+export type EnemyTelegraphEffectLabel = "";
 
 export const resolveEnemyTelegraphEffectLabel = (
-  attackType: EnemyHealthBarState["telegraphAttackType"],
-): EnemyTelegraphEffectLabel => (attackType === "buff" ? "BUFF" : attackType === "debuff" ? "DEBUFF" : "");
+  _attackType: EnemyHealthBarState["telegraphAttackType"],
+): EnemyTelegraphEffectLabel => "";
 
 export type EnemyHealthBarOptions = Readonly<{
   shield?: number;
@@ -86,7 +87,6 @@ export class EnemyHealthBar {
   private readonly shieldFill: Phaser.GameObjects.Rectangle;
   private readonly telegraphTrack: Phaser.GameObjects.Rectangle;
   private readonly telegraphFill: Phaser.GameObjects.Rectangle;
-  private readonly telegraphEffect: Phaser.GameObjects.Text;
   private readonly telegraphName: Phaser.GameObjects.Text;
   private readonly value: Phaser.GameObjects.Text;
   private state: EnemyHealthBarState;
@@ -109,17 +109,6 @@ export class EnemyHealthBar {
       .rectangle(TRACK_X, ENEMY_TELEGRAPH_TRACK_Y, ENEMY_HEALTH_BAR_TRACK_WIDTH, 6, 0x0f172a, 0.95)
       .setOrigin(0, 0.5);
     this.telegraphFill = scene.add.rectangle(TRACK_X, ENEMY_TELEGRAPH_TRACK_Y, 0, 6, 0xef4444, 1).setOrigin(0, 0.5);
-    this.telegraphEffect = scene.add
-      // Keep the status label above the attack name and outside the target
-      // marker, whose padded top edge is just above REGION_TOP.
-      .text(0, ENEMY_HEALTH_BAR_REGION_TOP - 22, "", {
-        color: "#fcd34d",
-        fontFamily: "monospace",
-        fontSize: "11px",
-        fontStyle: "bold",
-        align: "center",
-      })
-      .setOrigin(0.5, 0);
     this.telegraphName = scene.add
       .text(0, ENEMY_HEALTH_BAR_REGION_TOP + 2, "", {
         color: "#f8fafc",
@@ -149,7 +138,6 @@ export class EnemyHealthBar {
       this.panel,
       this.telegraphTrack,
       this.telegraphFill,
-      this.telegraphEffect,
       this.telegraphName,
       this.track,
       this.hpFill,
@@ -207,10 +195,6 @@ export class EnemyHealthBar {
       .setFillStyle(telegraphColor, 1);
     this.telegraphTrack.setVisible(this.state.telegraphAttackName.length > 0);
     this.telegraphFill.setVisible(this.state.telegraphAttackName.length > 0);
-    this.telegraphEffect
-      .setText(this.state.telegraphEffectLabel)
-      .setColor(this.state.telegraphAttackType === "buff" ? "#fcd34d" : "#c4b5fd")
-      .setVisible(this.state.telegraphEffectLabel.length > 0 && this.state.telegraphAttackName.length > 0);
     this.telegraphName.setText(this.state.telegraphAttackName).setVisible(this.state.telegraphAttackName.length > 0);
     this.shieldFill
       .setVisible(shieldRatio > 0)

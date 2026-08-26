@@ -31,9 +31,9 @@ describe("enemy health bar", () => {
     });
   });
 
-  test("keeps buff and debuff labels above the attack name without labeling attacks", () => {
-    expect(resolveEnemyTelegraphEffectLabel("buff")).toBe("BUFF");
-    expect(resolveEnemyTelegraphEffectLabel("debuff")).toBe("DEBUFF");
+  test("does not put a buff or debuff label over the attack name", () => {
+    expect(resolveEnemyTelegraphEffectLabel("buff")).toBe("");
+    expect(resolveEnemyTelegraphEffectLabel("debuff")).toBe("");
     expect(resolveEnemyTelegraphEffectLabel("attack")).toBe("");
     expect(resolveEnemyTelegraphEffectLabel("defense")).toBe("");
   });
