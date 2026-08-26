@@ -15,6 +15,7 @@ describe("final boss progression", () => {
 			...runState.map,
 			currentRound: 9,
 			currentNodeId: restNode.key,
+			choicePath: path,
 			nodeStatuses: {
 				[restNode.key]: "available",
 				[bossNode.key]: "locked",
