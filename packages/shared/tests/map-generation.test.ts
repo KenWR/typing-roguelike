@@ -20,7 +20,7 @@ describe("map generation", () => {
 		expect(map.rounds.at(-1)?.nodes).toHaveLength(1);
 		const nodes = map.rounds.flatMap(({ nodes: roundNodes }) => roundNodes);
 		expect(new Set(nodes.map(({ key }) => key)).size).toBe(nodes.length);
-		expect(nodes.every(({ nextNodeKeys }) => nextNodeKeys.length <= MAX_MAP_CHOICES)).toBe(true);
+		expect(nodes.every(({ nextNodeKeys }) => nextNodeKeys.length <= 2 || nodes.find((node) => node.key === nextNodeKeys[0])?.type === "boss")).toBe(true);
 		expect(map.rounds.at(-1)?.nodes[0]?.type).toBe("boss");
 	});
 
@@ -64,6 +64,42 @@ describe("map generation", () => {
 		expect(children.map(({ key }) => key)).toEqual(root.nextNodeKeys);
 		expect(children.every(({ round }) => round === 2)).toBe(true);
 		expect(getMapNodeKey(2, [3, 2])).toBe("2-2");
+	});
+
+	test("creates sparse strictly-upward routes and keeps every lane connected to the boss", () => {
+		for (let seed = 0; seed < 32; seed += 1) {
+			const map = generateMap(seed);
+			const byKey = new Map(map.rounds.flatMap(({ nodes }) => nodes).map((node) => [node.key, node] as const));
+
+			for (const { nodes } of map.rounds.slice(0, -1)) {
+				for (const node of nodes) {
+					expect(node.nextNodeKeys.length).toBeGreaterThan(0);
+				if (node.round < MAP_ROUND_COUNT - 1) {
+					expect(node.nextNodeKeys.length).toBeLessThanOrEqual(2);
+				}
+				for (const nextKey of node.nextNodeKeys) {
+					const next = byKey.get(nextKey);
+					expect(next).toBeDefined();
+					expect(next!.round).toBe(node.round + 1);
+				}
+			}
+			}
+
+			for (const start of map.rounds[0]!.nodes) {
+				let frontier = [start.key];
+				for (let round = 1; round < MAP_ROUND_COUNT; round += 1) {
+					frontier = [...new Set(frontier.flatMap((key) => byKey.get(key)?.nextNodeKeys ?? []))];
+				}
+				expect(frontier).toContain("10-1");
+			}
+		}
+	});
+
+	test("does not connect every lower node to every upper node", () => {
+		const map = generateMap(20260826);
+		for (const { nodes } of map.rounds.slice(0, -2)) {
+			expect(nodes.every((node) => node.nextNodeKeys.length < MAX_MAP_CHOICES)).toBe(true);
+		}
 	});
 
 	test("rejects invalid round and path boundaries", () => {
