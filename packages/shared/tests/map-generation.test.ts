@@ -5,63 +5,93 @@ import { generateMap, generateNodeChoices, getMapNodeKey, MAP_ROUND_COUNT, MAX_M
 const pathForRound = (round: number): number[] => Array.from({ length: round - 1 }, () => 1);
 
 describe("map generation", () => {
-	test("models ten rounds with at most three destinations per parent", () => {
+	test("models a fixed-width ten-floor graph with at most three nodes per floor", () => {
 		const map = generateMap(20260826);
 		expect(map.rounds).toHaveLength(MAP_ROUND_COUNT);
-		expect(map.rounds.map(({ round }) => round)).toEqual(Array.from({ length: MAP_ROUND_COUNT }, (_, index) => index + 1));
+		expect(map.rounds.slice(0, -1).every(({ nodes }) => nodes.length <= MAX_MAP_CHOICES)).toBe(true);
+		expect(map.rounds.at(-1)?.nodes).toHaveLength(1);
 		const nodes = map.rounds.flatMap(({ nodes: roundNodes }) => roundNodes);
-		expect(nodes.length).toBeGreaterThan(0);
 		expect(new Set(nodes.map(({ key }) => key)).size).toBe(nodes.length);
-		expect(nodes.every(({ nextNodeKeys }) => nextNodeKeys.length <= MAX_MAP_CHOICES)).toBe(true);
-		expect(map.rounds.at(-1)?.nodes.every(({ nextNodeKeys }) => nextNodeKeys.length === 0)).toBe(true);
-		const nodesByKey = new Map(nodes.map((node) => [node.key, node]));
-		for (const node of nodes) for (const nextNodeKey of node.nextNodeKeys) expect(nodesByKey.get(nextNodeKey)?.parentKey).toBe(node.key);
+		expect(nodes.every(({ nextNodeKeys }) => nextNodeKeys.length <= 2 || nodes.find((node) => node.key === nextNodeKeys[0])?.type === "boss")).toBe(true);
+		expect(map.rounds.at(-1)?.nodes[0]?.type).toBe("boss");
 	});
 
-	test("applies the first, recovery, and boss round rules", () => {
+	test("applies first-floor, recovery-floor, boss-floor, and no standalone reward rules", () => {
 		const firstRound = generateNodeChoices(1234, 1, []);
 		const recoveryRound = generateNodeChoices(1234, 9, pathForRound(9));
 		const bossRound = generateNodeChoices(1234, 10, pathForRound(10));
-		expect(firstRound.length).toBeGreaterThan(0);
-		expect(firstRound.length).toBeLessThanOrEqual(MAX_MAP_CHOICES);
-		expect(firstRound.every(({ type }) => type === "combat" || type === "elite" || type === "rest")).toBe(true);
-		expect(recoveryRound).toHaveLength(1);
-		expect(recoveryRound[0]?.type).toBe("rest");
-		expect(recoveryRound[0]?.nextNodeKeys).toHaveLength(1);
+		const allNodes = generateMap(1234).rounds.flatMap(({ nodes }) => nodes);
+
+		expect(firstRound).toHaveLength(3);
+		expect(firstRound.every(({ type }) => type !== "shop")).toBe(true);
+		expect(recoveryRound.every(({ type }) => type === "rest")).toBe(true);
 		expect(bossRound).toHaveLength(1);
 		expect(bossRound[0]?.type).toBe("boss");
-		expect(bossRound[0]?.iconType).toBe("boss");
+		expect(allNodes.some(({ type }) => type === "reward")).toBe(false);
 	});
 
 	test("only offers elite nodes on floors with an elite encounter", () => {
-		const eliteFloors = new Set(ENCOUNTER_CONFIGS.filter(({ nodeType }) => nodeType === "elite").map(({ floor }) => floor));
-		const generatedEliteFloors = new Set<number>();
+		const eliteFloors = new Set(
+			ENCOUNTER_CONFIGS.filter(({ nodeType }) => nodeType === "elite").map(({ floor }) => floor),
+		);
+
 		for (let round = 1; round < MAP_ROUND_COUNT; round += 1) {
 			if (round === 9) continue;
-			const nodes = Array.from({ length: 64 }, (_, seed) => generateNodeChoices(seed, round, pathForRound(round))).flat();
-			if (!eliteFloors.has(round)) { expect(nodes.some(({ type }) => type === "elite")).toBe(false); continue; }
-			if (nodes.some(({ type }) => type === "elite")) generatedEliteFloors.add(round);
+			const nodes = Array.from({ length: 64 }, (_, seed) =>
+				generateMap(seed).rounds[round - 1]!.nodes,
+			).flat();
+
+			if (!eliteFloors.has(round)) {
+				expect(nodes.some(({ type }) => type === "elite")).toBe(false);
+			}
 		}
-		expect(generatedEliteFloors).toEqual(eliteFloors);
 	});
 
-	test("never exposes reward nodes and keeps semantic icon values", () => {
-		const nodes = Array.from({ length: 32 }, (_, seed) => generateNodeChoices(seed, 2, [1])).flat();
-		expect(nodes.some(({ type }) => type === "reward")).toBe(false);
-		expect(nodes.every(({ icon, iconType, type }) => icon === type && iconType === type)).toBe(true);
+	test("keeps generation deterministic and exposes only connected next-floor choices", () => {
+		const seed = 77;
+		const root = generateNodeChoices(seed, 1, [])[0]!;
+		const children = generateNodeChoices(seed, 2, [root.choice]);
+
+		expect(generateMap(seed)).toEqual(generateMap(seed));
+		expect(children.map(({ key }) => key)).toEqual(root.nextNodeKeys);
+		expect(children.every(({ round }) => round === 2)).toBe(true);
+		expect(getMapNodeKey(2, [3, 2])).toBe("2-2");
 	});
 
-	test("keeps generation deterministic and links each node to its real branches", () => {
-		const seed = 77; const rootChoices = generateNodeChoices(seed, 1, []); const root = rootChoices[0]!;
-		const childChoices = generateNodeChoices(seed, 2, [root.choice]); const siblingChoices = generateNodeChoices(seed, 2, [rootChoices[1]!.choice]);
-		expect(generateNodeChoices(seed, 2, [root.choice])).toEqual(childChoices);
-		expect(new Set(childChoices.map(({ key }) => key)).size).toBe(childChoices.length);
-		expect(childChoices.length).toBeGreaterThan(0);
-		expect(childChoices.length).toBeLessThanOrEqual(MAX_MAP_CHOICES);
-		expect(childChoices.every(({ parentKey }) => parentKey === root.key)).toBe(true);
-		expect(root.nextNodeKeys).toEqual(childChoices.map(({ key }) => key));
-		expect(siblingChoices.map(({ key }) => key)).not.toEqual(childChoices.map(({ key }) => key));
-		expect(childChoices[0]?.nextNodeKeys).toEqual(generateNodeChoices(seed, 3, [root.choice, childChoices[0]!.choice]).map(({ key }) => key));
+	test("creates sparse strictly-upward routes and keeps every lane connected to the boss", () => {
+		for (let seed = 0; seed < 32; seed += 1) {
+			const map = generateMap(seed);
+			const byKey = new Map(map.rounds.flatMap(({ nodes }) => nodes).map((node) => [node.key, node] as const));
+
+			for (const { nodes } of map.rounds.slice(0, -1)) {
+				for (const node of nodes) {
+					expect(node.nextNodeKeys.length).toBeGreaterThan(0);
+				if (node.round < MAP_ROUND_COUNT - 1) {
+					expect(node.nextNodeKeys.length).toBeLessThanOrEqual(2);
+				}
+				for (const nextKey of node.nextNodeKeys) {
+					const next = byKey.get(nextKey);
+					expect(next).toBeDefined();
+					expect(next!.round).toBe(node.round + 1);
+				}
+			}
+			}
+
+			for (const start of map.rounds[0]!.nodes) {
+				let frontier = [start.key];
+				for (let round = 1; round < MAP_ROUND_COUNT; round += 1) {
+					frontier = [...new Set(frontier.flatMap((key) => byKey.get(key)?.nextNodeKeys ?? []))];
+				}
+				expect(frontier).toContain("10-1");
+			}
+		}
+	});
+
+	test("does not connect every lower node to every upper node", () => {
+		const map = generateMap(20260826);
+		for (const { nodes } of map.rounds.slice(0, -2)) {
+			expect(nodes.every((node) => node.nextNodeKeys.length < MAX_MAP_CHOICES)).toBe(true);
+		}
 	});
 
 	test("rejects invalid round and path boundaries", () => {

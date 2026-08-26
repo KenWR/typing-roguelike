@@ -89,12 +89,22 @@ export const saveCheckpoint = (
 			round,
 			previousPath,
 		).find((node) => node.choice === choice);
+		const previousNode = round <= 1
+			? undefined
+			: generateNodeChoices(
+				storedState.map.seed,
+				round - 1,
+				previousPath.slice(0, -1),
+			).find((node) => node.key === storedRun.nodeId);
 		const legacyParentKey = previousPath.length === 0
 			? START_NODE_KEY
 			: `${round - 1}-${previousPath.at(-1)}`;
+		const isConnected = round === 1
+			? storedRun.nodeId === START_NODE_KEY
+			: previousNode?.nextNodeKeys.includes(selectedNode?.key ?? "") === true;
 		if (
 			selectedNode === undefined ||
-			(selectedNode.parentKey !== storedRun.nodeId && storedRun.nodeId !== legacyParentKey)
+			(!isConnected && selectedNode.parentKey !== storedRun.nodeId && storedRun.nodeId !== legacyParentKey)
 		) {
 			throw new Error("NODE_STATE_MISMATCH");
 		}

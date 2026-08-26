@@ -29,7 +29,7 @@ const withAvailableRound = (
         ...base.map,
         currentRound: round,
         choicePath: [...choicePath],
-        currentNodeId: round === 1 ? "start" : `${round - 1}-${choicePath.join("-")}`,
+        currentNodeId: round === 1 ? "start" : `${round - 1}-${choicePath.at(-1)}`,
         nodeStatuses: Object.fromEntries(nodes.map((node) => [node.key, "available" as const])),
       },
     },
@@ -59,10 +59,13 @@ const expectAdvancedMap = (
   expect(runState.map.nodeStatuses[completedNode.key]).toBe("cleared");
 
   const hud = createMapHudView(runState);
+  const availableIds = hud.nodes
+    .filter((node) => node.status === "available")
+    .map((node) => node.id)
+    .sort();
   expect(hud.floor).toBe(completedNode.round + 1);
-  expect(hud.nodes.map((node) => node.id)).toEqual(completedNode.nextNodeKeys);
-  expect(hud.nodes.every((node) => node.status === "available")).toBe(true);
-  expect(hud.nodes.some((node) => node.id === completedNode.key)).toBe(false);
+  expect(availableIds).toEqual([...completedNode.nextNodeKeys].sort());
+  expect(hud.nodes.find((node) => node.id === completedNode.key)?.status).toBe("cleared");
 };
 
 describe("map round progression after node completion", () => {
