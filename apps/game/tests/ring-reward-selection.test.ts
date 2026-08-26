@@ -48,10 +48,12 @@ describe("ring combat rewards", () => {
       const candidates = createRunRewardSelectionFlow({
         runState: createInitialRunState({ seed }),
         nodeId: "ring-node",
+        rewardCount: 4,
       }).adapter.getViewState().candidates;
 
-      expect(candidates).toHaveLength(3);
+      expect(candidates).toHaveLength(4);
       expect(candidates.some(({ kind }) => kind === "weapon")).toBe(true);
+      expect(candidates.filter(({ kind }) => kind === "relic")).toHaveLength(2);
       if (candidates.some(({ kind }) => kind === "ring")) sawRing = true;
     }
     expect(sawRing).toBe(true);

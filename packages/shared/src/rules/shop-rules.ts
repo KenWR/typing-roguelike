@@ -15,6 +15,7 @@ import {
 	getRingPrice,
 	ownsRing,
 } from "./ring-drops.ts";
+import { applyEquipmentAcquisition } from "./equipment-loadout.ts";
 
 export type ShopOfferKind = "equipment" | "relic" | "ring";
 
@@ -273,11 +274,15 @@ export const applyShopPurchase = ({
 	const equipment = EQUIPMENT_CONFIGS.find(
 		(candidate) => candidate.id === offer.itemId,
 	);
-	const loadout = equipment === undefined
-		? runState.loadout
-		: equipment.slot === "weapon"
-			? { ...runState.loadout, weaponId: equipment.id }
-			: { ...runState.loadout, subweaponId: equipment.id };
+	const acquired = equipment === undefined
+		? {
+			...runState,
+			inventory: {
+				...runState.inventory,
+				itemInstances: [...runState.inventory.itemInstances, offer.itemId],
+			},
+		}
+		: applyEquipmentAcquisition(runState, equipment);
 	return {
 		applied: true,
 		reason: "purchased",
