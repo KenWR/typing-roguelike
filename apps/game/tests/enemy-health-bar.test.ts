@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { createEnemyHealthBarState } from "../src/game/combat/enemy-health-bar";
+import {
+  createEnemyHealthBarState,
+  formatEnemyHealthBarLabel,
+} from "../src/game/combat/enemy-health-bar";
 
 describe("enemy health bar", () => {
   test("keeps each enemy's hp and fill ratio independent", () => {
@@ -16,6 +19,23 @@ describe("enemy health bar", () => {
       healthRatio: 0.3,
       shieldRatio: 0,
       defeated: false,
+    });
+  });
+
+  test("formats hp and shield totals beside each other", () => {
+    const state = createEnemyHealthBarState(56, 56, {
+      shield: 0,
+      maxShield: 30,
+    });
+
+    expect(formatEnemyHealthBarLabel(state)).toBe("HP 56/56   SHD 0/30");
+  });
+
+  test("clamps a current shield to its configured maximum", () => {
+    expect(createEnemyHealthBarState(40, 40, { shield: 80, maxShield: 30 })).toMatchObject({
+      shield: 30,
+      maxShield: 30,
+      shieldRatio: 0.75,
     });
   });
 

@@ -28,6 +28,14 @@ import { persistCombatRunTransition } from "../run/persist-terminal-run";
 import { MENU_SETTINGS_REGISTRY_KEYS } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
 
+const resolveEnemyMaxShield = (
+  enemy: CombatEnemyInitialization,
+): number =>
+  enemy.actions.reduce(
+    (maximum, action) => Math.max(maximum, action.shieldAmount ?? 0),
+    0,
+  );
+
 const MAGIC_SHIELD = defineSkill({
   id: "skill.magic-shield",
   name: "매직 실드",
@@ -165,7 +173,9 @@ export class CombatFoundationScene extends Phaser.Scene {
       if (actor instanceof Phaser.GameObjects.Image) {
         this.enemyActorImages.set(enemy.instanceId, actor);
       }
-      const healthBar = new EnemyHealthBar(this, enemy.hp, enemy.hp);
+      const healthBar = new EnemyHealthBar(this, enemy.hp, enemy.hp, {
+        maxShield: resolveEnemyMaxShield(enemy),
+      });
       healthBar.container.setPosition(0, -158);
       placeholder.add(healthBar.container);
       this.enemyHealthBars.set(enemy.instanceId, healthBar);
@@ -409,6 +419,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     for (const enemy of this.combatInitialization?.enemies ?? []) {
       this.enemyHealthBars.get(enemy.instanceId)?.update(enemyHp[enemy.instanceId] ?? enemy.hp, enemy.hp, {
         shield: this.displayedEnemyShield[enemy.instanceId] ?? 0,
+        maxShield: resolveEnemyMaxShield(enemy),
         ...(this.targeting?.targetId === undefined ? {} : { targeted: this.targeting.targetId === enemy.instanceId }),
       });
     }
