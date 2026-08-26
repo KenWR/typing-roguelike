@@ -180,6 +180,7 @@ const NODE_STYLE: Record<MapNodeStatus, { fill: number; label: string }> = {
 };
 
 export class MapScene extends EmptyCoreScene {
+  protected readonly renderLegacyMapChoices = true;
   private runState?: Readonly<RunState>;
 
   constructor() {
@@ -270,6 +271,8 @@ export class MapScene extends EmptyCoreScene {
         wordWrap: { width: 540 },
       })
       .setOrigin(0.5);
+
+    if (!this.renderLegacyMapChoices) return;
 
     this.add.line(width / 2, 0, 0, 320, 0, 390, 0x6b7280).setOrigin(0.5, 0);
     const nodeXs = [width / 2 - 240, width / 2, width / 2 + 240];
