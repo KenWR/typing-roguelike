@@ -43,6 +43,12 @@ const NODE_TYPES: readonly MapNodeType[] = [
 	"rest",
 ];
 const NODE_CHOICES: readonly MapNodeChoice[] = [1, 2, 3];
+const DIAGONAL_EDGES: readonly (readonly [MapNodeChoice, MapNodeChoice])[] = [
+	[1, 2],
+	[2, 1],
+	[2, 3],
+	[3, 2],
+];
 
 const hash = (value: string): number => {
 	let result = 2166136261;
@@ -124,10 +130,23 @@ const getNodeTypes = (seed: number, round: number): MapNodeType[] => {
 	return Array.from({ length: MAX_MAP_CHOICES }, (_, index) => ordered[index % ordered.length]!);
 };
 
-const nextChoicesFor = (round: number, choice: MapNodeChoice): MapNodeChoice[] => {
+/**
+ * Builds a Slay-the-Spire-like sparse transition: every lane keeps one upward
+ * route and at most one lane on a floor receives one extra adjacent branch.
+ * That guarantees reachability without turning each floor into an all-to-all graph.
+ */
+const nextChoicesFor = (
+	seed: number,
+	round: number,
+	choice: MapNodeChoice,
+): MapNodeChoice[] => {
 	if (round >= MAP_ROUND_COUNT) return [];
 	if (round === MAP_ROUND_COUNT - 1) return [1];
-	return NODE_CHOICES.filter((nextChoice) => Math.abs(nextChoice - choice) <= 1);
+
+	const choices: MapNodeChoice[] = [choice];
+	const [branchFrom, branchTo] = DIAGONAL_EDGES[hash(`${seed}:edge:${round}`) % DIAGONAL_EDGES.length]!;
+	if (choice === branchFrom) choices.push(branchTo);
+	return choices;
 };
 
 const generateRoundNodes = (
@@ -141,7 +160,7 @@ const generateRoundNodes = (
 		const key = nodeKey(round, choice);
 		const parentChoice = choice;
 		const parentKey = round === 1 ? START_NODE_KEY : nodeKey(round - 1, parentChoice);
-		const nextNodeKeys = nextChoicesFor(round, choice).map((nextChoice) =>
+		const nextNodeKeys = nextChoicesFor(seed, round, choice).map((nextChoice) =>
 			nodeKey(round + 1, nextChoice),
 		);
 		const node: GeneratedMapNode = {
@@ -175,7 +194,7 @@ export const generateNodeChoices = (
 	if (round === 1 || round === MAP_ROUND_COUNT) return nodes;
 
 	const previousChoice = choicePath[choicePath.length - 1] as MapNodeChoice;
-	const allowed = new Set(nextChoicesFor(round - 1, previousChoice));
+	const allowed = new Set(nextChoicesFor(seed, round - 1, previousChoice));
 	return nodes.filter((node) => allowed.has(node.choice));
 };
 
