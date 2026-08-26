@@ -1,3 +1,5 @@
+import { ENCOUNTER_CONFIGS } from "../content/encounters.ts";
+
 export const MAP_ROUND_COUNT = 10;
 export const MAX_MAP_CHOICES = 3;
 export const START_NODE_KEY = "start";
@@ -105,6 +107,11 @@ export const getMapNodeKey = (round: number, path: readonly number[]): string =>
 	return nodeKey(round, path);
 };
 
+const hasEliteEncounter = (round: number): boolean =>
+	ENCOUNTER_CONFIGS.some(
+		(encounter) => encounter.floor === round && encounter.nodeType === "elite",
+	);
+
 const getNodeTypes = (seed: number, round: number, choicePath: readonly number[]): MapNodeType[] => {
 	// Keep the pre-graph seed input stable while node keys use an unambiguous path format.
 	const path = choicePath.join("");
@@ -115,9 +122,11 @@ const getNodeTypes = (seed: number, round: number, choicePath: readonly number[]
 		return ["boss"];
 	}
 
-	const candidates = round === 1
-		? NODE_TYPES.filter((type) => type !== "shop")
-		: NODE_TYPES;
+	const candidates = NODE_TYPES.filter((type) => {
+		if (round === 1 && type === "shop") return false;
+		if (type === "elite" && !hasEliteEncounter(round)) return false;
+		return true;
+	});
 	return shuffle(candidates, hash(`${seed}:${path}`)).slice(0, MAX_MAP_CHOICES);
 };
 
