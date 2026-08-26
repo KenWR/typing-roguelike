@@ -96,7 +96,8 @@ export class ShopNodeScene extends Phaser.Scene {
     const beforeCurrency = this.flow.runState.runCurrency;
     const beforeOwned = this.flow.runState.inventory.itemInstances.length;
     this.flow = purchaseShopOffer(this.flow, offer.id);
-    const purchased = this.flow.runState.runCurrency < beforeCurrency &&
+    const purchased =
+      this.flow.runState.runCurrency < beforeCurrency &&
       this.flow.runState.inventory.itemInstances.length > beforeOwned;
 
     if (purchased) {
