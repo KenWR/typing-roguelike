@@ -108,10 +108,10 @@ export function splitRingCommand(command: string): CommandHudSegments {
   let suffix: string | undefined;
   const prefixes = RING_CONFIGS
     .filter((ring) => ring.position === "prefix")
-    .toSorted((left, right) => right.commandAffix.length - left.commandAffix.length);
+    .sort((left, right) => right.commandAffix.length - left.commandAffix.length);
   const suffixes = RING_CONFIGS
     .filter((ring) => ring.position === "suffix")
-    .toSorted((left, right) => right.commandAffix.length - left.commandAffix.length);
+    .sort((left, right) => right.commandAffix.length - left.commandAffix.length);
 
   for (const ring of prefixes) {
     const token = `${ring.commandAffix} `;
