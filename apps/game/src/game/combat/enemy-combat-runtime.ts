@@ -1,4 +1,5 @@
 import type { RunState } from "@typing-roguelike/shared";
+import { playImpactHitSound } from "../audio/runtime-audio";
 import {
   finalizeCombatOutcome,
   type CombatOutcomeRoute,
@@ -109,6 +110,7 @@ export class EnemyCombatRuntime {
       const action = enemy?.actions.find((candidate) => candidate.id === event.attackId);
       if (enemy === undefined || action === undefined) continue;
 
+      const playerHpBeforeImpact = this.playerHp;
       const result = this.impactResolver.resolve({
         event,
         damage: action.damage,
@@ -118,6 +120,9 @@ export class EnemyCombatRuntime {
       });
       if (!result.applied) continue;
 
+      if (this.playerHp < playerHpBeforeImpact) {
+        playImpactHitSound();
+      }
       completedEnemyIds.add(enemy.instanceId);
       this.activeTimelineByEnemy.delete(enemy.instanceId);
       this.runState = {
