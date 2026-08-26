@@ -12,7 +12,10 @@ import {
   loadSavedRun,
   normalizeRestoredRunState,
 } from "../src/game/run/run-persistence";
-import { RunRemotePersistence } from "../src/game/run/run-remote-persistence";
+import {
+  RunRemotePersistence,
+  preferLocalRunState,
+} from "../src/game/run/run-remote-persistence";
 import { initializeRunMap } from "../src/game/run/run-start-map";
 
 const createMemoryStorage = () => {
@@ -133,5 +136,52 @@ describe("run restore normalization", () => {
 
     expect(normalizeRestoredRunState(finalRun)).toEqual(finalRun);
     expect(availableNodeIds(finalRun)).toEqual([]);
+  });
+
+  test("keeps newer local post-node progress over an older server entry checkpoint", () => {
+    const serverEntry = createSoftlockedRun(91);
+    const localProgress: RunState = {
+      ...normalizeRestoredRunState(serverEntry),
+      character: { ...serverEntry.character, currentHp: 64 },
+      runCurrency: 120,
+    };
+
+    expect(preferLocalRunState(serverEntry, localProgress)).toBe(localProgress);
+  });
+
+  test("keeps local mutations made inside the same server-checkpointed node", () => {
+    const initial = initializeRunMap(createInitialRunState({ seed: 92 }));
+    const selected = generateNodeChoices(92, 1, [])[0]!;
+    const serverEntry: RunState = {
+      ...initial,
+      map: {
+        ...initial.map,
+        currentNodeId: selected.key,
+      },
+    };
+    const localShopState: RunState = {
+      ...serverEntry,
+      runCurrency: 35,
+      inventory: { ...serverEntry.inventory, itemInstances: ["purchased-item"] },
+    };
+
+    expect(preferLocalRunState(serverEntry, localShopState)).toBe(localShopState);
+  });
+
+  test("uses a genuinely newer server floor instead of stale local progress", () => {
+    const local = initializeRunMap(createInitialRunState({ seed: 93 }));
+    const server = {
+      ...local,
+      map: { ...local.map, currentRound: 2, choicePath: [1] },
+    };
+
+    expect(preferLocalRunState(server, local)).toBe(server);
+  });
+
+  test("keeps a pending local terminal result over the active server entry", () => {
+    const server = initializeRunMap(createInitialRunState({ seed: 94 }));
+    const terminal: RunState = { ...server, status: "dead" };
+
+    expect(preferLocalRunState(server, terminal)).toBe(terminal);
   });
 });

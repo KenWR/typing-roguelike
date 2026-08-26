@@ -80,3 +80,15 @@ export class CommandInputRecoveryController {
     this.mistakeCount = 0;
   }
 }
+
+export const updateCommandInputElement = (
+  controller: CommandInputRecoveryController,
+  element: Pick<HTMLInputElement, "value">,
+  options: UpdateInputOptions = {},
+): CommandInputRecoveryResult => {
+  const result = controller.updateInput(element.value, options);
+  if (result.outcome === "incorrect") {
+    element.value = "";
+  }
+  return result;
+};

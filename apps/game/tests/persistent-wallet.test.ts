@@ -32,4 +32,17 @@ describe("persistent wallet", () => {
     expect(loadPersistentWallet(storage)).toEqual(result.wallet);
     expect(loadPersistentWallet(storage).settledRunIds).toContain(createSettlementRunId(run));
   });
+
+  test("reports an unavailable wallet store without throwing", () => {
+    const storage = {
+      setItem: () => {
+        throw new Error("quota_exceeded");
+      },
+    };
+
+    expect(savePersistentWallet({
+      totalCurrency: 50,
+      settledRunIds: ["tower-v1:1"],
+    }, storage)).toBe(false);
+  });
 });

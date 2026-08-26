@@ -32,12 +32,17 @@ describe("CombatApEffectController", () => {
     expect(effects.resolveSkillCost(skill({ name: "휘두르기", command: "휘두르기" }))).toBe(3);
   });
 
-  test("converts positive and negative timing relics to AP cost changes", () => {
+  test("applies guard timing relics to duration without changing their documented AP cost", () => {
     const actionPoints = new ActionPointResource();
     const heavyArmor = new CombatApEffectController({ actionPoints, relicIds: ["relic_heavy_armor"] });
     expect(heavyArmor.resolveSkillCost(skill())).toBe(3);
     const wristband = new CombatApEffectController({ actionPoints, relicIds: ["relic_time_wristband"] });
-    expect(wristband.resolveSkillCost(skill({ category: "guard", kind: "defense" }))).toBe(1);
+    expect(wristband.resolveSkillCost(skill({ category: "guard", kind: "defense" }))).toBe(2);
+    expect(wristband.resolveGuardDuration(800)).toBe(1_000);
+
+    const oldShield = new CombatApEffectController({ actionPoints, relicIds: ["relic_old_shield"] });
+    expect(oldShield.resolveGuardDuration(800)).toBe(1_100);
+    expect(() => oldShield.resolveGuardDuration(Number.NaN)).toThrow(RangeError);
   });
 
   test("meditation incense discounts the next special exactly once", () => {

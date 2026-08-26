@@ -53,13 +53,13 @@ const shopOffer: ShopOffer = {
 };
 
 describe("CORE-10-03 non-combat domain rules", () => {
-  test("selecting a node keeps siblings available until completion locks them and unlocks the next node", () => {
+  test("selecting a node locks siblings until completion unlocks the next node", () => {
     const run = createRun();
     const begun = beginMapNode(run.map, "start");
 
     expect(begun.currentNodeId).toBe("start");
-    expect(begun.nodeStatuses.start).toBe("available");
-    expect(begun.nodeStatuses.sibling).toBe("available");
+    expect(begun.nodeStatuses.start).toBe("in_progress");
+    expect(begun.nodeStatuses.sibling).toBe("locked");
     expect(begun.nodeStatuses.next).toBe("locked");
 
     const completed = completeMapNode(begun, "start", ["next"]);

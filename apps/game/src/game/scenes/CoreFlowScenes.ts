@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { RunState } from "@typing-roguelike/shared";
-import { playRuntimeBgm, setRuntimeAudioMuted } from "../audio/runtime-audio";
+import { playRuntimeBgm, setRuntimeAudioSettings } from "../audio/runtime-audio";
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import { createMapHudView } from "../run/map-hud-view";
 import { runRemotePersistence } from "../run/run-remote-persistence";
@@ -70,7 +70,7 @@ export class SettingsScene extends EmptyCoreScene {
     this.add.text(width / 2, height * 0.24, "설정", { fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace', fontSize: "44px", color: "#f9fafb" }).setOrigin(0.5);
     this.soundLabel = createMenuButton(this, width / 2, height * 0.46, "", () => { this.draftSettings = toggleSound(this.draftSettings); this.refreshSoundLabel(); });
     this.refreshSoundLabel();
-    createMenuButton(this, width / 2, height * 0.62, "적용", () => { saveMenuSettings(this.draftSettings, storage); this.sound.mute = !this.draftSettings.soundEnabled; setRuntimeAudioMuted(!this.draftSettings.soundEnabled); });
+    createMenuButton(this, width / 2, height * 0.62, "적용", () => { saveMenuSettings(this.draftSettings, storage); this.sound.mute = !this.draftSettings.soundEnabled; setRuntimeAudioSettings({ muted: !this.draftSettings.soundEnabled, volume: this.draftSettings.volume }); });
     createMenuButton(this, width / 2, height * 0.76, "뒤로", () => { const transition = resolveSceneTransition(SCENE_KEYS.start, undefined); this.scene.start(transition.key, transition.payload); });
   }
   private refreshSoundLabel(): void { this.soundLabel?.setText(`효과음: ${this.draftSettings.soundEnabled ? "켜짐" : "꺼짐"}`); }

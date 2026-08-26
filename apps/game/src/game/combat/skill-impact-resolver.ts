@@ -52,16 +52,21 @@ const validateNonNegative = (name: string, value: number): number => {
 export class SkillCombatantState {
   readonly id: string;
   readonly attackPower: number;
-  readonly defense: number;
   readonly health: HealthState;
+  private readonly baseDefense: number;
+  private temporaryDefense = 0;
   private readonly guards: ActiveGuardEffect[] = [];
   private readonly statuses: ActiveStatusEffect[] = [];
 
   constructor(config: SkillCombatantConfig) {
     this.id = validateIdentifier("Combatant id", config.id);
     this.attackPower = validateNonNegative("Attack power", config.attackPower);
-    this.defense = validateNonNegative("Defense", config.defense);
+    this.baseDefense = validateNonNegative("Defense", config.defense);
     this.health = new HealthState({ maxHp: config.maxHp, initialHp: config.initialHp });
+  }
+
+  get defense(): number {
+    return this.baseDefense + this.temporaryDefense;
   }
 
   get snapshot(): SkillCombatantSnapshot {
@@ -88,6 +93,14 @@ export class SkillCombatantState {
       durationMs: effect.durationMs,
       stacks: effect.stacks ?? 1,
     });
+  }
+
+  setTemporaryDefense(defense: number): void {
+    this.temporaryDefense = validateNonNegative("Temporary defense", defense);
+  }
+
+  clearTemporaryDefense(): void {
+    this.temporaryDefense = 0;
   }
 }
 

@@ -1,5 +1,18 @@
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary" | "hidden";
 export type SkillCategory = "basic" | "special" | "guard";
+export type SkillEffectConfig =
+  | Readonly<{ type: "damage"; coefficient: number }>
+  | Readonly<{
+      type: "guard";
+      damageMultiplier: number;
+      durationMs: number;
+    }>
+  | Readonly<{
+      type: "status";
+      statusId: string;
+      durationMs: number;
+      stacks?: number;
+    }>;
 export type EquipmentKind = "sword" | "greatsword" | "wand" | "staff" | "bow" | "crossbow" | "mace" | "club" | "shield" | "tome" | "orb" | "quiver";
 export interface SkillConfig {
   id: string;
@@ -16,6 +29,7 @@ export interface SkillConfig {
   description: string;
   tags?: readonly string[];
   effect?: string;
+  effects?: readonly SkillEffectConfig[];
   /** 성공적으로 적중했을 때 플레이어 AP에 적용할 변화량. */
   apDeltaOnHit?: number;
 }

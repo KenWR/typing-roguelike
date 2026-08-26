@@ -73,6 +73,9 @@ describe("combat outcome routing", () => {
     const adapter = result.payload.adapter as RewardSelectionAdapter<RunState>;
     const candidates = adapter.getViewState().candidates;
     expect(candidates).toHaveLength(3);
+    expect(result.payload.rewardEquipmentIds).toEqual(
+      candidates.map(({ id }) => id),
+    );
     expect(candidates.some(({ id }) => id === ownedEquipmentId)).toBe(false);
 
     const selectedEquipmentId = candidates[0]!.id;

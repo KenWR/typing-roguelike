@@ -3,10 +3,13 @@ import { runRemotePersistence } from "../run/run-remote-persistence";
 import { runSession } from "../run/run-session";
 import { SettlementCompletionController } from "../settlement/settlement-completion";
 import {
-  applySettlementCurrency,
   loadPersistentWallet,
   savePersistentWallet,
 } from "../settlement/persistent-wallet";
+import {
+  DEFAULT_CLEAR_REWARD_CURRENCY,
+  prepareRunSettlement,
+} from "../settlement/run-settlement";
 import type { SettlementPresentationInput } from "../settlement/settlement-view-state";
 import { SCENE_KEYS } from "./scene-contract";
 import { RunResultScene } from "./RunResultScene";
@@ -19,16 +22,33 @@ export type CompletableRunResultSceneData = Partial<SettlementPresentationInput>
 
 export class CompletableRunResultScene extends RunResultScene {
   private settlementRun: Readonly<RunState> | null = null;
-  private settlementPayout = 0;
+  private clearRewardCurrency = DEFAULT_CLEAR_REWARD_CURRENCY;
+  private settlementInProgress = false;
 
   init(data: CompletableRunResultSceneData = {}): void {
     this.settlementRun = data.runState ?? runSession.get();
-    const outcome =
-      data.outcome ?? data.result ?? (this.settlementRun?.status === "cleared" ? "clear" : "death");
+    this.settlementInProgress = false;
+    this.clearRewardCurrency =
+      data.clearRewardCurrency ?? DEFAULT_CLEAR_REWARD_CURRENCY;
+
+    if (
+      this.settlementRun?.status === "dead" ||
+      this.settlementRun?.status === "cleared"
+    ) {
+      const storage = typeof localStorage === "undefined" ? undefined : localStorage;
+      const settlement = prepareRunSettlement(
+        this.settlementRun,
+        loadPersistentWallet(storage),
+        this.clearRewardCurrency,
+      );
+      super.init(settlement.presentation);
+      return;
+    }
+
+    const outcome = data.outcome ?? data.result ?? "death";
     const itemExchangeCurrency =
       data.itemExchangeCurrency ?? this.settlementRun?.acquiredItemValue ?? 0;
     const clearRewardCurrency = data.clearRewardCurrency ?? 0;
-    this.settlementPayout = itemExchangeCurrency + clearRewardCurrency;
 
     super.init({ outcome, itemExchangeCurrency, clearRewardCurrency });
   }
@@ -48,23 +68,49 @@ export class CompletableRunResultScene extends RunResultScene {
       .setDepth(100)
       .setInteractive({ useHandCursor: true });
 
-    confirm.once("pointerdown", () => {
-      if (this.settlementRun !== null) {
-        void runRemotePersistence.complete(this.settlementRun);
-        const storage = typeof localStorage === "undefined" ? undefined : localStorage;
-        const currentWallet = loadPersistentWallet(storage);
-        const settlement = applySettlementCurrency(
-          currentWallet,
-          this.settlementRun,
-          this.settlementPayout,
-        );
-        savePersistentWallet(settlement.wallet, storage);
-        new SettlementCompletionController(this.settlementRun).confirm();
-      } else {
-        runSession.clear();
+    confirm.on("pointerdown", async () => {
+      if (this.settlementInProgress) return;
+      const showRetry = (message: string): void => {
+        this.settlementInProgress = false;
+        confirm
+          .setText(message)
+          .setInteractive({ useHandCursor: true });
+      };
+      this.settlementInProgress = true;
+      confirm.disableInteractive().setText("정산 저장 중...");
+      try {
+        if (this.settlementRun !== null) {
+          const completed = await runRemotePersistence.complete(this.settlementRun);
+          if (!completed) {
+            showRetry("서버 정산 저장 실패 · 다시 시도");
+            return;
+          }
+          const storage = typeof localStorage === "undefined" ? undefined : localStorage;
+          if (
+            this.settlementRun.status === "dead" ||
+            this.settlementRun.status === "cleared"
+          ) {
+            const settlement = prepareRunSettlement(
+              this.settlementRun,
+              loadPersistentWallet(storage),
+              this.clearRewardCurrency,
+            );
+            if (!savePersistentWallet(settlement.wallet, storage)) {
+              showRetry("로컬 정산 저장 실패 · 다시 시도");
+              return;
+            }
+            new SettlementCompletionController(settlement.runState).confirm();
+          } else {
+            new SettlementCompletionController(this.settlementRun).confirm();
+          }
+        } else {
+          runSession.clear();
+        }
+        confirm.setText("메인 화면으로 이동 중...");
+        this.scene.start(SCENE_KEYS.start);
+      } catch {
+        showRetry("정산 처리 실패 · 다시 시도");
       }
-      confirm.disableInteractive().setText("메인 화면으로 이동 중...");
-      this.scene.start(SCENE_KEYS.start);
     });
   }
 }

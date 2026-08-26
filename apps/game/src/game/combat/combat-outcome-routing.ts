@@ -138,6 +138,7 @@ export const finalizeCombatOutcome = ({
       runState: updatedRunState,
       adapter: rewardFlow.adapter,
       nextSceneKey: rewardFlow.nextSceneKey,
+      rewardEquipmentIds: candidates.map(({ id }) => id),
       rewardSource: "combat-victory",
       goldReward,
     },

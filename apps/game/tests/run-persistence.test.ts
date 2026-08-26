@@ -44,12 +44,29 @@ describe("run persistence", () => {
     expect(storage.getItem(RUN_STORAGE_KEY)).toBeNull();
   });
 
-  test("ending or clearing a run removes the active save", () => {
+  test.each(["dead", "cleared"] as const)(
+    "persists a %s run until settlement is confirmed",
+    (status) => {
+      const storage = createMemoryStorage();
+      const session = new RunSession(storage);
+      session.create({ seed: status === "dead" ? 5 : 6 });
+      session.end(status);
+
+      expect(storage.getItem(RUN_STORAGE_KEY)).not.toBeNull();
+      const restoredSession = new RunSession(storage);
+      expect(restoredSession.restore()?.status).toBe(status);
+
+      restoredSession.clear();
+      expect(storage.getItem(RUN_STORAGE_KEY)).toBeNull();
+    },
+  );
+
+  test("abandoning a run or clearing the session removes the save", () => {
     const storage = createMemoryStorage();
     const session = new RunSession(storage);
     session.create({ seed: 5 });
     expect(storage.getItem(RUN_STORAGE_KEY)).not.toBeNull();
-    session.end("dead");
+    session.end("abandoned");
     expect(storage.getItem(RUN_STORAGE_KEY)).toBeNull();
 
     session.create({ seed: 6 });

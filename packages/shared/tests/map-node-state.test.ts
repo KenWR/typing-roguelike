@@ -11,12 +11,12 @@ describe("map node state", () => {
     expect(isMapNodeStatus("locked")).toBe(true); expect(isMapNodeStatus("available")).toBe(true); expect(isMapNodeStatus("in_progress")).toBe(true); expect(isMapNodeStatus("cleared")).toBe(true); expect(isMapNodeStatus("done")).toBe(false);
   });
   test("treats missing nodes as locked", () => { expect(getMapNodeStatus(createMap(), "unknown")).toBe("locked"); });
-  test("selecting a node only records its current id", () => {
+  test("selecting a node marks it in progress and locks sibling choices", () => {
     const next = beginMapNode(createMap(), "1-1");
     expect(next.currentNodeId).toBe("1-1");
-    expect(next.nodeStatuses["1-1"]).toBe("available");
-    expect(next.nodeStatuses["1-2"]).toBe("available");
-    expect(next.nodeStatuses["1-3"]).toBe("available");
+    expect(next.nodeStatuses["1-1"]).toBe("in_progress");
+    expect(next.nodeStatuses["1-2"]).toBe("locked");
+    expect(next.nodeStatuses["1-3"]).toBe("locked");
   });
   test("rejects starting locked nodes", () => { expect(() => beginMapNode(createMap(), "2-1-1")).toThrow("not available"); });
   test("clears an available node and unlocks only connected next nodes", () => {

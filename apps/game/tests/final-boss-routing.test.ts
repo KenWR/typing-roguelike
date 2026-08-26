@@ -39,7 +39,7 @@ describe("final boss routing", () => {
     const route = routeMapNodeSelection(run, boss.key);
     expect(route.applied).toBe(true);
     expect(route.sceneKey).toBe(SCENE_KEYS.combat);
-    expect(route.runState.map.nodeStatuses[boss.key]).toBe("available");
+    expect(route.runState.map.nodeStatuses[boss.key]).toBe("in_progress");
     expect(route.payload.bossNode).toEqual(boss);
   });
 
