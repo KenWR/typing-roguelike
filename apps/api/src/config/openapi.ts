@@ -97,6 +97,12 @@ export const openApiDocument = {
           runCurrency: { type: "integer", minimum: 0, example: 120 },
         },
       },
+      CreateRunRequest: {
+        type: "object",
+        properties: {
+          seed: { type: "integer", minimum: 0, description: "클라이언트 로컬 fallback과 동일한 맵을 재생성하기 위한 선택 seed" },
+        },
+      },
       CheckpointRequest: {
         type: "object",
         required: ["round", "choice", "stateVersion", "state"],
@@ -138,6 +144,7 @@ export const openApiDocument = {
         tags: ["Runs"],
         summary: "새 게임 런 시작",
         security: [{ anonymousPlayerCookie: [] }],
+        requestBody: { required: false, content: { "application/json": { schema: { $ref: "#/components/schemas/CreateRunRequest" } } } },
         responses: {
           "201": { description: "런 생성 및 첫 체크포인트 저장" },
           "409": { description: "활성 런이 이미 존재", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
