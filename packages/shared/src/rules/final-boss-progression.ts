@@ -23,7 +23,7 @@ export const unlockFinalBoss = (
 	if (completedNode.round !== MAP_ROUND_COUNT - 1 || completedNode.type !== "rest") {
 		throw new Error("The final boss can only be unlocked after the required rest node.");
 	}
-	if (bossNode.parentKey !== completedNode.key || !completedNode.nextNodeKeys.includes(bossNode.key)) {
+	if (!completedNode.nextNodeKeys.includes(bossNode.key)) {
 		throw new Error("The final boss is not connected to the completed map path.");
 	}
 
