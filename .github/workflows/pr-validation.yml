@@ -2,12 +2,13 @@ name: PR validation
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
 
 # Stable required check/job name: PR validation (job id: pr-validation).
 # Keep this workflow path-unfiltered so shared-package changes run every consumer check.
 # The root test command discovers the complete game/shared suite and any future API tests.
 # The API package currently has no test files; workspace typecheck and build cover its paths.
+# The whitespace check uses the merge-base-to-head three-dot range to exclude base-only changes.
 
 permissions:
   contents: read
@@ -41,7 +42,7 @@ jobs:
           echo "Checked-out SHA: $(git rev-parse HEAD)"
 
       - name: Validate whitespace and static diff
-        run: git diff --check "${{ github.event.pull_request.base.sha }}" HEAD
+        run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
 
       - name: Typecheck complete workspace
         run: bun run typecheck
