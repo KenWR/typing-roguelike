@@ -1,4 +1,5 @@
 import type { RunState } from "@typing-roguelike/shared";
+import { runRemotePersistence } from "../run/run-remote-persistence";
 import { runSession } from "../run/run-session";
 import { SettlementCompletionController } from "../settlement/settlement-completion";
 import {
@@ -48,6 +49,7 @@ export class CompletableRunResultScene extends RunResultScene {
 
     confirm.once("pointerdown", () => {
       if (this.settlementRun !== null) {
+        void runRemotePersistence.complete(this.settlementRun);
         const storage = typeof localStorage === "undefined" ? undefined : localStorage;
         const currentWallet = loadPersistentWallet(storage);
         const settlement = applySettlementCurrency(
