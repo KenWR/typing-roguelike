@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { GeneratedMapNode, RunState, ShopOffer } from "@typing-roguelike/shared";
+import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import { playCoinSound, playRuntimeBgm } from "../audio/runtime-audio";
 import { getEquippedEquipment, formatEquipmentInfo } from "../equipment/equipment-info";
 import { RUN_RESUME_CHECKPOINT_VERSION } from "../run/run-resume-checkpoint";
@@ -28,7 +29,10 @@ export class ShopNodeScene extends Phaser.Scene {
 
   create(): void {
     playRuntimeBgm("tower");
-    this.cameras.main.setBackgroundColor("#111827");
+    const { width, height } = this.scale.gameSize;
+    const background = this.add.image(width / 2, height / 2, TEXTURE_KEYS.shopBackground);
+    background.setScale(Math.max(width / background.width, height / background.height));
+    this.add.rectangle(0, 0, width, height, 0x08101b, 0.3).setOrigin(0);
     this.add.text(36, 32, "상점", { fontFamily: "Galmuri9, monospace", fontSize: "30px", color: "#f9fafb" });
     this.statusText = this.add.text(36, 76, "", { fontFamily: "Galmuri9, monospace", fontSize: "18px", color: "#f5cf72" });
     this.feedbackText = this.add.text(36, 108, "", { fontFamily: "Galmuri9, monospace", fontSize: "15px", color: "#9ca3af" });

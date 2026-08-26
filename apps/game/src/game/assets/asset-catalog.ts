@@ -6,6 +6,7 @@ export const ASSET_PATHS = {
   backgrounds: {
     main: "/assets/background/메인 화면.png",
     map: "/assets/background/노드 선택 배경.png",
+    shop: "/assets/background/상점.png",
   },
   weaponIcons: {
     hud: "/assets/images/weapon_icons_pixel/96",
@@ -50,6 +51,7 @@ export const SCENE_BACKGROUND_ASSETS: readonly {
 }[] = [
   { key: "background:main", path: ASSET_PATHS.backgrounds.main },
   { key: "background:map", path: ASSET_PATHS.backgrounds.map },
+  { key: "background:shop", path: ASSET_PATHS.backgrounds.shop },
 ];
 
 /** The complete image catalog consumed by the BootScene preload boundary. */
@@ -65,6 +67,7 @@ export const RUNTIME_IMAGE_ASSETS: readonly {
 export const TEXTURE_KEYS = {
   mainBackground: "background:main",
   mapBackground: "background:map",
+  shopBackground: "background:shop",
   combatBackground: COMBAT_BACKGROUND_ASSET.key,
   missingAsset: "placeholder:missing-asset",
 } as const;

@@ -1,6 +1,7 @@
 import {
   beginMapNode,
   generateNodeChoices,
+  MAP_ROUND_COUNT,
   type GeneratedMapNode,
   type RunState,
 } from "@typing-roguelike/shared";
@@ -42,7 +43,7 @@ export const routeMapNodeSelection = (
     return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };
   }
 
-  if (node.type === "boss") {
+  if (node.type === "boss" && node.round === MAP_ROUND_COUNT) {
     const entry = enterBossCombat(runState as RunState, node);
     if (!entry.ok) {
       return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };

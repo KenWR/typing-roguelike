@@ -1,5 +1,6 @@
 import {
   generateNodeChoices,
+  getMapNodeKey,
   type CheckpointRequest,
   type CompleteRunRequest,
   type RunState,
@@ -31,10 +32,10 @@ const normalizeServerState = (state: Readonly<RunState>): RunState => {
     normalized = initializeRunMap(normalized);
   }
 
-  const currentStatus = normalized.map.nodeStatuses[normalized.map.currentNodeId];
   if (
-    currentStatus === "in_progress" &&
-    normalized.map.choicePath.length === normalized.map.currentRound
+    normalized.map.choicePath.length === normalized.map.currentRound &&
+    getMapNodeKey(normalized.map.currentRound, normalized.map.choicePath) ===
+      normalized.map.currentNodeId
   ) {
     normalized = {
       ...normalized,
