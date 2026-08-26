@@ -26,7 +26,7 @@ describe("run reward equipment presentation", () => {
     expect(candidate?.imageKey).toBe(resolveEquipmentIconTextureKey(weapon!.id));
   });
 
-  test("keeps subweapon candidates on the emoji fallback", () => {
+  test("gives subweapon candidates the matching uploaded image", () => {
     const subweapon = EQUIPMENT_CONFIGS.find(
       (equipment) => equipment.slot === "subweapon",
     );
@@ -38,7 +38,8 @@ describe("run reward equipment presentation", () => {
     });
     const candidate = flow.adapter.getViewState().candidates[0];
 
-    expect(candidate?.imageKey).toBeUndefined();
+    expect(candidate?.imageKey).toBe(`equipment-icon:${subweapon!.id}`);
+    expect(candidate?.imageKey).toBe(resolveEquipmentIconTextureKey(subweapon!.id));
     expect(candidate?.icon).toBe("◇");
   });
 });

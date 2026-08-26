@@ -59,14 +59,12 @@ describe("combat input and skill integration", () => {
         targetId: "enemy-1",
         atMs: attackSkill.windupMs,
       },
-    ]);
-    expect(combat.advance(attackSkill.recoveryMs).events).toEqual([
       {
         type: "impact-resolved",
         actionId: result.actionId,
         actorId: "player",
         targetId: "enemy-1",
-        atMs: attackSkill.windupMs + attackSkill.recoveryMs,
+        atMs: attackSkill.windupMs,
       },
     ]);
 

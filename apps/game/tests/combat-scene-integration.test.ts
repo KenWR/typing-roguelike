@@ -99,14 +99,14 @@ describe("combat scene runtime integration", () => {
       return;
     }
 
-    const update = ctx.runtime.advance(skill.windupMs + skill.recoveryMs);
+    const update = ctx.runtime.advance(skill.windupMs);
 
     expect(update.combat.events).toContainEqual({
       type: "impact-resolved",
       actionId: startResult.actionId,
       actorId: "player",
       targetId: enemy.instanceId,
-      atMs: skill.windupMs + skill.recoveryMs,
+      atMs: skill.windupMs,
     });
     expect(ctx.runtime.enemyHp[enemy.instanceId]).toBeLessThan(beforeHp);
     disconnect();

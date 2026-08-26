@@ -1,5 +1,9 @@
 import { COMBAT_BACKGROUND_ASSET, ENEMY_IMAGE_ASSETS } from "./enemy-visual-assets";
 import { EQUIPMENT_ICON_ASSETS } from "./equipment-icon-assets";
+import {
+  MAP_NODE_ICON_ASSET,
+  MAP_NODE_ICON_TEXTURE_KEY,
+} from "./map-node-assets";
 import { PLAYER_WEAPON_IMAGE_ASSETS } from "./player-visual-assets";
 import { RELIC_CONFIGS } from "@typing-roguelike/shared";
 
@@ -57,6 +61,13 @@ export const SCENE_BACKGROUND_ASSETS: readonly {
   { key: "background:rest", path: ASSET_PATHS.backgrounds.rest },
 ];
 
+export const RUNTIME_SPRITESHEET_ASSETS: readonly {
+  key: string;
+  path: string;
+  frameWidth: number;
+  frameHeight: number;
+}[] = [MAP_NODE_ICON_ASSET];
+
 /** The complete image catalog consumed by the BootScene preload boundary. */
 export const RUNTIME_IMAGE_ASSETS: readonly {
   key: string;
@@ -71,6 +82,7 @@ export const RUNTIME_IMAGE_ASSETS: readonly {
 export const TEXTURE_KEYS = {
   mainBackground: "background:main",
   mapBackground: "background:map",
+  mapNodeIcons: MAP_NODE_ICON_TEXTURE_KEY,
   shopBackground: "background:shop",
   restBackground: "background:rest",
   combatBackground: COMBAT_BACKGROUND_ASSET.key,
