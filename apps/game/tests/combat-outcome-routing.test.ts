@@ -31,9 +31,9 @@ const createInProgressRun = (currentRound = 1): RunState => {
 
 describe("combat outcome routing", () => {
   test("scales victory gold by floor and reward tier", () => {
-    expect(calculateCombatVictoryGold(1, "normal")).toBe(10);
-    expect(calculateCombatVictoryGold(4, "elite")).toBe(80);
-    expect(calculateCombatVictoryGold(5, "boss")).toBe(150);
+    expect(calculateCombatVictoryGold(1, "normal")).toBe(20);
+    expect(calculateCombatVictoryGold(4, "elite")).toBe(160);
+    expect(calculateCombatVictoryGold(5, "boss")).toBe(300);
   });
 
   test("victory stops combat, grants gold, clears the node and opens reward selection", () => {
@@ -63,8 +63,8 @@ describe("combat outcome routing", () => {
     expect(combat.snapshot.canAcceptInput).toBe(false);
     expect(timeline.snapshot.status).toBe("victory");
     expect(result.sceneKey).toBe("RewardSelectionScene");
-    expect(result.runState.runCurrency).toBe(37);
-    expect(result.payload.goldReward).toBe(30);
+    expect(result.runState.runCurrency).toBe(67);
+    expect(result.payload.goldReward).toBe(60);
     expect(result.payload.rewardSource).toBe("combat-victory");
     expect(result.runState.map.nodeStatuses["node-1"]).toBe("cleared");
     expect(result.runState.map.nodeStatuses["node-2"]).toBe("available");
@@ -85,7 +85,7 @@ describe("combat outcome routing", () => {
     const selectedEquipmentId = candidates[0]!.id;
     adapter.selectReward(selectedEquipmentId);
     adapter.continue();
-    expect(adapter.getRunState().runCurrency).toBe(37);
+    expect(adapter.getRunState().runCurrency).toBe(67);
     expect(adapter.getRunState().inventory.itemInstances).toContain(
       selectedEquipmentId,
     );
@@ -102,8 +102,8 @@ describe("combat outcome routing", () => {
       rewardRandom: () => 0,
     });
 
-    expect(result.runState.runCurrency).toBe(80);
-    expect(result.payload.goldReward).toBe(80);
+    expect(result.runState.runCurrency).toBe(160);
+    expect(result.payload.goldReward).toBe(160);
   });
 
   test("victory still offers relics when every equipment reward is already owned", () => {
@@ -127,8 +127,8 @@ describe("combat outcome routing", () => {
 
     expect(result.applied).toBe(true);
     expect(result.sceneKey).toBe("RewardSelectionScene");
-    expect(result.runState.runCurrency).toBe(20);
-    expect(result.payload.goldReward).toBe(20);
+    expect(result.runState.runCurrency).toBe(40);
+    expect(result.payload.goldReward).toBe(40);
     expect(result.runState.map.nodeStatuses["node-1"]).toBe("cleared");
     expect(result.runState.map.nodeStatuses["node-2"]).toBe("available");
     const adapter = result.payload.adapter as RewardSelectionAdapter<RunState>;
@@ -175,10 +175,10 @@ describe("combat outcome routing", () => {
       rewardRandom: () => 0,
     });
 
-    expect(first.runState.runCurrency).toBe(30);
+    expect(first.runState.runCurrency).toBe(60);
     expect(second.applied).toBe(false);
     expect(second.sceneKey).toBe("MapScene");
     expect(second.runState).toEqual(first.runState);
-    expect(second.runState.runCurrency).toBe(30);
+    expect(second.runState.runCurrency).toBe(60);
   });
 });

@@ -11,9 +11,9 @@ import { CombatState, type CombatOutcome } from "./combat-state";
 import { EnemyAttackTimeline } from "./enemy-attack-timeline";
 
 const GOLD_MULTIPLIER_BY_TIER: Readonly<Record<EquipmentRewardTier, number>> = {
-  normal: 10,
-  elite: 20,
-  boss: 30,
+  normal: 20,
+  elite: 40,
+  boss: 60,
 };
 
 export const calculateCombatVictoryGold = (
