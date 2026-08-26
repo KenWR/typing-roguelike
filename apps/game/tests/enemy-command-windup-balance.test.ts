@@ -59,8 +59,8 @@ describe("enemy command windup balance", () => {
       findActionIndex(enemyIndex, "hook-tentacle-attack"),
     );
 
-    expect(action.windupMs).toBe(1_400);
-    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(2_800);
+    expect(action.windupMs).toBe(4_200);
+    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(8_400);
   });
 
   test("doubles a normal enemy defense windup", () => {
@@ -70,8 +70,8 @@ describe("enemy command windup balance", () => {
       findActionIndex(enemyIndex, "hook-tentacle-defense"),
     );
 
-    expect(action.windupMs).toBe(1_000);
-    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(2_000);
+    expect(action.windupMs).toBe(3_000);
+    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(6_000);
   });
 
   test("doubles an auto-generated special windup", () => {
@@ -81,8 +81,8 @@ describe("enemy command windup balance", () => {
       findActionIndex(enemyIndex, "hook-tentacle-special"),
     );
 
-    expect(action.windupMs).toBe(1_800);
-    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(3_600);
+    expect(action.windupMs).toBe(5_400);
+    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(10_800);
   });
 
   test("doubles an explicitly configured boss special windup", () => {
@@ -92,8 +92,8 @@ describe("enemy command windup balance", () => {
       findActionIndex(enemyIndex, "palimpsest-red-edit"),
     );
 
-    expect(action.windupMs).toBe(2_700);
-    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(5_400);
+    expect(action.windupMs).toBe(8_100);
+    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(16_200);
   });
 
   test("applies the expected runtime windup to every enemy action without mutating action payloads", () => {
@@ -121,13 +121,13 @@ describe("enemy command windup balance", () => {
       findActionIndex(enemyIndex, "hook-tentacle-attack"),
     );
 
-    expect(timeline.advance(2_799).events).toEqual([]);
+    expect(timeline.advance(8_399).events).toEqual([]);
     expect(timeline.advance(1).events).toMatchObject([
-      { type: "cast-completed", atMs: 2_800 },
+      { type: "cast-completed", atMs: 8_400 },
     ]);
     expect(timeline.advance(299).events).toEqual([]);
     expect(timeline.advance(1).events).toMatchObject([
-      { type: "impact-resolved", atMs: 3_100 },
+      { type: "impact-resolved", atMs: 8_700 },
     ]);
   });
 });
