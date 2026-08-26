@@ -86,6 +86,10 @@ export class CommandInputBuffer {
       this.completionEmitted = true;
       this.completedRawInput = rawInput;
       this.emitCompleted();
+
+      const completedSnapshot = this.snapshot;
+      this.clearCompletedInput();
+      return completedSnapshot;
     }
 
     return this.snapshot;
@@ -112,6 +116,12 @@ export class CommandInputBuffer {
     return () => {
       this.statusChangedListeners.delete(listener);
     };
+  }
+
+  private clearCompletedInput(): void {
+    this.input = "";
+    this.committedInput = "";
+    this.updateStatus("idle");
   }
 
   private prepareInputForNextCycle(rawInput: string): string {
