@@ -5,6 +5,7 @@ export * from "./rules/final-boss-progression.ts";
 export * from "./rules/rest-recovery.ts";
 export * from "./rules/shop-rules.ts";
 export * from "./rules/loadout-slots.ts";
+export * from "./rules/available-skills.ts";
 export * from "./contracts/backend/run-contracts.ts";
 export * from "./contracts/backend/run-state.ts";
 export * from "./contracts/gameplay/skill-contract.ts";
