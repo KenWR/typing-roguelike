@@ -3,6 +3,13 @@ import { resolveEffectTextureKey } from "../assets/effect-visual-assets";
 import { RING_CONFIGS } from "@typing-roguelike/shared";
 import { MENU_SETTINGS_REGISTRY_KEYS, type CommandLanguage } from "../scenes/menu-settings";
 import type { CommandInputSnapshot, CommandInputStatus } from "../input/command-input-buffer";
+import {
+  EFFECT_PLACEHOLDER_TEXTURE_KEY,
+  formatEffectRemainingTime,
+  getEffectDarknessRatio,
+} from "./effect-presentation";
+
+export { formatEffectRemainingTime, getEffectDarknessRatio } from "./effect-presentation";
 
 export type CommandHudFeedback = Readonly<{
   type: "skill-started";
@@ -105,7 +112,7 @@ const EFFECT_GAP = 6;
 const EFFECT_TOP = 8;
 const EFFECT_LEFT = 8;
 const EFFECT_RADIUS = 7;
-const MISSING_ASSET_TEXTURE_KEY = "placeholder:missing-asset";
+const MISSING_ASSET_TEXTURE_KEY = EFFECT_PLACEHOLDER_TEXTURE_KEY;
 const effectTextureKey = (effectId: string): string => resolveEffectTextureKey(effectId) ?? MISSING_ASSET_TEXTURE_KEY;
 const SCENE_UPDATE_EVENT = "update";
 const SCENE_SHUTDOWN_EVENT = "shutdown";
@@ -188,18 +195,6 @@ export function formatAvailableSkillPreviews(
       return `${label} : ${skill.name} : ${ap} : ${damage === null ? "-" : Math.max(0, Math.round(damage))}`;
     }),
   ].join("\n");
-}
-
-export function getEffectDarknessRatio(effect: Pick<CommandHudEffect, "durationMs" | "remainingMs">): number {
-  if (effect.durationMs === null || effect.remainingMs === null || effect.durationMs <= 0) return 0;
-  const remainingRatio = clamp(effect.remainingMs / effect.durationMs, 0, 1);
-  return 1 - remainingRatio;
-}
-
-export function formatEffectRemainingTime(remainingMs: number | null): string {
-  if (remainingMs === null) return "지속시간: 발동 시 적용";
-  if (remainingMs >= 1_000) return `남은 시간: ${(remainingMs / 1_000).toFixed(1)}초`;
-  return `남은 시간: ${Math.ceil(Math.max(0, remainingMs))}ms`;
 }
 
 export function createSkillCommandEffects(skill: SkillLike | undefined): CommandHudEffect[] {

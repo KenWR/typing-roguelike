@@ -9,10 +9,10 @@ import { ActionPointResource } from "./action-point-resource";
 import { CombatApEffectController } from "./combat-ap-effects";
 import type { CombatEnemyInitialization, CombatEncounterInitialization } from "./encounter-initializer";
 import type { CombatState, CombatUpdate } from "./combat-state";
-import { ShieldPool } from "./shield-pool";
+import { ShieldPool, type ShieldInstance } from "./shield-pool";
 import type { EnemyAttackTimeline, EnemyAttackEvent, EnemyAttackTimelineUpdate } from "./enemy-attack-timeline";
 import { EnemyImpactResolver } from "./enemy-impact-resolver";
-import { SkillCombatantState, SkillImpactResolver } from "./skill-impact-resolver";
+import { SkillCombatantState, SkillImpactResolver, type TimedStatusEffect } from "./skill-impact-resolver";
 import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome-routing";
 
 export type PlayerCombatRuntimeConfig = Readonly<{
@@ -35,6 +35,10 @@ export type PlayerCombatRuntimeUpdate = Readonly<{
   enemyHp: Readonly<Record<string, number>>;
   playerShield: number;
   enemyShield: Readonly<Record<string, number>>;
+  playerStatuses: readonly TimedStatusEffect[];
+  enemyStatuses: Readonly<Record<string, readonly TimedStatusEffect[]>>;
+  playerShields: readonly ShieldInstance[];
+  enemyShields: Readonly<Record<string, readonly ShieldInstance[]>>;
   route: CombatOutcomeRoute | null;
 }>;
 
@@ -168,9 +172,21 @@ export class PlayerCombatRuntime {
     );
   }
 
+  get playerStatuses(): readonly TimedStatusEffect[] {
+    return this.player.timedStatuses;
+  }
+
+  get enemyStatuses(): Readonly<Record<string, readonly TimedStatusEffect[]>> {
+    return Object.fromEntries(Array.from(this.enemies, ([enemyId, enemy]) => [enemyId, enemy.timedStatuses]));
+  }
+
   /** 커맨드 완성으로 얻어 아직 남아 있는 플레이어 실드량입니다. */
   get playerShield(): number {
     return this.shields.totalAmount(this.player.id, this.elapsedMs);
+  }
+
+  get playerShields(): readonly ShieldInstance[] {
+    return this.shields.activeShields(this.player.id, this.elapsedMs);
   }
 
   /** 선딜 중이라 실드가 차 있는 적들의 남은 실드량입니다. */
@@ -181,11 +197,21 @@ export class PlayerCombatRuntime {
     );
   }
 
+  get enemyShields(): Readonly<Record<string, readonly ShieldInstance[]>> {
+    const atMs = this.elapsedMs;
+    return Object.fromEntries(
+      Array.from(this.enemies.keys(), (enemyId) => [enemyId, this.shields.activeShields(enemyId, atMs)]),
+    );
+  }
+
   private get elapsedMs(): number {
     return this.enemyTimeline.snapshot.elapsedMs;
   }
 
   advance(deltaMs: number): PlayerCombatRuntimeUpdate {
+    this.player.advanceStatuses(deltaMs);
+    for (const enemy of this.enemies.values()) enemy.advanceStatuses(deltaMs);
+
     const combatUpdate = this.combat.advance(deltaMs);
     const enemyTimelineUpdate = this.enemyTimeline.advance(deltaMs);
 
@@ -212,6 +238,10 @@ export class PlayerCombatRuntime {
       enemyHp: this.enemyHp,
       playerShield: this.playerShield,
       enemyShield: this.enemyShield,
+      playerStatuses: this.playerStatuses,
+      enemyStatuses: this.enemyStatuses,
+      playerShields: this.playerShields,
+      enemyShields: this.enemyShields,
       route: this.route,
     };
   }

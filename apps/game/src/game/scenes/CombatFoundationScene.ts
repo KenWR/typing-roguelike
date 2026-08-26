@@ -28,8 +28,11 @@ import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
 import type { ComboSnapshot } from "../combat/combo-tracker";
 import { CombatFeedbackController, playProceduralCombatSound } from "../feedback/combat-feedback";
+import { ActorEffectHud } from "../hud/actor-effect-hud";
 import { CombatHud } from "../hud/combat-hud";
 import { CommandHud } from "../hud/command-hud";
+import { createActorEffectPresentations } from "../hud/effect-presentation";
+import { EnemyAttackGauge } from "../hud/enemy-attack-gauge";
 import { RelicHud } from "../hud/relic-hud";
 import { CommandInputBuffer } from "../input/command-input-buffer";
 import { installCommandInputClipboardGuard } from "../input/command-input-clipboard-guard";
@@ -77,8 +80,10 @@ export class CombatFoundationScene extends Phaser.Scene {
   private playerRestTextureKey?: string;
   private playerAttackReset?: Phaser.Time.TimerEvent;
   private playerAttackTween?: Phaser.Tweens.Tween;
+  private playerEffectHud?: ActorEffectHud;
   private enemyPlaceholders: Phaser.GameObjects.Container[] = [];
   private enemyActorImages = new Map<string, Phaser.GameObjects.Image>();
+  private enemyEffectHuds = new Map<string, ActorEffectHud>();
   private enemyTargetMarkers = new Map<string, Phaser.GameObjects.Rectangle>();
   private enemyHealthBars = new Map<string, EnemyHealthBar>();
   private displayedEnemyHp = new Map<string, number>();
@@ -87,6 +92,7 @@ export class CombatFoundationScene extends Phaser.Scene {
   private encounterLabel!: Phaser.GameObjects.Text;
   private combatHud!: CombatHud;
   private relicHud!: RelicHud;
+  private enemyAttackGauge!: EnemyAttackGauge;
   private enemyAttackTimeline!: EnemyAttackTimeline;
   private actionPoints!: ActionPointResource;
   private apEffects!: CombatApEffectController;
@@ -133,9 +139,12 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.playerRestTextureKey = undefined;
     this.playerAttackReset = undefined;
     this.playerAttackTween = undefined;
+    this.playerEffectHud = undefined;
+    this.skillStarter = undefined;
     this.comboPulseTween = undefined;
     this.lastComboCount = 0;
     this.enemyActorImages.clear();
+    this.enemyEffectHuds.clear();
     this.enemyTargetMarkers.clear();
     this.enemyHealthBars.clear();
     this.displayedEnemyHp.clear();
@@ -180,6 +189,9 @@ export class CombatFoundationScene extends Phaser.Scene {
     if (playerActor instanceof Phaser.GameObjects.Image) {
       this.playerActorImage = playerActor;
     }
+    this.playerEffectHud = new ActorEffectHud(this);
+    this.playerEffectHud.setPosition(0, -184);
+    this.playerPlaceholder.add(this.playerEffectHud.container);
     this.enemyPlaceholders = initialization.enemies.map((enemy) => {
       const placeholder = this.createActorPlaceholder(enemy.name, 0x8d4b52, resolveEnemyTextureKey(enemy.enemyId));
       const actor = placeholder.getAt(0);
@@ -193,6 +205,10 @@ export class CombatFoundationScene extends Phaser.Scene {
       healthBar.container.setPosition(0, ENEMY_HEALTH_BAR_OFFSET_Y);
       placeholder.add(healthBar.container);
       this.enemyHealthBars.set(enemy.instanceId, healthBar);
+      const effectHud = new ActorEffectHud(this);
+      effectHud.setPosition(0, -198);
+      placeholder.add(effectHud.container);
+      this.enemyEffectHuds.set(enemy.instanceId, effectHud);
       const marker = this.add
         .rectangle(
           0,
@@ -261,6 +277,8 @@ export class CombatFoundationScene extends Phaser.Scene {
         });
       }
     }
+    this.enemyAttackGauge = new EnemyAttackGauge(this, this.enemyAttackTimeline.snapshot);
+    this.uiLayer.add(this.enemyAttackGauge.container);
     const availableSkills =
       initialization.player.skills.length > 0
         ? initialization.player.skills.map((skill) => defineSkill(skill))
@@ -360,6 +378,8 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.DESTROY, this.releasePauseHandling, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseTargetHandling, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseTargetHandling, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseActorEffectHuds, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseActorEffectHuds, this);
     this.applyLayout(this.scale.gameSize.width, this.scale.gameSize.height);
   }
 
@@ -373,17 +393,28 @@ export class CombatFoundationScene extends Phaser.Scene {
     const playerUpdate = this.playerCombatRuntime?.advance(safeDelta);
     if (playerUpdate === undefined) {
       const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
+      this.enemyAttackGauge.update(enemyUpdate.snapshot);
+      this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
+      this.playerEffectHud?.update(
+        createActorEffectPresentations({
+          apEffects: this.actionPoints.snapshot.timedEffects,
+          atMs: enemyUpdate.snapshot.elapsedMs,
+        }),
+      );
       this.updateEnemyVisuals(Object.fromEntries(this.displayedEnemyHp), safeDelta, enemyUpdate.snapshot);
       this.updateEnemyHealth(Object.fromEntries(this.displayedEnemyHp), enemyUpdate.snapshot);
       return;
     }
 
+    this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);
+    this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
     this.combatHud.update({
       hp: playerUpdate.playerHp,
       ap: playerUpdate.playerAp,
       shield: playerUpdate.playerShield,
     });
     this.displayedEnemyShield = playerUpdate.enemyShield;
+    this.refreshActorEffects(playerUpdate);
     this.updateEnemyVisuals(playerUpdate.enemyHp, safeDelta, playerUpdate.enemyTimeline.snapshot);
     this.targeting?.refresh();
     this.refreshTargetPresentation();
@@ -401,6 +432,31 @@ export class CombatFoundationScene extends Phaser.Scene {
       const outcome = this.combat.snapshot.status;
       this.feedback?.trigger(outcome === "victory" ? "victory" : "defeat");
       this.startCombatRoute(playerUpdate.route.sceneKey, playerUpdate.route.payload, outcome === "victory" ? 1_500 : 0);
+    }
+  }
+
+  private refreshActorEffects(update: ReturnType<PlayerCombatRuntime["advance"]>): void {
+    const atMs = update.enemyTimeline.snapshot.elapsedMs;
+    this.playerEffectHud?.update(
+      createActorEffectPresentations({
+        statuses: update.playerStatuses,
+        shields: update.playerShields,
+        apEffects: this.actionPoints.snapshot.timedEffects,
+        atMs,
+      }),
+    );
+
+    for (const enemy of this.combatInitialization?.enemies ?? []) {
+      const alive = (update.enemyHp[enemy.instanceId] ?? 0) > 0;
+      this.enemyEffectHuds.get(enemy.instanceId)?.update(
+        alive
+          ? createActorEffectPresentations({
+              statuses: update.enemyStatuses[enemy.instanceId] ?? [],
+              shields: update.enemyShields[enemy.instanceId] ?? [],
+              atMs,
+            })
+          : [],
+      );
     }
   }
 
@@ -504,6 +560,13 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.targeting?.dispose();
   }
 
+  private releaseActorEffectHuds(): void {
+    this.playerEffectHud?.container.destroy(true);
+    this.playerEffectHud = undefined;
+    for (const effectHud of this.enemyEffectHuds.values()) effectHud.container.destroy(true);
+    this.enemyEffectHuds.clear();
+  }
+
   /** 지정한 적에게만 조준 테두리를 보여 주고 나머지는 살짝 흐리게 둡니다. */
   private refreshTargetPresentation(): void {
     const targetId = this.targeting?.targetId;
@@ -585,6 +648,8 @@ export class CombatFoundationScene extends Phaser.Scene {
       .setVisible(width >= 720);
     this.combatHud.setPosition(layout.hudReservation.x, layout.hudReservation.y);
     this.combatHud.setSize(layout.hudReservation.width, layout.hudReservation.height);
+    this.enemyAttackGauge.setPosition(layout.enemyAttackGaugeReservation.x, layout.enemyAttackGaugeReservation.y);
+    this.enemyAttackGauge.setSize(layout.enemyAttackGaugeReservation.width, layout.enemyAttackGaugeReservation.height);
     this.commandHud.setSize(layout.commandHudReservation.width, layout.commandHudReservation.height);
     this.commandHud.setPosition(
       layout.commandHudReservation.x,
