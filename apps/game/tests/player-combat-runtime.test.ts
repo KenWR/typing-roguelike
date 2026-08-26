@@ -94,6 +94,7 @@ describe("PlayerCombatRuntime", () => {
       runState,
       initialization: multiInitialization,
       nextNodeIds: firstCombatNode.nextNodeKeys,
+      random: () => 0,
     });
     const skillConfig = initialization.player.skills.find((candidate) => candidate.kind === "attack")!;
     const skill = defineSkill(skillConfig);
