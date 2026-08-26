@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  createInitialRunState,
+  defineSkill,
   type GeneratedMapNode,
 } from "@typing-roguelike/shared";
 import { CombatState } from "../src/game/combat/combat-state";
@@ -48,15 +48,16 @@ const createPlayableCombat = () => {
     nextNodeIds: firstCombatNode.nextNodeKeys,
   });
 
-  return { runState, combat, runtime, initialization: entry.combat };
+  return { combat, runtime, initialization: entry.combat };
 };
 
 describe("PlayerCombatRuntime", () => {
   test("advances a started attack and applies real enemy HP damage", () => {
     const { combat, runtime, initialization } = createPlayableCombat();
-    const skill = initialization.player.skills.find((candidate) => candidate.kind === "attack");
-    expect(skill).toBeDefined();
-    if (!skill) return;
+    const skillConfig = initialization.player.skills.find((candidate) => candidate.kind === "attack");
+    expect(skillConfig).toBeDefined();
+    if (!skillConfig) return;
+    const skill = defineSkill(skillConfig);
 
     const enemy = initialization.enemies[0]!;
     const beforeHp = runtime.enemyHp[enemy.instanceId]!;
@@ -68,10 +69,7 @@ describe("PlayerCombatRuntime", () => {
       windupMs: skill.windupMs,
       recoveryMs: skill.recoveryMs,
     });
-    runtime.registerAction(actionId, {
-      ...skill,
-      effects: [{ type: "damage", coefficient: skill.damageCoefficient ?? 1 }],
-    });
+    runtime.registerAction(actionId, skill);
 
     runtime.advance(skill.windupMs + skill.recoveryMs);
 
@@ -80,7 +78,8 @@ describe("PlayerCombatRuntime", () => {
 
   test("does not apply the same impact twice", () => {
     const { combat, runtime, initialization } = createPlayableCombat();
-    const skill = initialization.player.skills.find((candidate) => candidate.kind === "attack")!;
+    const skillConfig = initialization.player.skills.find((candidate) => candidate.kind === "attack")!;
+    const skill = defineSkill(skillConfig);
     const enemy = initialization.enemies[0]!;
     const actionId = "player:first-attack:dedupe";
     combat.startAction({
@@ -90,10 +89,7 @@ describe("PlayerCombatRuntime", () => {
       windupMs: skill.windupMs,
       recoveryMs: skill.recoveryMs,
     });
-    runtime.registerAction(actionId, {
-      ...skill,
-      effects: [{ type: "damage", coefficient: skill.damageCoefficient ?? 1 }],
-    });
+    runtime.registerAction(actionId, skill);
 
     runtime.advance(skill.windupMs + skill.recoveryMs);
     const hpAfterImpact = runtime.enemyHp[enemy.instanceId];
@@ -104,7 +100,8 @@ describe("PlayerCombatRuntime", () => {
 
   test("routes to reward flow after the final enemy dies", () => {
     const { combat, runtime, initialization } = createPlayableCombat();
-    const skill = initialization.player.skills.find((candidate) => candidate.kind === "attack")!;
+    const skillConfig = initialization.player.skills.find((candidate) => candidate.kind === "attack")!;
+    const skill = defineSkill(skillConfig);
 
     let route = null;
     let sequence = 1;
@@ -118,10 +115,7 @@ describe("PlayerCombatRuntime", () => {
           windupMs: skill.windupMs,
           recoveryMs: skill.recoveryMs,
         });
-        runtime.registerAction(actionId, {
-          ...skill,
-          effects: [{ type: "damage", coefficient: skill.damageCoefficient ?? 1 }],
-        });
+        runtime.registerAction(actionId, skill);
         route = runtime.advance(skill.windupMs + skill.recoveryMs).route;
       }
     }
