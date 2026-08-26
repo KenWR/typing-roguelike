@@ -2,55 +2,57 @@ import { describe, expect, test } from "bun:test";
 import { ENEMY_CONFIGS } from "../src/content/enemies.ts";
 
 const expectedAttackWindups: Readonly<Record<string, number>> = {
-  "ink-slime": 5400,
-  "hook-tentacle": 4200,
-  "iron-beetle": 6000,
-  "bell-wraith": 5100,
-  "mimic-doll": 5700,
-  "reverse-bat": 4500,
-  "space-eater": 6300,
-  "needle-gunner": 3600,
-  "red-scribe": 6000,
-  "repair-golem": 6600,
-  "explosive-spore": 4200,
-  "chain-executor": 5700,
-  "mirror-doll": 4800,
-  "clock-tick": 4200,
-  "ap-devourer": 6900,
-  "red-corrector": 4800,
-  "inverted-knight": 5400,
-  "chorus-conductor": 4500,
-  palimpsest: 5700,
-  "thousand-beat-chorus": 4500,
-  "beat-tentacle": 4200,
+  "ink-slime": 7200,
+  "hook-tentacle": 5600,
+  "iron-beetle": 8000,
+  "bell-wraith": 6800,
+  "mimic-doll": 7600,
+  "reverse-bat": 6000,
+  "space-eater": 8400,
+  "needle-gunner": 4800,
+  "red-scribe": 8000,
+  "repair-golem": 8800,
+  "explosive-spore": 5600,
+  "chain-executor": 7600,
+  "mirror-doll": 6400,
+  "clock-tick": 5600,
+  "ap-devourer": 9200,
+  "red-corrector": 6400,
+  "inverted-knight": 7200,
+  "chorus-conductor": 6000,
+  palimpsest: 7600,
+  "thousand-beat-chorus": 6000,
+  "beat-tentacle": 5600,
 };
 
 const expectedExplicitSpecialWindups: Readonly<Record<string, number>> = {
-  "palimpsest-word-storm": 6900,
-  "palimpsest-red-edit": 8100,
-  "thousand-beat-chorus-grand-chorus": 5700,
-  "thousand-beat-chorus-crescendo": 7200,
+  "palimpsest-word-storm": 9200,
+  "palimpsest-red-edit": 10800,
+  "thousand-beat-chorus-grand-chorus": 7600,
+  "thousand-beat-chorus-crescendo": 9600,
 };
 
-describe("enemy windup 3x balance", () => {
-  test("stores 3x attack windups directly in enemy content", () => {
+describe("enemy windup 4x balance", () => {
+  test("stores 4x attack windups directly in enemy content", () => {
+    expect(Object.keys(expectedAttackWindups)).toHaveLength(ENEMY_CONFIGS.length);
+
     for (const enemy of ENEMY_CONFIGS) {
       const attack = enemy.actions.find((action) => action.kind === "attack");
       expect(attack?.windupMs).toBe(expectedAttackWindups[enemy.id]);
     }
   });
 
-  test("stores 3x defense and special windups without a runtime multiplier", () => {
+  test("stores 4x defense and special windups without a runtime multiplier", () => {
     for (const enemy of ENEMY_CONFIGS) {
       const defense = enemy.actions.find((action) => action.kind === "defense");
-      expect(defense?.windupMs).toBe(3000);
+      expect(defense?.windupMs).toBe(4000);
 
       for (const special of enemy.actions.filter((action) => action.kind === "special")) {
         const explicit = expectedExplicitSpecialWindups[special.id];
         if (explicit !== undefined) {
           expect(special.windupMs).toBe(explicit);
         } else {
-          expect(special.windupMs).toBe(expectedAttackWindups[enemy.id]! + 1200);
+          expect(special.windupMs).toBe(expectedAttackWindups[enemy.id]! + 1600);
         }
       }
     }

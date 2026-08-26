@@ -49,40 +49,40 @@ const findActionIndex = (enemyIndex: number, actionId: string): number => {
 describe("enemy command windup balance", () => {
   test("uses the configured content windup without another runtime multiplier", () => {
     expect(ENEMY_COMMAND_WINDUP_MULTIPLIER).toBe(1);
-    expect(applyEnemyCommandWindupMultiplier(4_200)).toBe(4_200);
+    expect(applyEnemyCommandWindupMultiplier(5_600)).toBe(5_600);
   });
 
-  test("keeps a normal enemy basic attack at its configured 3x windup", () => {
+  test("keeps a normal enemy basic attack at its configured 4x windup", () => {
     const enemyIndex = findEnemyIndex("hook-tentacle");
     const { action, result } = selectAction(
       enemyIndex,
       findActionIndex(enemyIndex, "hook-tentacle-attack"),
     );
 
-    expect(action.windupMs).toBe(4_200);
-    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(4_200);
+    expect(action.windupMs).toBe(5_600);
+    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(5_600);
   });
 
-  test("keeps a normal enemy defense at its configured 3x windup", () => {
+  test("keeps a normal enemy defense at its configured 4x windup", () => {
     const enemyIndex = findEnemyIndex("hook-tentacle");
     const { action, result } = selectAction(
       enemyIndex,
       findActionIndex(enemyIndex, "hook-tentacle-defense"),
     );
 
-    expect(action.windupMs).toBe(3_000);
-    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(3_000);
+    expect(action.windupMs).toBe(4_000);
+    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(4_000);
   });
 
-  test("keeps an auto-generated special at its configured 3x windup", () => {
+  test("keeps an auto-generated special at its configured 4x windup", () => {
     const enemyIndex = findEnemyIndex("hook-tentacle");
     const { action, result } = selectAction(
       enemyIndex,
       findActionIndex(enemyIndex, "hook-tentacle-special"),
     );
 
-    expect(action.windupMs).toBe(5_400);
-    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(5_400);
+    expect(action.windupMs).toBe(7_200);
+    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(7_200);
   });
 
   test("keeps an explicitly configured boss special windup", () => {
@@ -92,8 +92,8 @@ describe("enemy command windup balance", () => {
       findActionIndex(enemyIndex, "palimpsest-red-edit"),
     );
 
-    expect(action.windupMs).toBe(8_100);
-    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(8_100);
+    expect(action.windupMs).toBe(10_800);
+    expect(result.update?.snapshot.attacks[0]?.phaseDurationMs).toBe(10_800);
   });
 
   test("applies the expected runtime windup to every enemy action without mutating action payloads", () => {
@@ -121,13 +121,13 @@ describe("enemy command windup balance", () => {
       findActionIndex(enemyIndex, "hook-tentacle-attack"),
     );
 
-    expect(timeline.advance(4_199).events).toEqual([]);
+    expect(timeline.advance(5_599).events).toEqual([]);
     expect(timeline.advance(1).events).toMatchObject([
-      { type: "cast-completed", atMs: 4_200 },
+      { type: "cast-completed", atMs: 5_600 },
     ]);
     expect(timeline.advance(299).events).toEqual([]);
     expect(timeline.advance(1).events).toMatchObject([
-      { type: "impact-resolved", atMs: 4_500 },
+      { type: "impact-resolved", atMs: 5_900 },
     ]);
   });
 });
