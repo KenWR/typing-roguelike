@@ -22,5 +22,6 @@ Codex는 저장소 루트의 `.agents/skills`를 자동으로 탐색합니다. �
 | `e2e-tester` | 브라우저와 API E2E 검증 | workspace-write |
 | `reviewer` | 정확성, 보안, 성능, 테스트 공백 검토 | read-only |
 | `verifier` | 최종 타입 검사, 빌드, 실행 검증 | workspace-write |
+| `PR-merger` | GitHub PR의 live 상태, 병합 조건, 최종 상태 확인 | workspace-write |
 
 동시에 실행하는 하위 에이전트는 최대 6개입니다. 구현 에이전트에는 작업마다 파일 소유권을 지정해야 합니다.
