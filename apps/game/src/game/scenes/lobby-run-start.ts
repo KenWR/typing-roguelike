@@ -1,11 +1,10 @@
-import { createInitialRunState, type RunState } from "@typing-roguelike/shared";
+import type { RunState } from "@typing-roguelike/shared";
+import { runSession } from "../run/run-session";
 
 export type RunInitializer = (seed: number) => RunState;
 export type RunSeedFactory = () => number;
 
-const defaultRunInitializer: RunInitializer = (seed) =>
-  createInitialRunState({ seed });
-
+const defaultRunInitializer: RunInitializer = (seed) => runSession.create({ seed });
 const defaultSeedFactory: RunSeedFactory = () => Date.now();
 
 export class LobbyRunStarter {
