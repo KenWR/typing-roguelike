@@ -4,6 +4,7 @@ import {
   type RunState,
   type SkillDefinition,
 } from "@typing-roguelike/shared";
+import { playImpactHitSound, playRuntimeBgm } from "../audio/runtime-audio";
 import type { CombatEncounterInitialization } from "./encounter-initializer";
 import { CombatState, type CombatUpdate } from "./combat-state";
 import { EnemyAttackTimeline } from "./enemy-attack-timeline";
@@ -62,6 +63,7 @@ export class PlayerCombatRuntime {
     this.initialization = config.initialization;
     this.nextNodeIds = config.nextNodeIds ?? [];
     this.bossNode = config.bossNode;
+    playRuntimeBgm(config.initialization.nodeType === "boss" ? "boss" : "tower");
     this.player = new SkillCombatantState({
       id: "player",
       attackPower: resolveAttackPower(config.initialization),
@@ -119,12 +121,20 @@ export class PlayerCombatRuntime {
           : this.resolveLivingEnemyTarget(event.targetId);
         if (target === undefined) continue;
 
-        this.impactResolver.resolve({
+        const hpBeforeImpact = target.snapshot.health.currentHp;
+        const result = this.impactResolver.resolve({
           event: target.id === event.targetId ? event : { ...event, targetId: target.id },
           skill,
           actor: this.player,
           target,
         });
+        if (
+          result.applied &&
+          target.id !== "player" &&
+          target.snapshot.health.currentHp < hpBeforeImpact
+        ) {
+          playImpactHitSound();
+        }
       }
 
       if (
