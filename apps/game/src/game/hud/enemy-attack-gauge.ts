@@ -1,4 +1,4 @@
-import Phaser from "phaser";
+import type Phaser from "phaser";
 import { ENEMY_HEALTH_BAR_TRACK_WIDTH } from "../combat/enemy-health-bar";
 import type {
   EnemyAttackPhase,
