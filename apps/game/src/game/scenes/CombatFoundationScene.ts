@@ -10,10 +10,7 @@ import { CombatApEffectController } from "../combat/combat-ap-effects";
 import { CombatState } from "../combat/combat-state";
 import { CombatTargetingController } from "../combat/combat-targeting";
 import { CombatPauseController, type PauseDocument, type PauseWindow } from "../combat/combat-pause-controller";
-import type {
-  CombatEncounterInitialization,
-  CombatEnemyInitialization,
-} from "../combat/encounter-initializer";
+import type { CombatEncounterInitialization, CombatEnemyInitialization } from "../combat/encounter-initializer";
 import { EnemyHealthBar } from "../combat/enemy-health-bar";
 import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
@@ -31,11 +28,9 @@ import { persistCombatRunTransition } from "../run/persist-terminal-run";
 import { MENU_SETTINGS_REGISTRY_KEYS } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
 
-const resolveEnemyMaxShield = (
-  enemy: CombatEnemyInitialization,
-): number =>
+const resolveEnemyMaxShield = (enemy: CombatEnemyInitialization): number =>
   enemy.actions.reduce(
-    (maximum, action) => Math.max(maximum, action.shieldAmount ?? 0),
+    (maximum, action) => (action.kind === "defense" ? Math.max(maximum, action.shieldAmount ?? 0) : maximum),
     0,
   );
 
@@ -279,6 +274,12 @@ export class CombatFoundationScene extends Phaser.Scene {
         ...(this.bossNode === undefined ? {} : { bossNode: this.bossNode }),
       });
       this.playerCombatRuntime.start();
+      // The runtime grants an enemy defense shield while starting its first
+      // windup. Sync the HUD immediately so the initial defense state is
+      // visible before the first Phaser update tick.
+      this.displayedEnemyShield = this.playerCombatRuntime.enemyShield;
+      this.enemyAttackGauge.update(this.enemyAttackTimeline.snapshot);
+      this.updateEnemyHealth(this.playerCombatRuntime.enemyHp);
     }
 
     const skillStarter = new SkillCommandStarter({
