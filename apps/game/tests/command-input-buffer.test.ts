@@ -55,6 +55,16 @@ describe("CommandInputBuffer", () => {
     });
   });
 
+  test("submits the current cycle before clearing it", () => {
+    const buffer = new CommandInputBuffer("test");
+    const submitted: string[] = [];
+    buffer.onSubmitted(({ snapshot }) => submitted.push(`${snapshot.input}:${snapshot.status}`));
+
+    buffer.updateInput("testX");
+    expect(buffer.submit()).toMatchObject({ input: "", status: "idle" });
+    expect(submitted).toEqual(["testX:incorrect"]);
+  });
+
   test("emits completion once until the buffer is reset", () => {
     const buffer = new CommandInputBuffer("휘두르기");
     const completed: string[] = [];
@@ -69,24 +79,19 @@ describe("CommandInputBuffer", () => {
     expect(completed).toEqual(["휘두르기", "휘두르기"]);
   });
 
-  test("keeps appended input until the user explicitly resets the buffer", () => {
+  test("starts a fresh cycle when input continues after a completed command", () => {
     const buffer = new CommandInputBuffer("베기");
     const completed: string[] = [];
     buffer.onCompleted(({ input }) => completed.push(input));
 
     expect(buffer.updateInput("베기").status).toBe("complete");
     expect(buffer.updateInput("베기베")).toMatchObject({
-      input: "베기베",
-      committedInput: "베기베",
-      status: "incorrect",
+      input: "베",
+      committedInput: "베",
+      status: "matching",
     });
-    expect(buffer.updateInput("베기베기").status).toBe("incorrect");
 
     expect(completed).toEqual(["베기"]);
-
-    buffer.reset();
-    expect(buffer.updateInput("베기").status).toBe("complete");
-    expect(completed).toEqual(["베기", "베기"]);
   });
 
   test("requires an explicit reset before typing the same command again", () => {

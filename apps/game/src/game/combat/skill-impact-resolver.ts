@@ -1,7 +1,4 @@
-import type {
-  SkillDefinition,
-  SkillStatusEffect,
-} from "@typing-roguelike/shared";
+import type { SkillDefinition, SkillStatusEffect } from "@typing-roguelike/shared";
 import type { CombatActionEvent } from "./combat-state";
 import { calculateDamage } from "./damage-formula";
 import { HealthState, type HealthSnapshot } from "./health-state";
@@ -12,6 +9,11 @@ export type ActiveStatusEffect = Readonly<{
   durationMs: number;
   stacks: number;
 }>;
+
+export type TimedStatusEffect = ActiveStatusEffect &
+  Readonly<{
+    remainingMs: number;
+  }>;
 
 export type SkillCombatantSnapshot = Readonly<{
   id: string;
@@ -28,6 +30,13 @@ export type SkillCombatantConfig = Readonly<{
   maxHp?: number;
   initialHp?: number;
 }>;
+
+type MutableStatusEffect = {
+  statusId: string;
+  durationMs: number;
+  remainingMs: number;
+  stacks: number;
+};
 
 const validateIdentifier = (name: string, value: string): string => {
   if (value.trim().length === 0) {
@@ -48,7 +57,7 @@ export class SkillCombatantState {
   readonly attackPower: number;
   readonly health: HealthState;
   private readonly baseDefense: number;
-  private readonly statuses: ActiveStatusEffect[] = [];
+  private readonly statuses: MutableStatusEffect[] = [];
 
   constructor(config: SkillCombatantConfig) {
     this.id = validateIdentifier("Combatant id", config.id);
@@ -67,18 +76,43 @@ export class SkillCombatantState {
       attackPower: this.attackPower,
       defense: this.defense,
       health: this.health.snapshot,
-      statuses: [...this.statuses],
+      statuses: this.statuses.map(({ statusId, durationMs, stacks }) => ({
+        statusId,
+        durationMs,
+        stacks,
+      })),
     };
+  }
+
+  /** HUD 등 presentation 계층에서 원래 지속시간과 남은 시간을 함께 사용한다. */
+  get timedStatuses(): readonly TimedStatusEffect[] {
+    return this.statuses.map(({ statusId, durationMs, remainingMs, stacks }) => ({
+      statusId,
+      durationMs,
+      remainingMs,
+      stacks,
+    }));
   }
 
   applyStatus(effect: SkillStatusEffect): void {
     this.statuses.push({
       statusId: effect.statusId,
       durationMs: effect.durationMs,
+      remainingMs: effect.durationMs,
       stacks: effect.stacks ?? 1,
     });
   }
 
+  /** 기존 상태만 경과시키며 0이 된 상태는 즉시 제거한다. */
+  advanceStatuses(deltaMs: number): void {
+    const delta = validateNonNegative("Status delta", deltaMs);
+    for (let index = this.statuses.length - 1; index >= 0; index -= 1) {
+      const status = this.statuses[index];
+      if (status === undefined) continue;
+      status.remainingMs = Math.max(0, status.remainingMs - delta);
+      if (status.remainingMs === 0) this.statuses.splice(index, 1);
+    }
+  }
 }
 
 export type ResolveSkillImpactInput = Readonly<{
@@ -105,14 +139,7 @@ export type SkillImpactResult = Readonly<{
 export class SkillImpactResolver {
   private readonly resolvedActionIds = new Set<string>();
 
-  resolve({
-    event,
-    skill,
-    actor,
-    target,
-    shields,
-    damageMultiplier = 1,
-  }: ResolveSkillImpactInput): SkillImpactResult {
+  resolve({ event, skill, actor, target, shields, damageMultiplier = 1 }: ResolveSkillImpactInput): SkillImpactResult {
     if (event.type !== "impact-resolved") {
       return this.emptyResult(event.actionId);
     }

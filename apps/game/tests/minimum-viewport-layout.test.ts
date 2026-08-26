@@ -26,6 +26,7 @@ Object.assign(globalThis, {
 });
 
 const { createCombatLayout } = await import("../src/game/layout/combat-layout");
+const { ENEMY_HEALTH_BAR_TRACK_Y, ENEMY_TELEGRAPH_TRACK_Y } = await import("../src/game/combat/enemy-health-bar");
 
 const VIEWPORT_WIDTH = 1280;
 const VIEWPORT_HEIGHT = 720;
@@ -41,10 +42,7 @@ const right = (rect: RectLike): number => rect.x + rect.width;
 const bottom = (rect: RectLike): number => rect.y + rect.height;
 
 const isInsideViewport = (rect: RectLike): boolean =>
-  rect.x >= 0 &&
-  rect.y >= 0 &&
-  right(rect) <= VIEWPORT_WIDTH &&
-  bottom(rect) <= VIEWPORT_HEIGHT;
+  rect.x >= 0 && rect.y >= 0 && right(rect) <= VIEWPORT_WIDTH && bottom(rect) <= VIEWPORT_HEIGHT;
 
 const overlaps = (a: RectLike, b: RectLike): boolean =>
   a.x < right(b) && right(a) > b.x && a.y < bottom(b) && bottom(a) > b.y;
@@ -64,20 +62,19 @@ describe("1280x720 minimum viewport layout", () => {
 
     expect(overlaps(layout.relicHudReservation, layout.hudReservation)).toBe(false);
     expect(overlaps(layout.relicHudReservation, layout.enemyAttackGaugeReservation)).toBe(false);
-    expect(
-      overlaps(layout.hudReservation, layout.enemyAttackGaugeReservation),
-    ).toBe(false);
+    expect(overlaps(layout.hudReservation, layout.enemyAttackGaugeReservation)).toBe(false);
   });
 
   test("keeps the command HUD below top information and actor anchors", () => {
     const layout = createCombatLayout(VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
-    const topInformationBottom = Math.max(
-      bottom(layout.hudReservation),
-      bottom(layout.enemyAttackGaugeReservation),
-    );
+    const topInformationBottom = Math.max(bottom(layout.hudReservation), bottom(layout.enemyAttackGaugeReservation));
 
     expect(topInformationBottom).toBeLessThan(layout.commandHudReservation.y);
     expect(layout.player.y).toBeLessThan(layout.commandHudReservation.y);
     expect(layout.enemy.y).toBeLessThan(layout.commandHudReservation.y);
+  });
+
+  test("places each enemy telegraph below its HP bar", () => {
+    expect(ENEMY_TELEGRAPH_TRACK_Y).toBeGreaterThan(ENEMY_HEALTH_BAR_TRACK_Y);
   });
 });

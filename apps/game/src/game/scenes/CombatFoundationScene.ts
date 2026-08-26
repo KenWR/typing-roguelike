@@ -1,5 +1,12 @@
 import Phaser from "phaser";
-import { defineSkill, type GeneratedMapNode, type RunState, type SkillDefinition } from "@typing-roguelike/shared";
+import {
+  calculateRelicDamage,
+  defineSkill,
+  EQUIPMENT_CONFIGS,
+  type GeneratedMapNode,
+  type RunState,
+  type SkillDefinition,
+} from "@typing-roguelike/shared";
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import { resolveEnemyTextureKey, resolveEnemyVisualState } from "../assets/enemy-visual-assets";
 import { resolvePlayerAttackTextureKey, resolvePlayerTextureKey } from "../assets/player-visual-assets";
@@ -10,32 +17,34 @@ import { CombatApEffectController } from "../combat/combat-ap-effects";
 import { CombatState } from "../combat/combat-state";
 import { CombatTargetingController } from "../combat/combat-targeting";
 import { CombatPauseController, type PauseDocument, type PauseWindow } from "../combat/combat-pause-controller";
-import type {
-  CombatEncounterInitialization,
-  CombatEnemyInitialization,
-} from "../combat/encounter-initializer";
-import { EnemyHealthBar } from "../combat/enemy-health-bar";
+import type { CombatEncounterInitialization, CombatEnemyInitialization } from "../combat/encounter-initializer";
+import {
+  ENEMY_HEALTH_BAR_PANEL_WIDTH,
+  ENEMY_HEALTH_BAR_REGION_BOTTOM,
+  ENEMY_HEALTH_BAR_REGION_TOP,
+  EnemyHealthBar,
+} from "../combat/enemy-health-bar";
 import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
 import type { ComboSnapshot } from "../combat/combo-tracker";
 import { CombatFeedbackController, playProceduralCombatSound } from "../feedback/combat-feedback";
+import { ActorEffectHud } from "../hud/actor-effect-hud";
 import { CombatHud } from "../hud/combat-hud";
 import { CommandHud } from "../hud/command-hud";
+import { createActorEffectPresentations } from "../hud/effect-presentation";
 import { EnemyAttackGauge } from "../hud/enemy-attack-gauge";
 import { RelicHud } from "../hud/relic-hud";
 import { CommandInputBuffer } from "../input/command-input-buffer";
 import { installCommandInputClipboardGuard } from "../input/command-input-clipboard-guard";
 import { CommandInputRecoveryController, updateCommandInputElement } from "../input/command-input-recovery";
-import { createCombatLayout } from "../layout/combat-layout";
+import { createCombatLayout, ENEMY_HEALTH_BAR_OFFSET_Y } from "../layout/combat-layout";
 import { persistCombatRunTransition } from "../run/persist-terminal-run";
 import { MENU_SETTINGS_REGISTRY_KEYS } from "./menu-settings";
 import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
 
-const resolveEnemyMaxShield = (
-  enemy: CombatEnemyInitialization,
-): number =>
+const resolveEnemyMaxShield = (enemy: CombatEnemyInitialization): number =>
   enemy.actions.reduce(
-    (maximum, action) => Math.max(maximum, action.shieldAmount ?? 0),
+    (maximum, action) => (action.kind === "defense" ? Math.max(maximum, action.shieldAmount ?? 0) : maximum),
     0,
   );
 
@@ -71,8 +80,10 @@ export class CombatFoundationScene extends Phaser.Scene {
   private playerRestTextureKey?: string;
   private playerAttackReset?: Phaser.Time.TimerEvent;
   private playerAttackTween?: Phaser.Tweens.Tween;
+  private playerEffectHud?: ActorEffectHud;
   private enemyPlaceholders: Phaser.GameObjects.Container[] = [];
   private enemyActorImages = new Map<string, Phaser.GameObjects.Image>();
+  private enemyEffectHuds = new Map<string, ActorEffectHud>();
   private enemyTargetMarkers = new Map<string, Phaser.GameObjects.Rectangle>();
   private enemyHealthBars = new Map<string, EnemyHealthBar>();
   private displayedEnemyHp = new Map<string, number>();
@@ -92,6 +103,8 @@ export class CombatFoundationScene extends Phaser.Scene {
   private pauseOverlay?: Phaser.GameObjects.Text;
   private commandHud!: CommandHud;
   private comboText!: Phaser.GameObjects.Text;
+  private comboPulseTween?: Phaser.Tweens.Tween;
+  private lastComboCount = 0;
   private skillStarter?: SkillCommandStarter;
   private commandInputBuffer!: CommandInputBuffer;
   private commandInputRecovery!: CommandInputRecoveryController;
@@ -99,6 +112,7 @@ export class CombatFoundationScene extends Phaser.Scene {
   private commandInputCleanup?: () => void;
   private commandCompletionCleanup?: () => void;
   private commandStatusCleanup?: () => void;
+  private commandSubmitCleanup?: () => void;
   private combatInitialization?: CombatEncounterInitialization;
   private runState?: Readonly<RunState>;
   private mapNode?: GeneratedMapNode;
@@ -125,7 +139,12 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.playerRestTextureKey = undefined;
     this.playerAttackReset = undefined;
     this.playerAttackTween = undefined;
+    this.playerEffectHud = undefined;
+    this.skillStarter = undefined;
+    this.comboPulseTween = undefined;
+    this.lastComboCount = 0;
     this.enemyActorImages.clear();
+    this.enemyEffectHuds.clear();
     this.enemyTargetMarkers.clear();
     this.enemyHealthBars.clear();
     this.displayedEnemyHp.clear();
@@ -170,6 +189,9 @@ export class CombatFoundationScene extends Phaser.Scene {
     if (playerActor instanceof Phaser.GameObjects.Image) {
       this.playerActorImage = playerActor;
     }
+    this.playerEffectHud = new ActorEffectHud(this);
+    this.playerEffectHud.setPosition(0, -184);
+    this.playerPlaceholder.add(this.playerEffectHud.container);
     this.enemyPlaceholders = initialization.enemies.map((enemy) => {
       const placeholder = this.createActorPlaceholder(enemy.name, 0x8d4b52, resolveEnemyTextureKey(enemy.enemyId));
       const actor = placeholder.getAt(0);
@@ -179,11 +201,23 @@ export class CombatFoundationScene extends Phaser.Scene {
       const healthBar = new EnemyHealthBar(this, enemy.hp, enemy.hp, {
         maxShield: resolveEnemyMaxShield(enemy),
       });
-      healthBar.container.setPosition(0, -158);
+      // Keep each enemy's attack name and telegraph attached to its HP bar.
+      healthBar.container.setPosition(0, ENEMY_HEALTH_BAR_OFFSET_Y);
       placeholder.add(healthBar.container);
       this.enemyHealthBars.set(enemy.instanceId, healthBar);
+      const effectHud = new ActorEffectHud(this);
+      effectHud.setPosition(0, -198);
+      placeholder.add(effectHud.container);
+      this.enemyEffectHuds.set(enemy.instanceId, effectHud);
       const marker = this.add
-        .rectangle(0, 0, 200, 250, 0x000000, 0)
+        .rectangle(
+          0,
+          ENEMY_HEALTH_BAR_OFFSET_Y + (ENEMY_HEALTH_BAR_REGION_TOP + ENEMY_HEALTH_BAR_REGION_BOTTOM) / 2,
+          ENEMY_HEALTH_BAR_PANEL_WIDTH + 10,
+          ENEMY_HEALTH_BAR_REGION_BOTTOM - ENEMY_HEALTH_BAR_REGION_TOP + 10,
+          0x000000,
+          0,
+        )
         .setStrokeStyle(3, 0xffd166, 0.95)
         .setVisible(false);
       placeholder.add(marker);
@@ -245,7 +279,6 @@ export class CombatFoundationScene extends Phaser.Scene {
     }
     this.enemyAttackGauge = new EnemyAttackGauge(this, this.enemyAttackTimeline.snapshot);
     this.uiLayer.add(this.enemyAttackGauge.container);
-
     const availableSkills =
       initialization.player.skills.length > 0
         ? initialization.player.skills.map((skill) => defineSkill(skill))
@@ -253,13 +286,17 @@ export class CombatFoundationScene extends Phaser.Scene {
     const initialSkill = availableSkills[0] ?? MAGIC_SHIELD;
     this.commandInputBuffer = new CommandInputBuffer(availableSkills.map((skill) => skill.command));
     this.commandInputRecovery = new CommandInputRecoveryController(this.commandInputBuffer);
-    this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
+    this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot, {
+      skills: availableSkills,
+      resolveApCost: (skill) => this.apEffects.resolveSkillCost(skill as SkillDefinition),
+      resolveDamage: (skill) => this.resolveExpectedSkillDamage(skill as SkillDefinition),
+    });
     this.uiLayer.add(this.commandHud.container);
     this.comboText = this.add
       .text(0, 0, "x0 +0%", {
         color: "#fcd34d",
         fontFamily: "Galmuri9, monospace",
-        fontSize: "18px",
+        fontSize: "36px",
         fontStyle: "bold",
         stroke: "#101827",
         strokeThickness: 4,
@@ -279,6 +316,12 @@ export class CombatFoundationScene extends Phaser.Scene {
         ...(this.bossNode === undefined ? {} : { bossNode: this.bossNode }),
       });
       this.playerCombatRuntime.start();
+      // The runtime grants an enemy defense shield while starting its first
+      // windup. Sync the HUD immediately so the initial defense state is
+      // visible before the first Phaser update tick.
+      this.displayedEnemyShield = this.playerCombatRuntime.enemyShield;
+      this.updateEnemyHealth(this.playerCombatRuntime.enemyHp, this.enemyAttackTimeline.snapshot);
+      this.refreshTargetPresentation();
     }
 
     const skillStarter = new SkillCommandStarter({
@@ -310,12 +353,17 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandStatusCleanup = this.commandInputBuffer.onStatusChanged(({ snapshot }) => {
       if (snapshot.status === "complete") {
         this.feedback?.trigger("command-success");
-      } else if (snapshot.status === "incorrect") {
+      }
+    });
+    this.commandSubmitCleanup = this.commandInputBuffer.onSubmitted(({ snapshot }) => {
+      if (snapshot.input.length === 0) return;
+      const combo = this.skillStarter?.comboSnapshot;
+      if (snapshot.status !== "complete" || combo?.lastBreakReason === "incorrect-input") {
         this.apEffects.onCommandFailed();
         this.feedback?.trigger("command-failure");
         playComboBreakSound();
-        this.updateComboDisplay(this.skillStarter?.comboSnapshot);
       }
+      this.updateComboDisplay(combo);
     });
     this.createCommandInputElement();
     this.createPauseHandling();
@@ -330,6 +378,8 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.DESTROY, this.releasePauseHandling, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseTargetHandling, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseTargetHandling, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseActorEffectHuds, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseActorEffectHuds, this);
     this.applyLayout(this.scale.gameSize.width, this.scale.gameSize.height);
   }
 
@@ -345,7 +395,14 @@ export class CombatFoundationScene extends Phaser.Scene {
       const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
       this.enemyAttackGauge.update(enemyUpdate.snapshot);
       this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
+      this.playerEffectHud?.update(
+        createActorEffectPresentations({
+          apEffects: this.actionPoints.snapshot.timedEffects,
+          atMs: enemyUpdate.snapshot.elapsedMs,
+        }),
+      );
       this.updateEnemyVisuals(Object.fromEntries(this.displayedEnemyHp), safeDelta, enemyUpdate.snapshot);
+      this.updateEnemyHealth(Object.fromEntries(this.displayedEnemyHp), enemyUpdate.snapshot);
       return;
     }
 
@@ -357,16 +414,13 @@ export class CombatFoundationScene extends Phaser.Scene {
       shield: playerUpdate.playerShield,
     });
     this.displayedEnemyShield = playerUpdate.enemyShield;
+    this.refreshActorEffects(playerUpdate);
     this.updateEnemyVisuals(playerUpdate.enemyHp, safeDelta, playerUpdate.enemyTimeline.snapshot);
     this.targeting?.refresh();
     this.refreshTargetPresentation();
-    this.updateEnemyHealth(playerUpdate.enemyHp);
+    this.updateEnemyHealth(playerUpdate.enemyHp, playerUpdate.enemyTimeline.snapshot);
 
     if (previousPlayerHp !== undefined && playerUpdate.playerHp < previousPlayerHp) {
-      this.skillStarter?.breakCombo("player-hit");
-      this.updateComboDisplay(this.skillStarter?.comboSnapshot);
-      this.feedback?.trigger("command-failure");
-      playComboBreakSound();
       this.feedback?.trigger("player-hit");
     }
 
@@ -378,6 +432,31 @@ export class CombatFoundationScene extends Phaser.Scene {
       const outcome = this.combat.snapshot.status;
       this.feedback?.trigger(outcome === "victory" ? "victory" : "defeat");
       this.startCombatRoute(playerUpdate.route.sceneKey, playerUpdate.route.payload, outcome === "victory" ? 1_500 : 0);
+    }
+  }
+
+  private refreshActorEffects(update: ReturnType<PlayerCombatRuntime["advance"]>): void {
+    const atMs = update.enemyTimeline.snapshot.elapsedMs;
+    this.playerEffectHud?.update(
+      createActorEffectPresentations({
+        statuses: update.playerStatuses,
+        shields: update.playerShields,
+        apEffects: this.actionPoints.snapshot.timedEffects,
+        atMs,
+      }),
+    );
+
+    for (const enemy of this.combatInitialization?.enemies ?? []) {
+      const alive = (update.enemyHp[enemy.instanceId] ?? 0) > 0;
+      this.enemyEffectHuds.get(enemy.instanceId)?.update(
+        alive
+          ? createActorEffectPresentations({
+              statuses: update.enemyStatuses[enemy.instanceId] ?? [],
+              shields: update.enemyShields[enemy.instanceId] ?? [],
+              atMs,
+            })
+          : [],
+      );
     }
   }
 
@@ -418,14 +497,57 @@ export class CombatFoundationScene extends Phaser.Scene {
       }
     }
   }
-  private updateEnemyHealth(enemyHp: Readonly<Record<string, number>>): void {
+  private updateEnemyHealth(
+    enemyHp: Readonly<Record<string, number>>,
+    timeline: Readonly<EnemyAttackTimeline["snapshot"]> = this.enemyAttackTimeline.snapshot,
+  ): void {
     for (const enemy of this.combatInitialization?.enemies ?? []) {
-      this.enemyHealthBars.get(enemy.instanceId)?.update(enemyHp[enemy.instanceId] ?? enemy.hp, enemy.hp, {
+      const activeAttack = timeline.attacks.find(
+        (attack) => attack.enemyId === enemy.instanceId && attack.phase !== "resolved",
+      );
+      const telegraphProgress =
+        activeAttack?.phase === "windup" ? activeAttack.phaseProgress : activeAttack === undefined ? 0 : 1;
+      const healthBar = this.enemyHealthBars.get(enemy.instanceId);
+      healthBar?.update(enemyHp[enemy.instanceId] ?? enemy.hp, enemy.hp, {
         shield: this.displayedEnemyShield[enemy.instanceId] ?? 0,
         maxShield: resolveEnemyMaxShield(enemy),
         ...(this.targeting?.targetId === undefined ? {} : { targeted: this.targeting.targetId === enemy.instanceId }),
       });
+      healthBar?.updateTelegraph(activeAttack?.attackName, activeAttack?.attackType ?? null, telegraphProgress);
     }
+  }
+
+  private resolveExpectedSkillDamage(skill: SkillDefinition): number | null {
+    const damageEffect = skill.effects.find((effect) => effect.type === "damage");
+    if (damageEffect === undefined) return null;
+
+    const weaponAttack =
+      this.combatInitialization?.player.equipmentIds.reduce((total, equipmentId) => {
+        const equipment = EQUIPMENT_CONFIGS.find(({ id }) => id === equipmentId);
+        return total + (equipment?.baseAttack ?? 0);
+      }, 0) ?? 0;
+    const targetId = this.targeting?.targetId;
+    const target = this.combatInitialization?.enemies.find((enemy) => enemy.instanceId === targetId);
+    const targetHp = target === undefined ? 1 : (this.displayedEnemyHp.get(target.instanceId) ?? target.hp) / target.hp;
+    const hasTwoHandedWeapon =
+      this.combatInitialization?.player.equipmentIds.some(
+        (equipmentId) => EQUIPMENT_CONFIGS.find(({ id }) => id === equipmentId)?.kind === "greatsword",
+      ) ?? false;
+    const relicDamage = calculateRelicDamage({
+      weaponAttack: Math.max(1, weaponAttack),
+      skillCoefficient: damageEffect.coefficient,
+      skillCategory: skill.category,
+      ownedRelicIds: new Set(this.runState?.build.equippedRelicIds ?? []),
+      targetHpRatio: targetHp,
+      enemyCount: this.combatInitialization?.enemies.length ?? 1,
+      playerHpRatio:
+        this.runState === undefined ? 1 : this.runState.character.currentHp / this.runState.character.maxHp,
+      hasTwoHandedWeapon,
+      recoveryMs: skill.recoveryMs,
+      floor: this.combatInitialization?.floor ?? 0,
+    });
+    const comboMultiplier = this.skillStarter?.comboSnapshot.multiplier ?? 1;
+    return Math.max(1, Math.round(relicDamage.damage * comboMultiplier));
   }
 
   private createTargetHandling(): void {
@@ -438,10 +560,16 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.targeting?.dispose();
   }
 
+  private releaseActorEffectHuds(): void {
+    this.playerEffectHud?.container.destroy(true);
+    this.playerEffectHud = undefined;
+    for (const effectHud of this.enemyEffectHuds.values()) effectHud.container.destroy(true);
+    this.enemyEffectHuds.clear();
+  }
+
   /** 지정한 적에게만 조준 테두리를 보여 주고 나머지는 살짝 흐리게 둡니다. */
   private refreshTargetPresentation(): void {
     const targetId = this.targeting?.targetId;
-    this.enemyAttackGauge?.setTargetedEnemy(targetId);
     for (const [enemyId, marker] of this.enemyTargetMarkers) {
       const alive = (this.displayedEnemyHp.get(enemyId) ?? 0) > 0;
       marker.setVisible(alive && enemyId === targetId);
@@ -522,8 +650,11 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.combatHud.setSize(layout.hudReservation.width, layout.hudReservation.height);
     this.enemyAttackGauge.setPosition(layout.enemyAttackGaugeReservation.x, layout.enemyAttackGaugeReservation.y);
     this.enemyAttackGauge.setSize(layout.enemyAttackGaugeReservation.width, layout.enemyAttackGaugeReservation.height);
-    this.commandHud.setPosition(layout.commandHudReservation.x, layout.commandHudReservation.y);
     this.commandHud.setSize(layout.commandHudReservation.width, layout.commandHudReservation.height);
+    this.commandHud.setPosition(
+      layout.commandHudReservation.x,
+      height - layout.safeInset - this.commandHud.getHeight(),
+    );
     this.comboText.setPosition(width - 24, height - 24).setVisible(this.skillStarter !== undefined);
     this.pauseOverlay?.setPosition(width / 2, height / 2);
   }
@@ -531,7 +662,27 @@ export class CombatFoundationScene extends Phaser.Scene {
   private updateComboDisplay(snapshot: ComboSnapshot | undefined): void {
     if (snapshot === undefined) return;
     const bonusPercent = Math.round((snapshot.multiplier - 1) * 100);
+    const minimumScale = 1 + Math.min(0.45, snapshot.count * 0.03);
     this.comboText.setText(`x${snapshot.count} +${bonusPercent}%`).setColor(snapshot.count > 0 ? "#fcd34d" : "#94a3b8");
+    if (snapshot.count === 0) {
+      this.comboPulseTween?.stop();
+      this.comboPulseTween = undefined;
+      this.comboText.setScale(1);
+    } else if (snapshot.count > this.lastComboCount) {
+      this.comboPulseTween?.stop();
+      this.comboText.setScale(minimumScale);
+      this.comboPulseTween = this.tweens.add({
+        targets: this.comboText,
+        scaleX: minimumScale * 1.12,
+        scaleY: minimumScale * 1.12,
+        duration: 120,
+        yoyo: true,
+        ease: "Sine.Out",
+      });
+    } else {
+      this.comboText.setScale(minimumScale);
+    }
+    this.lastComboCount = snapshot.count;
   }
 
   private createCommandInputElement(): void {
@@ -594,6 +745,8 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandCompletionCleanup = undefined;
     this.commandStatusCleanup?.();
     this.commandStatusCleanup = undefined;
+    this.commandSubmitCleanup?.();
+    this.commandSubmitCleanup = undefined;
     this.isComposing = false;
   }
 
