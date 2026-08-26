@@ -7,6 +7,7 @@ import {
   continueRewardSelection,
   createRewardSelectionViewState,
   selectReward,
+  skipRewardSelection,
   type RewardCandidate,
 } from "../src/game/rewards/reward-selection-view-state";
 
@@ -75,6 +76,13 @@ describe("reward selection view state", () => {
       "Reward candidate not found: unknown-reward",
     );
   });
+
+  test("can complete without selecting a reward", () => {
+    expect(skipRewardSelection(createViewState())).toMatchObject({
+      selectedRewardId: null,
+      status: "continued",
+    });
+  });
 });
 
 describe("reward selection adapter", () => {
@@ -114,5 +122,34 @@ describe("reward selection adapter", () => {
       inventory: ["ember-charm"],
       nextStep: "map",
     });
+  });
+
+  test("skips without applying a candidate and can still advance run state", () => {
+    const initialRunState: RewardSelectionRunState = {
+      inventory: ["owned-item"],
+      selectedRewardIds: [],
+      nextStep: null,
+    };
+
+    const adapter = createRewardSelectionAdapter({
+      initialViewState: createViewState(),
+      initialRunState,
+      applySelection: (runState, reward) => ({
+        ...runState,
+        inventory: [...runState.inventory, reward.id],
+      }),
+      applySkip: (runState) => ({ ...runState, nextStep: "map" }),
+    });
+
+    expect(adapter.skip()).toMatchObject({
+      selectedRewardId: null,
+      status: "continued",
+    });
+    expect(adapter.getRunState()).toEqual({
+      inventory: ["owned-item"],
+      selectedRewardIds: [],
+      nextStep: "map",
+    });
+    expect(() => adapter.skip()).toThrow("already complete");
   });
 });
