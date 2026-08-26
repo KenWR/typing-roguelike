@@ -17,6 +17,8 @@ describe("map generation", () => {
 
 		expect(map.rounds).toHaveLength(MAP_ROUND_COUNT);
 		expect(map.rounds.slice(0, -1).every(({ nodes }) => nodes.length <= MAX_MAP_CHOICES)).toBe(true);
+		expect(map.rounds[8]?.nodes).toHaveLength(1);
+		expect(map.rounds[8]?.nodes[0]?.type).toBe("rest");
 		expect(map.rounds.at(-1)?.nodes).toHaveLength(1);
 		const nodes = map.rounds.flatMap(({ nodes: roundNodes }) => roundNodes);
 		expect(new Set(nodes.map(({ key }) => key)).size).toBe(nodes.length);
@@ -32,7 +34,8 @@ describe("map generation", () => {
 
 		expect(firstRound).toHaveLength(3);
 		expect(firstRound.every(({ type }) => type !== "shop")).toBe(true);
-		expect(recoveryRound.every(({ type }) => type === "rest")).toBe(true);
+		expect(recoveryRound).toHaveLength(1);
+		expect(recoveryRound[0]?.type).toBe("rest");
 		expect(bossRound).toHaveLength(1);
 		expect(bossRound[0]?.type).toBe("boss");
 		expect(allNodes.some(({ type }) => type === "reward")).toBe(false);
