@@ -5,6 +5,7 @@ export type EnemyHealthBarState = Readonly<{
   maxHp: number;
   healthRatio: number;
   shield: number;
+  maxShield: number;
   shieldRatio: number;
   targeted: boolean;
   defeated: boolean;
@@ -12,18 +13,24 @@ export type EnemyHealthBarState = Readonly<{
 
 export type EnemyHealthBarOptions = Readonly<{
   shield?: number;
+  maxShield?: number;
   targeted?: boolean;
 }>;
 
-const PANEL_WIDTH = 220;
+export const ENEMY_HEALTH_BAR_PANEL_WIDTH = 220;
 const PANEL_HEIGHT = 40;
-const TRACK_WIDTH = 190;
+export const ENEMY_HEALTH_BAR_TRACK_WIDTH = 190;
 const TRACK_HEIGHT = 11;
-const TRACK_X = -TRACK_WIDTH / 2;
+const TRACK_X = -ENEMY_HEALTH_BAR_TRACK_WIDTH / 2;
 const TRACK_Y = -7;
 
 const clamp = (value: number, maximum: number): number =>
   Math.min(Math.max(0, value), Math.max(0, maximum));
+
+export const formatEnemyHealthBarLabel = (
+  state: Pick<EnemyHealthBarState, "currentHp" | "maxHp" | "shield" | "maxShield">,
+): string =>
+  `HP ${state.currentHp}/${state.maxHp}   SHD ${state.shield}/${state.maxShield}`;
 
 const safeNumber = (value: number | undefined, fallback: number): number =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -35,7 +42,15 @@ export const createEnemyHealthBarState = (
 ): EnemyHealthBarState => {
   const safeMaxHp = Math.max(0, safeNumber(maxHp, 0));
   const safeCurrentHp = clamp(safeNumber(currentHp, 0), safeMaxHp);
-  const shield = Math.max(0, Math.round(safeNumber(options.shield, 0)));
+  const requestedShield = Math.max(
+    0,
+    Math.round(safeNumber(options.shield, 0)),
+  );
+  const maxShield = Math.max(
+    requestedShield,
+    Math.round(safeNumber(options.maxShield, requestedShield)),
+  );
+  const shield = Math.min(requestedShield, maxShield);
   const healthRatio = safeMaxHp > 0 ? safeCurrentHp / safeMaxHp : 0;
 
   return {
@@ -43,6 +58,7 @@ export const createEnemyHealthBarState = (
     maxHp: safeMaxHp,
     healthRatio,
     shield,
+    maxShield,
     shieldRatio:
       safeMaxHp > 0
         ? Math.min(shield / safeMaxHp, Math.max(0, 1 - healthRatio))
@@ -71,10 +87,10 @@ export class EnemyHealthBar {
     this.state = createEnemyHealthBarState(currentHp, maxHp, options);
     this.container = scene.add.container(0, 0);
     this.panel = scene.add
-      .rectangle(0, 0, PANEL_WIDTH, PANEL_HEIGHT, 0x24151c, 0.94)
+      .rectangle(0, 0, ENEMY_HEALTH_BAR_PANEL_WIDTH, PANEL_HEIGHT, 0x24151c, 0.94)
       .setStrokeStyle(2, 0x64748b, 0.8);
     this.track = scene.add
-      .rectangle(TRACK_X, TRACK_Y, TRACK_WIDTH, TRACK_HEIGHT, 0x0f172a, 0.95)
+      .rectangle(TRACK_X, TRACK_Y, ENEMY_HEALTH_BAR_TRACK_WIDTH, TRACK_HEIGHT, 0x0f172a, 0.95)
       .setOrigin(0, 0.5);
     this.hpFill = scene.add
       .rectangle(TRACK_X, TRACK_Y, 0, TRACK_HEIGHT, 0xe35d6a)
@@ -98,7 +114,7 @@ export class EnemyHealthBar {
       this.shieldFill,
       this.value,
     ]);
-    this.container.setSize(PANEL_WIDTH, PANEL_HEIGHT);
+    this.container.setSize(ENEMY_HEALTH_BAR_PANEL_WIDTH, PANEL_HEIGHT);
     this.refresh();
   }
 
@@ -123,12 +139,12 @@ export class EnemyHealthBar {
 
   private refresh(): void {
     const { healthRatio, shieldRatio } = this.state;
-    this.hpFill.setSize(TRACK_WIDTH * healthRatio, TRACK_HEIGHT);
+    this.hpFill.setSize(ENEMY_HEALTH_BAR_TRACK_WIDTH * healthRatio, TRACK_HEIGHT);
     this.shieldFill
       .setVisible(shieldRatio > 0)
-      .setPosition(TRACK_X + TRACK_WIDTH * healthRatio, TRACK_Y)
-      .setSize(TRACK_WIDTH * shieldRatio, TRACK_HEIGHT);
-    this.value.setText(`HP ${this.state.currentHp} / ${this.state.maxHp}`);
+      .setPosition(TRACK_X + ENEMY_HEALTH_BAR_TRACK_WIDTH * healthRatio, TRACK_Y)
+      .setSize(ENEMY_HEALTH_BAR_TRACK_WIDTH * shieldRatio, TRACK_HEIGHT);
+    this.value.setText(formatEnemyHealthBarLabel(this.state));
     this.panel
       .setStrokeStyle(
         2,
