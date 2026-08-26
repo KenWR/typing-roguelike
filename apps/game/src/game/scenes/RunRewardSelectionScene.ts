@@ -2,6 +2,10 @@ import Phaser from "phaser";
 import type { RunState } from "@typing-roguelike/shared";
 import type { RewardSelectionAdapter } from "../rewards/reward-selection-adapter";
 import { createRunRewardSceneEntry } from "../rewards/run-reward-scene-entry";
+import {
+  createRewardTransitionPointerGuard,
+  type RewardTransitionPointerGuard,
+} from "../rewards/reward-transition-pointer-guard";
 import { runSession } from "../run/run-session";
 import {
   RewardSelectionScene,
@@ -49,12 +53,15 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
   private runAdapter?: RewardSelectionAdapter<RunState>;
   private routeData: RunRewardSelectionSceneData = {};
   private cardHitAreas: Phaser.GameObjects.Rectangle[] = [];
-  private pointerSelectionBlocked = false;
+  private transitionPointerGuard: RewardTransitionPointerGuard =
+    createRewardTransitionPointerGuard();
 
   override init(data: RunRewardSelectionSceneData = {}): void {
     this.routeData = data;
     this.cardHitAreas = [];
-    this.pointerSelectionBlocked = data.suppressPointerUntilRelease === true;
+    this.transitionPointerGuard = createRewardTransitionPointerGuard(
+      data.suppressPointerUntilRelease === true,
+    );
 
     if (data.adapter !== undefined) {
       const adapter = data.runState === undefined
@@ -100,7 +107,7 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
     if (this.runAdapter === undefined) return;
 
     this.installCardInputLayer();
-    if (this.pointerSelectionBlocked) {
+    if (!this.transitionPointerGuard.acceptsPointerDown()) {
       this.input.once(Phaser.Input.Events.POINTER_UP, this.releaseTransitionPointer, this);
     }
     this.routeData = { ...this.routeData, suppressPointerUntilRelease: false };
@@ -119,7 +126,7 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
         .setDepth(80)
         .setInteractive({ useHandCursor: true });
       hitArea.on(Phaser.Input.Events.POINTER_DOWN, () => {
-        if (this.pointerSelectionBlocked) return;
+        if (!this.transitionPointerGuard.acceptsPointerDown()) return;
         this.selectReward(candidate.id);
       });
       return hitArea;
@@ -128,7 +135,7 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
   }
 
   private releaseTransitionPointer(): void {
-    this.pointerSelectionBlocked = false;
+    this.transitionPointerGuard.release();
   }
 
   private layoutCardHitAreas(): void {
