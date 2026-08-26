@@ -9,7 +9,7 @@ const restNode = generateNodeChoices(17, 9, path)[0]!;
 const bossNode = generateNodeChoices(17, 10, [...path, restNode.choice])[0]!;
 
 describe("final boss progression", () => {
-	test("unlocks only the connected boss after completing the required rest node", () => {
+	test("unlocks the shared boss after completing any connected recovery branch", () => {
 		const runState = createInitialRunState({ seed: 17 });
 		const map = beginMapNode({
 			...runState.map,
@@ -29,15 +29,15 @@ describe("final boss progression", () => {
 		expect(Object.values(result.state.nodeStatuses).filter((status) => status === "available")).toHaveLength(1);
 	});
 
-	test("rejects an unrelated or non-rest path before the boss", () => {
+	test("rejects an unconnected or non-rest path before the boss", () => {
 		const runState = createInitialRunState({ seed: 17 });
 		const startedMap = {
 			...runState.map,
 			nodeStatuses: { [restNode.key]: "in_progress" as const },
 		};
-		const unrelatedBoss = { ...bossNode, parentKey: "other" };
+		const unconnectedRest = { ...restNode, nextNodeKeys: [] };
 
-		expect(() => unlockFinalBoss(startedMap, restNode, unrelatedBoss)).toThrow("not connected");
+		expect(() => unlockFinalBoss(startedMap, unconnectedRest, bossNode)).toThrow("not connected");
 		expect(() => unlockFinalBoss(startedMap, { ...restNode, type: "combat" }, bossNode)).toThrow("required rest");
 	});
 
