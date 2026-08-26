@@ -12,8 +12,10 @@ const MAP_VIEW_TOP = 292;
 const MAP_VIEW_BOTTOM_MARGIN = 24;
 const MAP_ROW_GAP = 150;
 const MAP_BOSS_Y = 70;
-const MAP_NODE_WIDTH = 154;
+const MAP_NODE_WIDTH = 130;
 const MAP_NODE_HEIGHT = 86;
+const MAP_SIDE_GUTTER = 340;
+const MAP_LANE_PADDING = 16;
 
 const NODE_FILL: Record<string, number> = {
   locked: 0x374151,
@@ -48,10 +50,12 @@ export class InteractiveMapScene extends MapScene {
     const { width, height } = this.scale.gameSize;
     const view = createMapHudView(activeRun);
     const centerX = width / 2;
-    const laneXs = [centerX - 205, centerX, centerX + 205];
-    const mapLeft = Math.max(340, centerX - 345);
-    const mapRight = Math.min(width - 340, centerX + 345);
-    const mapWidth = Math.max(500, mapRight - mapLeft);
+    const mapLeft = Math.max(MAP_SIDE_GUTTER, centerX - 310);
+    const mapRight = Math.min(width - MAP_SIDE_GUTTER, centerX + 310);
+    const mapWidth = Math.max(360, mapRight - mapLeft);
+    const laneLeft = mapLeft + MAP_NODE_WIDTH / 2 + MAP_LANE_PADDING;
+    const laneRight = mapRight - MAP_NODE_WIDTH / 2 - MAP_LANE_PADDING;
+    const laneXs = [laneLeft, (laneLeft + laneRight) / 2, laneRight];
     const mapBottom = height - MAP_VIEW_BOTTOM_MARGIN;
     const floorY = (round: number): number => MAP_BOSS_Y + (10 - round) * MAP_ROW_GAP;
 
@@ -62,7 +66,7 @@ export class InteractiveMapScene extends MapScene {
 
     const maskShape = this.make.graphics({ x: 0, y: 0, add: false });
     maskShape.fillStyle(0xffffff);
-    maskShape.fillRect(centerX - mapWidth / 2, MAP_VIEW_TOP, mapWidth, mapBottom - MAP_VIEW_TOP);
+    maskShape.fillRect(mapLeft, MAP_VIEW_TOP, mapWidth, mapBottom - MAP_VIEW_TOP);
     const mapMask = maskShape.createGeometryMask();
 
     const mapContainer = this.add.container(0, 0).setDepth(90).setMask(mapMask);
@@ -73,7 +77,7 @@ export class InteractiveMapScene extends MapScene {
       const y = floorY(node.round);
       for (const nextId of node.nextNodeIds) {
         const next = nodeById.get(nextId);
-        if (next === undefined) continue;
+        if (next === undefined || next.round <= node.round) continue;
         const nextX = laneXs[next.choice - 1] ?? centerX;
         const nextY = floorY(next.round);
         const line = this.add.line(0, 0, x, y - MAP_NODE_HEIGHT / 2, nextX, nextY + MAP_NODE_HEIGHT / 2, 0x4b5563)
@@ -93,7 +97,7 @@ export class InteractiveMapScene extends MapScene {
       const typeText = this.add
         .text(x, y - 17, `${node.round}F · ${node.type.toUpperCase()}`, {
           fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
-          fontSize: node.type === "boss" ? "20px" : "17px",
+          fontSize: node.type === "boss" ? "18px" : "15px",
           color: "#ffffff",
           align: "center",
         })
