@@ -1,6 +1,5 @@
 import {
   completeMapNode,
-  generateEquipmentRewardCandidates,
   type EquipmentRewardTier,
   type GeneratedMapNode,
   type RunState,
@@ -109,13 +108,13 @@ export const finalizeCombatOutcome = ({
     map: completion.map,
     runCurrency: runState.runCurrency + goldReward,
   };
-  const candidates = generateEquipmentRewardCandidates({
-    tier: rewardTier,
-    count: rewardCount,
+  const rewardFlow = createRunRewardSelectionFlow({
+    runState: updatedRunState,
     random: rewardRandom,
-    excludedEquipmentIds: updatedRunState.inventory.itemInstances,
+    equipmentTier: rewardTier,
+    rewardCount,
   });
-
+  const candidates = rewardFlow.adapter.getViewState().candidates;
   if (candidates.length === 0) {
     return {
       applied: true,
@@ -125,11 +124,6 @@ export const finalizeCombatOutcome = ({
     };
   }
 
-  const rewardFlow = createRunRewardSelectionFlow({
-    runState: updatedRunState,
-    equipmentIds: candidates.map(({ id }) => id),
-  });
-
   return {
     applied: true,
     runState: updatedRunState,
@@ -138,7 +132,12 @@ export const finalizeCombatOutcome = ({
       runState: updatedRunState,
       adapter: rewardFlow.adapter,
       nextSceneKey: rewardFlow.nextSceneKey,
-      rewardEquipmentIds: candidates.map(({ id }) => id),
+      rewardEquipmentIds: candidates
+        .filter((candidate) => candidate.kind === "weapon")
+        .map(({ id }) => id),
+      rewardRelicIds: candidates
+        .filter((candidate) => candidate.kind === "relic")
+        .map(({ id }) => id),
       rewardSource: "combat-victory",
       goldReward,
     },

@@ -82,10 +82,19 @@ const resumeFromCheckpoint = (
   }
 
   if (checkpoint.sceneKey === SCENE_KEYS.reward) {
-    if ((checkpoint.rewardEquipmentIds?.length ?? 0) === 0) return null;
+    if (
+      (checkpoint.rewardEquipmentIds?.length ?? 0) +
+        (checkpoint.rewardRelicIds?.length ?? 0) ===
+      0
+    ) return null;
     const rewardFlow = createRunRewardSelectionFlow({
       runState: runState as RunState,
-      equipmentIds: checkpoint.rewardEquipmentIds,
+      ...(checkpoint.rewardEquipmentIds === undefined
+        ? {}
+        : { equipmentIds: checkpoint.rewardEquipmentIds }),
+      ...(checkpoint.rewardRelicIds === undefined
+        ? {}
+        : { relicIds: checkpoint.rewardRelicIds }),
     });
     return {
       sceneKey: SCENE_KEYS.reward,

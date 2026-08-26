@@ -116,8 +116,15 @@ const createSeededRandom = (seed: number): (() => number) => {
 const getRewardCandidates = (
   runState: Readonly<RunState>,
   nodeId: string | undefined,
+  randomOverride?: () => number,
+  equipmentTier: EquipmentRewardTier = "normal",
+  rewardCount = REWARD_CANDIDATE_COUNT,
 ): readonly RewardCandidate[] => {
-  const random = createSeededRandom(
+  if (!Number.isSafeInteger(rewardCount) || rewardCount < 0) {
+    throw new RangeError(`Reward candidate count must be a non-negative integer: ${rewardCount}`);
+  }
+  const candidateCount = Math.max(MIN_RELIC_REWARD_COUNT, rewardCount);
+  const random = randomOverride ?? createSeededRandom(
     runState.map.seed ^ hashString(nodeId ?? runState.map.currentNodeId),
   );
 
@@ -135,7 +142,7 @@ const getRewardCandidates = (
     excludedRingIds: runState.inventory.itemInstances,
   });
   const relics = generateRelicRewardCandidates({
-    count: relicCount,
+    count: MIN_RELIC_REWARD_COUNT,
     random,
     excludedRelicIds: runState.inventory.relicInstances,
   });
@@ -179,23 +186,7 @@ export const applyEquipmentReward = (
   equipmentId: string,
 ): RunState => {
   const equipment = findEquipment(equipmentId);
-  const alreadyOwned = runState.inventory.itemInstances.includes(equipment.id);
-
-  return {
-    ...runState,
-    inventory: {
-      ...runState.inventory,
-      itemInstances: alreadyOwned
-        ? [...runState.inventory.itemInstances]
-        : [...runState.inventory.itemInstances, equipment.id],
-    },
-    loadout: {
-      ...runState.loadout,
-      ...(equipment.slot === "weapon"
-        ? { weaponId: equipment.id }
-        : { subweaponId: equipment.id }),
-    },
-  };
+  return applyEquipmentAcquisition(runState, equipment);
 };
 
 export type RunRewardSelectionFlow = Readonly<{

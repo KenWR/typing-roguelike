@@ -1,5 +1,11 @@
 import Phaser from "phaser";
-import type { Rarity, RunState } from "@typing-roguelike/shared";
+import {
+  EQUIPMENT_BY_ID,
+  type CombatLoadoutMode,
+  type CombatLoadoutOption,
+  type Rarity,
+  type RunState,
+} from "@typing-roguelike/shared";
 import { getRelicIconTextureKey } from "../assets/asset-catalog";
 import { resolveEquipmentIconTextureKey } from "../assets/equipment-icon-assets";
 import {
@@ -42,12 +48,20 @@ const SLOT_LABELS: Readonly<Record<InventoryEquipmentSlot, string>> = {
 
 type InventoryModalCloseHandler = () => void;
 
+export type InventoryModalOptions = Readonly<{
+  combatLoadout?: Readonly<{
+    options: readonly CombatLoadoutOption[];
+    onSelect: (mode: CombatLoadoutMode) => void;
+  }>;
+}>;
+
 export class InventoryModal {
   readonly container: Phaser.GameObjects.Container;
 
   private readonly scene: Phaser.Scene;
   private readonly view: ReturnType<typeof createInventoryView>;
   private readonly onClose: InventoryModalCloseHandler;
+  private readonly combatLoadout?: InventoryModalOptions["combatLoadout"];
   private readonly blocker: Phaser.GameObjects.Rectangle;
   private readonly panel: Phaser.GameObjects.Rectangle;
   private readonly contentBackdrop: Phaser.GameObjects.Rectangle;
@@ -72,10 +86,12 @@ export class InventoryModal {
     scene: Phaser.Scene,
     runState: Readonly<RunState>,
     onClose: InventoryModalCloseHandler,
+    options: InventoryModalOptions = {},
   ) {
     this.scene = scene;
     this.view = createInventoryView(runState);
     this.onClose = onClose;
+    this.combatLoadout = options.combatLoadout;
 
     const width = Math.max(1, scene.scale.gameSize.width || scene.scale.width);
     const height = Math.max(1, scene.scale.gameSize.height || scene.scale.height);
@@ -231,6 +247,14 @@ export class InventoryModal {
     );
 
     this.contentRoot.removeAll(true);
+    const loadoutHeight = this.renderCombatLoadoutSection(
+      0,
+      0,
+      layout.contentWidth,
+      layout.compact,
+    );
+    const sectionGap = loadoutHeight > 0 ? 18 : 0;
+    const equipmentY = loadoutHeight + sectionGap;
     const wide = !layout.compact && layout.contentWidth >= 700;
     const columnGap = 14;
     const equipmentWidth = wide
@@ -241,24 +265,24 @@ export class InventoryModal {
       : layout.contentWidth;
     const equipmentHeight = this.renderEquipmentSection(
       0,
-      0,
+      equipmentY,
       equipmentWidth,
       layout.compact,
     );
 
-    let usedHeight = equipmentHeight;
+    let usedHeight = equipmentY + equipmentHeight;
     if (wide) {
       usedHeight = Math.max(
         usedHeight,
-        this.renderRelicSection(
+        equipmentY + this.renderRelicSection(
           equipmentWidth + columnGap,
-          0,
+          equipmentY,
           relicWidth,
           layout.compact,
         ),
       );
     } else {
-      const relicY = equipmentHeight + 18;
+      const relicY = equipmentY + equipmentHeight + 18;
       usedHeight = this.renderRelicSection(0, relicY, relicWidth, layout.compact);
     }
 
@@ -268,6 +292,79 @@ export class InventoryModal {
       this.maxScroll,
     );
     this.applyScroll();
+  }
+
+  private renderCombatLoadoutSection(
+    x: number,
+    y: number,
+    width: number,
+    compact: boolean,
+  ): number {
+    const selection = this.combatLoadout;
+    if (selection === undefined || selection.options.length === 0) return 0;
+
+    const height = compact ? 126 : 112;
+    const panel = this.scene.add
+      .rectangle(x, y, width, height, 0x14263b, 0.98)
+      .setOrigin(0)
+      .setStrokeStyle(2, 0xf6c85f, 0.9);
+    this.contentRoot.add(panel);
+    this.addText(this.contentRoot, x + 14, y + 10, "전투 장비 선택", {
+      color: "#f8fafc",
+      fontSize: compact ? "14px" : "16px",
+      fontStyle: "bold",
+    });
+    this.addText(
+      this.contentRoot,
+      x + 14,
+      y + (compact ? 34 : 38),
+      "전투에 가져갈 장비 구성을 선택하세요.",
+      { color: "#fcd34d", fontSize: compact ? "9px" : "10px" },
+    );
+
+    const gap = compact ? 8 : 12;
+    const buttonY = compact ? 62 : 68;
+    const buttonHeight = compact ? 52 : 42;
+    const buttonWidth = (width - 28 - gap * (selection.options.length - 1)) /
+      selection.options.length;
+    selection.options.forEach((option, index) => {
+      const button = this.scene.add
+        .rectangle(
+          x + 14 + index * (buttonWidth + gap),
+          y + buttonY,
+          buttonWidth,
+          buttonHeight,
+          0x263449,
+          1,
+        )
+        .setOrigin(0)
+        .setStrokeStyle(1, 0x5eead4, 0.9)
+        .setInteractive({ useHandCursor: true });
+      const weaponName = EQUIPMENT_BY_ID.get(option.weaponId)?.name ?? option.weaponId;
+      const subweaponName = option.subweaponId === null
+        ? "보조무기 없음"
+        : EQUIPMENT_BY_ID.get(option.subweaponId)?.name ?? option.subweaponId;
+      const label = option.mode === "two-handed"
+        ? `양손무기\n${weaponName}`
+        : `한손무기 + 보조무기\n${weaponName} · ${subweaponName}`;
+      const text = this.scene.add.text(
+        button.x + buttonWidth / 2,
+        button.y + buttonHeight / 2,
+        label,
+        {
+          color: "#edf5ff",
+          fontFamily: FONT_FAMILY,
+          fontSize: compact ? "8px" : "10px",
+          align: "center",
+          wordWrap: { width: Math.max(1, buttonWidth - 12) },
+        },
+      ).setOrigin(0.5);
+      button.on(Phaser.Input.Events.POINTER_OVER, () => button.setFillStyle(0x36506c, 1));
+      button.on(Phaser.Input.Events.POINTER_OUT, () => button.setFillStyle(0x263449, 1));
+      button.on(Phaser.Input.Events.POINTER_DOWN, () => selection.onSelect(option.mode));
+      this.contentRoot.add([button, text]);
+    });
+    return height;
   }
 
   scroll(deltaY: number): void {

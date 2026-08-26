@@ -83,6 +83,34 @@ describe("skill impact resolver", () => {
     expect(target.snapshot.health.currentHp).toBe(50);
   });
 
+  test("applies the combo damage multiplier to impact damage", () => {
+    const resolver = new SkillImpactResolver();
+    const { actor, target } = createCombatants();
+    const skill = defineSkill({
+      id: "skill.combo-slash",
+      name: "Combo Slash",
+      command: "연속베기",
+      kind: "attack",
+      category: "basic",
+      apCost: 1,
+      windupMs: 200,
+      recoveryMs: 300,
+      effects: [{ type: "damage", coefficient: 1 }],
+      description: "Combo attack",
+    });
+
+    const result = resolver.resolve({
+      event: impactEvent("action.combo-slash"),
+      skill,
+      actor,
+      target,
+      damageMultiplier: 1.05,
+    });
+
+    expect(result.damageApplied).toBe(53);
+    expect(target.snapshot.health.currentHp).toBe(47);
+  });
+
   test("keeps shield effects out of impact resolution and applies status to the target", () => {
     const resolver = new SkillImpactResolver();
     const { actor, target } = createCombatants();
