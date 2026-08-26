@@ -4,6 +4,10 @@ import { PLAYER_WEAPON_IMAGE_ASSETS } from "./player-visual-assets";
 import { RELIC_CONFIGS } from "@typing-roguelike/shared";
 
 export const ASSET_PATHS = {
+  backgrounds: {
+    main: "/assets/background/메인 화면.png",
+    map: "/assets/background/노드 선택 배경.png",
+  },
   weaponIcons: {
     hud: "/assets/images/weapon_icons_pixel/96",
     detail: "/assets/images/weapon_icons_pixel/192",
@@ -41,13 +45,27 @@ export const COMBAT_IMAGE_ASSETS: readonly {
   ...PLAYER_WEAPON_IMAGE_ASSETS,
 ];
 
+export const SCENE_BACKGROUND_ASSETS: readonly {
+  key: string;
+  path: string;
+}[] = [
+  { key: "background:main", path: ASSET_PATHS.backgrounds.main },
+  { key: "background:map", path: ASSET_PATHS.backgrounds.map },
+];
+
 /** The complete image catalog consumed by the BootScene preload boundary. */
 export const RUNTIME_IMAGE_ASSETS: readonly {
   key: string;
   path: string;
-}[] = [...RELIC_ICON_ASSETS, ...EQUIPMENT_ICON_ASSETS, ...COMBAT_IMAGE_ASSETS];
+}[] = [
+  ...RELIC_ICON_ASSETS,
+  ...COMBAT_IMAGE_ASSETS,
+  ...SCENE_BACKGROUND_ASSETS,
+];
 
 export const TEXTURE_KEYS = {
+  mainBackground: "background:main",
+  mapBackground: "background:map",
   combatBackground: COMBAT_BACKGROUND_ASSET.key,
   missingAsset: "placeholder:missing-asset",
 } as const;

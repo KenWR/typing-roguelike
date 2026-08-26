@@ -69,6 +69,11 @@ describe("combat encounter initializer", () => {
     if (boss.ok) {
       expect(boss.combat.encounterId).toBe("floor-10-boss");
       expect(boss.combat.rewardPolicy).toBe("boss");
+      expect(boss.combat.enemies.map(({ enemyId }) => enemyId)).toEqual([
+        "thousand-beat-chorus",
+        "hook-tentacle",
+        "hook-tentacle",
+      ]);
     }
   });
 
