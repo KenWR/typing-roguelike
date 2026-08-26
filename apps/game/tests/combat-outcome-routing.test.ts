@@ -20,6 +20,7 @@ const createInProgressRun = (currentRound = 1): RunState => {
       ...runState.map,
       currentNodeId: "node-1",
       currentRound,
+      choicePath: Array.from({ length: currentRound - 1 }, () => 1),
       nodeStatuses: {
         "node-1": "in_progress" as const,
         "node-2": "locked" as const,
