@@ -1,177 +1,225 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
-	createInitialRunState,
-	generateNodeChoices,
-	MAP_ROUND_COUNT,
-	START_NODE_KEY,
-	type CompleteRunRequest,
-	type RunState,
+  createInitialRunState,
+  generateNodeChoices,
+  MAP_ROUND_COUNT,
+  START_NODE_KEY,
+  type CheckpointRequest,
+  type CompleteRunRequest,
+  type CreateRunResponse,
+  type RunState,
 } from "@typing-roguelike/shared";
-import { database } from "../config/database.ts";
+import type {
+  ActiveRunRecord,
+  LeaderboardRecord,
+  RunRepository,
+} from "../repositories/run-repository.ts";
+
+export type RunServiceErrorCode =
+  | "ACTIVE_RUN_EXISTS"
+  | "RUN_NOT_FOUND"
+  | "RUN_NOT_ACTIVE"
+  | "STALE_STATE_VERSION"
+  | "NODE_STATE_MISMATCH"
+  | "INVALID_REQUEST";
+
+export class RunServiceError extends Error {
+  public constructor(public readonly code: RunServiceErrorCode) {
+    super(code);
+    this.name = "RunServiceError";
+  }
+}
+
+export interface RunService {
+  createRun(playerId: string, requestedSeed?: number): Promise<CreateRunResponse>;
+  getActiveRun(playerId: string): Promise<ActiveRunRecord | null>;
+  saveCheckpoint(
+    playerId: string,
+    runId: string,
+    request: CheckpointRequest,
+  ): Promise<{ stateVersion: number; savedAt: string; nodeChoices: ReturnType<typeof generateNodeChoices> }>;
+  completeRun(
+    playerId: string,
+    runId: string,
+    input: CompleteRunRequest,
+  ): Promise<{ runId: string; finalizedAt: string }>;
+  getLeaderboard(limit: number): Promise<LeaderboardRecord[]>;
+}
 
 const now = (): string => new Date().toISOString();
 const hashState = (state: RunState): string =>
   createHash("sha256").update(JSON.stringify(state)).digest("hex");
 
-const defaultState = (seed: number): RunState =>
-  createInitialRunState({ seed });
-
 const randomMapSeed = (): number => Math.floor(Math.random() * 2_147_483_647);
 
-export const createRun = (playerId: string, requestedSeed?: number) => {
-  const runId = randomUUID();
-  const timestamp = now();
-  const mapSeed = Number.isSafeInteger(requestedSeed) && requestedSeed !== undefined && requestedSeed >= 0
-    ? requestedSeed
-    : randomMapSeed();
-  const state = defaultState(mapSeed);
-  const stateJson = JSON.stringify(state);
-  const stateHash = hashState(state);
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
-  const transaction = database.transaction(() => {
-    const activeRun = database.prepare(
-      "SELECT id FROM game_runs WHERE anonymous_player_id = ? AND status = 'active'",
-    ).get(playerId) as { id: string } | null;
-    if (activeRun) throw new Error("ACTIVE_RUN_EXISTS");
+const isValidCompleteRequest = (input: CompleteRunRequest | undefined): boolean => {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return false;
 
-    database.prepare(`
-      INSERT INTO game_runs
-        (id, anonymous_player_id, current_node_id, current_floor, state_snapshot,
-         state_version, state_hash, started_at, last_saved_at)
-      VALUES (?, ?, 'start', 1, ?, 1, ?, ?, ?)
-    `).run(runId, playerId, stateJson, stateHash, timestamp, timestamp);
-    database.prepare(`
-      INSERT INTO run_checkpoints
-        (id, run_id, sequence_no, reason, node_id, floor, state_snapshot, state_hash, created_at)
-      VALUES (?, ?, 1, 'run_started', 'start', 1, ?, ?, ?)
-    `).run(randomUUID(), runId, stateJson, stateHash, timestamp);
-  });
-  transaction();
-  return { runId, stateVersion: 1, checkpoint: state, nodeChoices: generateNodeChoices(mapSeed, 1, []) };
+  const validEndReason = ["dead", "cleared", "abandoned"].includes(input.endReason);
+  const validScore = Number.isSafeInteger(input.score) && input.score >= 0;
+  const validFloor = Number.isSafeInteger(input.clearedFloor) && input.clearedFloor >= 0;
+  const validAccuracy = input.accuracy === undefined ||
+    (Number.isFinite(input.accuracy) && input.accuracy >= 0 && input.accuracy <= 100);
+  const validSnapshot = input.resultSnapshot === undefined || isRecord(input.resultSnapshot);
+
+  if (!validSnapshot) return false;
+  try {
+    JSON.stringify(input.resultSnapshot ?? {});
+  } catch {
+    return false;
+  }
+
+  return validEndReason && validScore && validFloor && validAccuracy;
 };
 
-export const getActiveRun = (playerId: string) => {
-  const run = database.prepare(`
-  SELECT id AS runId, current_node_id AS nodeId, current_floor AS floor,
-         state_snapshot AS state, state_version AS stateVersion, last_saved_at AS savedAt
-  FROM game_runs WHERE anonymous_player_id = ? AND status = 'active'
-  `).get(playerId) as (Record<string, unknown> & { state: string }) | null;
-  if (!run) return null;
-  return { ...run, state: JSON.parse(run.state) as RunState };
+const assertCheckpointRequest = (request: CheckpointRequest): void => {
+  if (
+    !request ||
+    typeof request !== "object" ||
+    Array.isArray(request) ||
+    !Number.isSafeInteger(request.round) ||
+    request.round < 1 ||
+    ![1, 2, 3].includes(request.choice) ||
+    !Number.isSafeInteger(request.stateVersion) ||
+    request.stateVersion < 1 ||
+    !isRecord(request.state) ||
+    !isRecord(request.state.map) ||
+    typeof request.state.map.mapId !== "string" ||
+    !Number.isSafeInteger(request.state.map.seed) ||
+    !Array.isArray(request.state.map.choicePath)
+  ) {
+    throw new RunServiceError("INVALID_REQUEST");
+  }
 };
 
-export const saveCheckpoint = (
-  playerId: string,
-  runId: string,
-  round: number,
-  choice: 1 | 2 | 3,
-  expectedVersion: number,
-  state: RunState,
-) => {
-	let savedAt = "";
-	const transaction = database.transaction(() => {
-		const storedRun = database.prepare(`
-			SELECT current_node_id AS nodeId, state_snapshot AS state
-			FROM game_runs
-			WHERE id = ? AND anonymous_player_id = ? AND status = 'active' AND state_version = ?
-		`).get(runId, playerId, expectedVersion) as { nodeId: string; state: string } | null;
-		if (!storedRun) throw new Error("STALE_STATE_VERSION");
+export const createRunService = (repository: RunRepository): RunService => ({
+  async createRun(playerId, requestedSeed) {
+    const runId = randomUUID();
+    const timestamp = now();
+    const mapSeed = Number.isSafeInteger(requestedSeed) && requestedSeed !== undefined && requestedSeed >= 0
+      ? requestedSeed
+      : randomMapSeed();
+    const state = createInitialRunState({ seed: mapSeed });
+    const result = await repository.createRun({
+      runId,
+      checkpointId: randomUUID(),
+      playerId,
+      state,
+      stateHash: hashState(state),
+      timestamp,
+    });
 
-		const storedState = JSON.parse(storedRun.state) as RunState;
-		const previousPath = storedState.map.choicePath;
-		const expectedRound = previousPath.length + 1;
-		if (round !== expectedRound || round > MAP_ROUND_COUNT) {
-			throw new Error("NODE_STATE_MISMATCH");
-		}
+    if (result === "active_run_exists") {
+      throw new RunServiceError("ACTIVE_RUN_EXISTS");
+    }
 
-		const selectedNode = generateNodeChoices(
-			storedState.map.seed,
-			round,
-			previousPath,
-		).find((node) => node.choice === choice);
-		const legacyParentKey = previousPath.length === 0
-			? START_NODE_KEY
-			: `${round - 1}-${previousPath.at(-1)}`;
-		if (
-			selectedNode === undefined ||
-			(selectedNode.parentKey !== storedRun.nodeId && storedRun.nodeId !== legacyParentKey)
-		) {
-			throw new Error("NODE_STATE_MISMATCH");
-		}
+    return {
+      runId,
+      stateVersion: 1,
+      checkpoint: state,
+      nodeChoices: generateNodeChoices(mapSeed, 1, []),
+    };
+  },
 
-		const nextPath = [...previousPath, choice];
-		if (
-			state.map.mapId !== storedState.map.mapId ||
-			state.map.seed !== storedState.map.seed ||
-			state.map.currentRound !== round ||
-			state.map.choicePath.length !== nextPath.length ||
-			state.map.choicePath.some((value, index) => value !== nextPath[index])
-		) {
-			throw new Error("NODE_STATE_MISMATCH");
-		}
+  getActiveRun(playerId) {
+    return repository.getActiveRun(playerId);
+  },
 
-		const checkpointState: RunState = {
-			...state,
-			map: {
-				...state.map,
-				currentNodeId: selectedNode.key,
-				choicePath: nextPath,
-			},
-		};
-		const stateJson = JSON.stringify(checkpointState);
-		const stateHash = hashState(checkpointState);
-		const timestamp = now();
-		savedAt = timestamp;
-		const result = database.prepare(`
-			UPDATE game_runs
-      SET current_node_id = ?, current_floor = ?, state_snapshot = ?, state_hash = ?,
-          state_version = state_version + 1, last_saved_at = ?
-      WHERE id = ? AND anonymous_player_id = ? AND status = 'active' AND state_version = ?
-		`).run(selectedNode.key, round, stateJson, stateHash, timestamp, runId, playerId, expectedVersion);
-		if (result.changes === 0) throw new Error("STALE_STATE_VERSION");
-		database.prepare(`
-      INSERT INTO run_checkpoints
-        (id, run_id, sequence_no, reason, node_id, floor, state_snapshot, state_hash, created_at)
-      SELECT ?, ?, state_version, 'node_entered', ?, ?, ?, ?, ? FROM game_runs WHERE id = ?
-		`).run(randomUUID(), runId, selectedNode.key, round, stateJson, stateHash, timestamp, runId);
-	});
-	transaction();
-	return {
-		stateVersion: expectedVersion + 1,
-		savedAt,
-		nodeChoices: round < MAP_ROUND_COUNT
-			? generateNodeChoices(state.map.seed, round + 1, state.map.choicePath)
-			: [],
-	};
-};
+  async saveCheckpoint(playerId, runId, request) {
+    assertCheckpointRequest(request);
+    const storedRun = await repository.getOwnedRun(playerId, runId);
 
-export const completeRun = (playerId: string, runId: string, input: CompleteRunRequest) => {
-  const timestamp = now();
-  const transaction = database.transaction(() => {
-    const result = database.prepare(`
-      UPDATE game_runs SET status = ?, ended_at = ?, last_saved_at = ?
-      WHERE id = ? AND anonymous_player_id = ? AND status = 'active'
-    `).run(input.endReason, timestamp, timestamp, runId, playerId);
-    if (result.changes === 0) throw new Error("RUN_NOT_ACTIVE");
-    database.prepare(`
-      INSERT INTO run_results
-        (run_id, end_reason, score, cleared_floor, accuracy, result_snapshot, finalized_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      runId, input.endReason, input.score, input.clearedFloor, input.accuracy ?? null,
-      JSON.stringify(input.resultSnapshot ?? {}), timestamp,
-    );
-  });
-  transaction();
-  return { runId, finalizedAt: timestamp };
-};
+    if (!storedRun) throw new RunServiceError("RUN_NOT_FOUND");
+    if (storedRun.status !== "active") throw new RunServiceError("RUN_NOT_ACTIVE");
+    if (storedRun.stateVersion !== request.stateVersion) {
+      throw new RunServiceError("STALE_STATE_VERSION");
+    }
 
-export const getLeaderboard = (limit: number) => database.prepare(`
-  SELECT score, cleared_floor AS clearedFloor, accuracy, finalized_at AS finalizedAt
-  FROM run_results
-  ORDER BY score DESC, finalized_at ASC
-  LIMIT ?
-`).all(limit).map((entry, index) => ({
-  rank: index + 1,
-  ...(entry as { score: number; clearedFloor: number; accuracy: number | null; finalizedAt: string }),
-}));
+    const storedState = storedRun.state;
+    const previousPath = storedState.map.choicePath;
+    const expectedRound = previousPath.length + 1;
+    if (request.round !== expectedRound || request.round > MAP_ROUND_COUNT) {
+      throw new RunServiceError("NODE_STATE_MISMATCH");
+    }
+
+    const selectedNode = generateNodeChoices(
+      storedState.map.seed,
+      request.round,
+      previousPath,
+    ).find((node) => node.choice === request.choice);
+    const legacyParentKey = previousPath.length === 0
+      ? START_NODE_KEY
+      : `${request.round - 1}-${previousPath.at(-1)}`;
+
+    if (
+      selectedNode === undefined ||
+      (selectedNode.parentKey !== storedRun.nodeId && storedRun.nodeId !== legacyParentKey)
+    ) {
+      throw new RunServiceError("NODE_STATE_MISMATCH");
+    }
+
+    const nextPath = [...previousPath, request.choice];
+    if (
+      request.state.map.mapId !== storedState.map.mapId ||
+      request.state.map.seed !== storedState.map.seed ||
+      request.state.map.currentRound !== request.round ||
+      request.state.map.choicePath.length !== nextPath.length ||
+      request.state.map.choicePath.some((value, index) => value !== nextPath[index])
+    ) {
+      throw new RunServiceError("NODE_STATE_MISMATCH");
+    }
+
+    const checkpointState: RunState = {
+      ...request.state,
+      map: {
+        ...request.state.map,
+        currentNodeId: selectedNode.key,
+        choicePath: nextPath,
+      },
+    };
+    const savedAt = now();
+    const result = await repository.saveCheckpoint({
+      checkpointId: randomUUID(),
+      playerId,
+      runId,
+      expectedVersion: request.stateVersion,
+      nodeId: selectedNode.key,
+      floor: request.round,
+      state: checkpointState,
+      stateHash: hashState(checkpointState),
+      timestamp: savedAt,
+    });
+
+    if (result === "run_not_found") throw new RunServiceError("RUN_NOT_FOUND");
+    if (result === "run_not_active") throw new RunServiceError("RUN_NOT_ACTIVE");
+    if (result === "stale_state_version") throw new RunServiceError("STALE_STATE_VERSION");
+
+    return {
+      stateVersion: request.stateVersion + 1,
+      savedAt,
+      nodeChoices: request.round < MAP_ROUND_COUNT
+        ? generateNodeChoices(checkpointState.map.seed, request.round + 1, checkpointState.map.choicePath)
+        : [],
+    };
+  },
+
+  async completeRun(playerId, runId, input) {
+    if (!isValidCompleteRequest(input)) {
+      throw new RunServiceError("INVALID_REQUEST");
+    }
+
+    const finalizedAt = now();
+    const result = await repository.completeRun({ playerId, runId, input, timestamp: finalizedAt });
+    if (result === "run_not_found") throw new RunServiceError("RUN_NOT_FOUND");
+    if (result === "run_not_active") throw new RunServiceError("RUN_NOT_ACTIVE");
+
+    return { runId, finalizedAt };
+  },
+
+  getLeaderboard(limit) {
+    return repository.getLeaderboard(limit);
+  },
+});
