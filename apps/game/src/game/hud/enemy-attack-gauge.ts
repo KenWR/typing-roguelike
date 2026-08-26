@@ -93,28 +93,30 @@ export function createEnemyAttackGaugeState(
   return {
     status: snapshot.status,
     elapsedMs: snapshot.elapsedMs,
-    attacks: snapshot.attacks.map((attack) => {
-      const presentation = getEnemyAttackTypePresentation(attack.attackType);
+    attacks: snapshot.attacks
+      .filter((attack) => attack.phase !== "resolved")
+      .map((attack) => {
+        const presentation = getEnemyAttackTypePresentation(attack.attackType);
 
-      return {
-        timelineId: attack.timelineId,
-        enemyId: attack.enemyId,
-        targetId: attack.targetId,
-        attackId: attack.attackId,
-        attackName: attack.attackName,
-        attackType: attack.attackType,
-        phase: attack.phase,
-        phaseElapsedMs: attack.phaseElapsedMs,
-        phaseDurationMs: attack.phaseDurationMs,
-        phaseProgress: clampProgress(attack.phaseProgress),
-        progress: getGaugeProgress(attack),
-        phaseLabel: ENEMY_ATTACK_PHASE_LABEL[attack.phase],
-        icon: presentation.icon,
-        typeLabel: presentation.label,
-        color: presentation.color,
-        accent: presentation.accent,
-      };
-    }),
+        return {
+          timelineId: attack.timelineId,
+          enemyId: attack.enemyId,
+          targetId: attack.targetId,
+          attackId: attack.attackId,
+          attackName: attack.attackName,
+          attackType: attack.attackType,
+          phase: attack.phase,
+          phaseElapsedMs: attack.phaseElapsedMs,
+          phaseDurationMs: attack.phaseDurationMs,
+          phaseProgress: clampProgress(attack.phaseProgress),
+          progress: getGaugeProgress(attack),
+          phaseLabel: ENEMY_ATTACK_PHASE_LABEL[attack.phase],
+          icon: presentation.icon,
+          typeLabel: presentation.label,
+          color: presentation.color,
+          accent: presentation.accent,
+        };
+      }),
   };
 }
 
@@ -218,10 +220,7 @@ export class EnemyAttackGauge {
     this.panel.setSize(this.panelWidth, this.panelHeight);
     this.title.setColor("#e2e8f0");
     this.activeCount
-      .setText(
-        this.state.attacks.filter((attack) => attack.phase !== "resolved")
-          .length + " ACTIVE",
-      )
+      .setText(this.state.attacks.length + " ACTIVE")
       .setPosition(Math.max(160, this.panelWidth - 92), 8);
     this.emptyText.setVisible(this.state.attacks.length === 0);
 
@@ -333,7 +332,7 @@ export class EnemyAttackGauge {
     row.panel
       .setSize(this.panelWidth, bodyHeight)
       .setFillStyle(0x111c2d, 0.9)
-      .setStrokeStyle(1, attack.accent, attack.phase === "resolved" ? 0.45 : 0.9);
+      .setStrokeStyle(1, attack.accent, 0.9);
     row.icon.setPosition(8, labelY).setText(attack.icon).setColor(attack.color);
     row.attackName
       .setPosition(34, labelY)
@@ -351,7 +350,7 @@ export class EnemyAttackGauge {
     row.fill
       .setPosition(34, trackY)
       .setSize(trackWidth * attack.progress, 6)
-      .setFillStyle(attack.accent, attack.phase === "resolved" ? 0.55 : 1);
+      .setFillStyle(attack.accent, 1);
     row.progress
       .setPosition(progressX, trackY)
       .setText(Math.round(attack.progress * 100) + "%")

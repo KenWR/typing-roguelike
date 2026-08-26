@@ -2,6 +2,7 @@ import type { EnemyActionConfig, EnemyConfig } from "./types.ts";
 
 interface SpecialActionDefinition {
   id: string;
+  name?: string;
   damage: number;
   windupMs: number;
   recoveryMs: number;
@@ -53,6 +54,7 @@ const createDefenseAction = (enemy: EnemyDefinition): EnemyActionConfig => ({
 const createSpecialActions = (enemy: EnemyDefinition): readonly EnemyActionConfig[] => {
   const specials = enemy.specials ?? [{
     id: "special",
+    name: enemy.attackDescription,
     damage: Math.ceil(enemy.attackDamage * 1.5),
     windupMs: enemy.attackWindupMs + 400,
     recoveryMs: 500,
@@ -62,7 +64,7 @@ const createSpecialActions = (enemy: EnemyDefinition): readonly EnemyActionConfi
   return specials.map((special) => ({
     id: `${enemy.id}-${special.id}`,
     kind: "special",
-    name: "특수기술",
+    name: special.name ?? enemy.attackDescription,
     damage: special.damage,
     windupMs: special.windupMs,
     recoveryMs: special.recoveryMs,
@@ -116,12 +118,12 @@ export const ENEMY_CONFIGS = [
   createEnemyConfig({ id: "inverted-knight", name: "뒤집힌 기사", tier: "elite", role: "defense", hp: 230, allowedFloors: [7], attackDamage: 26, attackWindupMs: 1800, attackDescription: "역순 입력" }),
   createEnemyConfig({ id: "chorus-conductor", name: "합창의 지휘 촉수", tier: "elite", role: "support", hp: 260, allowedFloors: [8, 9], attackDamage: 16, attackWindupMs: 1500, attackDescription: "동기화 공격" }),
   createEnemyConfig({ id: "palimpsest", name: "붉은 편집장 팔림프세스트", tier: "boss", role: "disruption", hp: 430, allowedFloors: [5], attackDamage: 30, attackWindupMs: 1900, attackDescription: "추가 어절 기믹", specials: [
-    { id: "word-storm", damage: 45, windupMs: 2300, recoveryMs: 700, description: "추가 어절을 생성합니다." },
-    { id: "red-edit", damage: 55, windupMs: 2700, recoveryMs: 900, description: "플레이어의 입력 규칙을 교정합니다." },
+    { id: "word-storm", name: "어절 폭풍", damage: 45, windupMs: 2300, recoveryMs: 700, description: "추가 어절을 생성합니다." },
+    { id: "red-edit", name: "붉은 교정", damage: 55, windupMs: 2700, recoveryMs: 900, description: "플레이어의 입력 규칙을 교정합니다." },
   ] }),
   createEnemyConfig({ id: "thousand-beat-chorus", name: "천 개의 박자 합창체", tier: "boss", role: "pressure", hp: 630, allowedFloors: [10], attackDamage: 20, attackWindupMs: 1500, attackDescription: "대합창은 최대 2회", specials: [
-    { id: "grand-chorus", damage: 30, windupMs: 1900, recoveryMs: 600, description: "대합창을 시작합니다." },
-    { id: "crescendo", damage: 40, windupMs: 2400, recoveryMs: 800, description: "합창의 박자를 끌어올립니다." },
+    { id: "grand-chorus", name: "대합창", damage: 30, windupMs: 1900, recoveryMs: 600, description: "대합창을 시작합니다." },
+    { id: "crescendo", name: "크레센도", damage: 40, windupMs: 2400, recoveryMs: 800, description: "합창의 박자를 끌어올립니다." },
   ] }),
   createEnemyConfig({ id: "beat-tentacle", name: "박자 촉수", tier: "summon", role: "pressure", hp: 70, allowedFloors: [10], attackDamage: 11, attackWindupMs: 1400, attackDescription: "합창체 보조 공격" }),
 ] as const satisfies readonly EnemyConfig[];
