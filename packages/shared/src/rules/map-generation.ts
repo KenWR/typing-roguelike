@@ -39,7 +39,6 @@ export interface GeneratedMap {
 const NODE_TYPES: readonly MapNodeType[] = [
 	"combat",
 	"elite",
-	"reward",
 	"shop",
 	"rest",
 ];
@@ -88,10 +87,9 @@ const validateChoicePath = (round: number, choicePath: readonly number[]): void 
 	}
 };
 
-const nodeKey = (round: number, path: readonly number[]): string =>
-	`${round}-${path.join("-")}`;
+const nodeKey = (round: number, choice: MapNodeChoice): string => `${round}-${choice}`;
 
-/** Returns the stable key for a node identified by its complete choice path. */
+/** Returns the stable key for a node identified by its floor and selected lane. */
 export const getMapNodeKey = (round: number, path: readonly number[]): string => {
 	validateRound(round);
 	if (path.length !== round) {
@@ -104,7 +102,7 @@ export const getMapNodeKey = (round: number, path: readonly number[]): string =>
 			throw new RangeError("Map choices must be integers from 1 to 3.");
 		}
 	}
-	return nodeKey(round, path);
+	return nodeKey(round, path[path.length - 1] as MapNodeChoice);
 };
 
 const hasEliteEncounter = (round: number): boolean =>
@@ -112,22 +110,55 @@ const hasEliteEncounter = (round: number): boolean =>
 		(encounter) => encounter.floor === round && encounter.nodeType === "elite",
 	);
 
-const getNodeTypes = (seed: number, round: number, choicePath: readonly number[]): MapNodeType[] => {
-	// Keep the pre-graph seed input stable while node keys use an unambiguous path format.
-	const path = choicePath.join("");
-	if (round === 9) {
-		return ["rest", "rest", "rest"];
-	}
-	if (round === MAP_ROUND_COUNT) {
-		return ["boss"];
-	}
+const getNodeTypes = (seed: number, round: number): MapNodeType[] => {
+	if (round === 9) return ["rest", "rest", "rest"];
+	if (round === MAP_ROUND_COUNT) return ["boss"];
 
 	const candidates = NODE_TYPES.filter((type) => {
 		if (round === 1 && type === "shop") return false;
 		if (type === "elite" && !hasEliteEncounter(round)) return false;
 		return true;
 	});
-	return shuffle(candidates, hash(`${seed}:${path}`)).slice(0, MAX_MAP_CHOICES);
+
+	const ordered = shuffle(candidates, hash(`${seed}:${round}`));
+	return Array.from({ length: MAX_MAP_CHOICES }, (_, index) => ordered[index % ordered.length]!);
+};
+
+const nextChoicesFor = (round: number, choice: MapNodeChoice): MapNodeChoice[] => {
+	if (round >= MAP_ROUND_COUNT) return [];
+	if (round === MAP_ROUND_COUNT - 1) return [1];
+	return NODE_CHOICES.filter((nextChoice) => Math.abs(nextChoice - choice) <= 1);
+};
+
+const generateRoundNodes = (
+	seed: number,
+	round: number,
+	monsterIds: readonly string[] = [],
+): GeneratedMapNode[] => {
+	const types = getNodeTypes(seed, round);
+	return types.map((type, index) => {
+		const choice = NODE_CHOICES[index]!;
+		const key = nodeKey(round, choice);
+		const parentChoice = choice;
+		const parentKey = round === 1 ? START_NODE_KEY : nodeKey(round - 1, parentChoice);
+		const nextNodeKeys = nextChoicesFor(round, choice).map((nextChoice) =>
+			nodeKey(round + 1, nextChoice),
+		);
+		const node: GeneratedMapNode = {
+			choice,
+			icon: type,
+			iconType: type,
+			key,
+			parentKey,
+			nextNodeKeys,
+			round,
+			type,
+		};
+		if ((type === "combat" || type === "elite" || type === "boss") && monsterIds.length > 0) {
+			node.monsterId = monsterIds[hash(`${seed}:${round}:${choice}`) % monsterIds.length];
+		}
+		return node;
+	});
 };
 
 export const generateNodeChoices = (
@@ -140,57 +171,25 @@ export const generateNodeChoices = (
 	validateRound(round);
 	validateChoicePath(round, choicePath);
 
-	const types = getNodeTypes(seed, round, choicePath);
-	return types.map((type, index) => {
-		const choice = NODE_CHOICES[index]!;
-		const fullPath = [...choicePath, choice];
-		const key = nodeKey(round, fullPath);
-		const parentKey = round === 1
-			? START_NODE_KEY
-			: nodeKey(round - 1, choicePath);
-		const nextNodeKeys = round === MAP_ROUND_COUNT
-			? []
-			: round === MAP_ROUND_COUNT - 1
-				? [nodeKey(round + 1, [...fullPath, 1])]
-				: NODE_CHOICES.map((nextChoice) => nodeKey(round + 1, [...fullPath, nextChoice]));
-		const node: GeneratedMapNode = {
-			choice,
-			icon: type,
-			iconType: type,
-			key,
-			parentKey,
-			nextNodeKeys,
-			round,
-			type,
-		};
-		if ((type === "combat" || type === "elite" || type === "boss") && monsterIds.length > 0) {
-			node.monsterId = monsterIds[hash(`${seed}:${fullPath.join("")}`) % monsterIds.length];
-		}
-		return node;
-	});
+	const nodes = generateRoundNodes(seed, round, monsterIds);
+	if (round === 1 || round === MAP_ROUND_COUNT) return nodes;
+
+	const previousChoice = choicePath[choicePath.length - 1] as MapNodeChoice;
+	const allowed = new Set(nextChoicesFor(round - 1, previousChoice));
+	return nodes.filter((node) => allowed.has(node.choice));
 };
 
-/** Generates the complete deterministic ten-round map tree. */
+/** Generates the complete deterministic fixed-width ten-round map graph. */
 export const generateMap = (
 	seed: number,
 	monsterIds: readonly string[] = [],
 ): GeneratedMap => {
 	validateSeed(seed);
-	const rounds = Array.from({ length: MAP_ROUND_COUNT }, (_, index) => ({
-		round: index + 1,
-		nodes: [] as GeneratedMapNode[],
-	} satisfies GeneratedMapRound));
-
-	const visit = (round: number, choicePath: readonly number[]): void => {
-		const nodes = generateNodeChoices(seed, round, choicePath, monsterIds);
-		rounds[round - 1]!.nodes.push(...nodes);
-		if (round < MAP_ROUND_COUNT) {
-			for (const node of nodes) {
-				visit(round + 1, [...choicePath, node.choice]);
-			}
-		}
+	return {
+		seed,
+		rounds: Array.from({ length: MAP_ROUND_COUNT }, (_, index) => {
+			const round = index + 1;
+			return { round, nodes: generateRoundNodes(seed, round, monsterIds) };
+		}),
 	};
-
-	visit(1, []);
-	return { seed, rounds };
 };
