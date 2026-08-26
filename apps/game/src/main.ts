@@ -11,7 +11,7 @@ import {
 } from "./game/scenes/CoreFlowScenes";
 import { EquipmentScene } from "./game/scenes/EquipmentScene";
 import { RewardSelectionScene } from "./game/scenes/RewardSelectionScene";
-import { RunResultScene } from "./game/scenes/RunResultScene";
+import { CompletableRunResultScene } from "./game/scenes/CompletableRunResultScene";
 import "./styles/global.css";
 
 const game = new Phaser.Game({
@@ -39,7 +39,7 @@ const game = new Phaser.Game({
     EquipmentScene,
     ShopScene,
     RestScene,
-    RunResultScene,
+    CompletableRunResultScene,
   ],
 });
 
