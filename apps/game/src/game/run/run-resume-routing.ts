@@ -81,6 +81,9 @@ export const resolveRunResumeRoute = (
         ...(matchingCheckpoint?.purchasedOfferIds === undefined
           ? {}
           : { purchasedOfferIds: matchingCheckpoint.purchasedOfferIds }),
+        ...(matchingCheckpoint?.shopRerollCount === undefined
+          ? {}
+          : { rerollCount: matchingCheckpoint.shopRerollCount }),
       },
       recovered: true,
     };
