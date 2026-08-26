@@ -39,9 +39,10 @@ describe("map generation", () => {
 		expect(firstRound).toHaveLength(3);
 		expect(firstRound.every(({ type }) => type !== "shop")).toBe(true);
 		expect(recoveryRound.map(({ type }) => type)).toEqual(["rest", "rest", "rest"]);
-		expect(bossRound.filter(({ type }) => type === "boss")).toHaveLength(1);
-		expect(bossRound.every(({ type }) => type !== "shop")).toBe(true);
-		expect(bossRound.find(({ type }) => type === "boss")?.iconType).toBe("boss");
+		expect(bossRound).toHaveLength(1);
+		expect(bossRound[0]?.type).toBe("boss");
+		expect(bossRound[0]?.iconType).toBe("boss");
+		expect(recoveryRound.every(({ nextNodeKeys }) => nextNodeKeys.length === 1)).toBe(true);
 	});
 
 	test("exposes reward and semantic icon values", () => {
