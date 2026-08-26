@@ -6,13 +6,15 @@ usage() {
 Usage:
   verified-head-merge.sh capture --repo <owner/repo> --pr <number>
   verified-head-merge.sh merge --repo <owner/repo> --pr <number> \
-    --expected-head-sha <40-hex-sha> [--merge-method <merge|squash|rebase>] [--dry-run]
+    --expected-head-sha <40-hex-sha> --expected-base-ref <ref> \
+    --expected-base-sha <40-hex-sha> [--merge-method <merge|squash|rebase>] [--dry-run]
 
-The capture command records the reviewed PR head before live checks.
-The merge command re-reads the head immediately before a conditional merge.
+The capture command records the reviewed PR head and base identity before live checks.
+The merge command re-reads all three values immediately before a conditional merge.
 
 Exit status 2 means invalid arguments, 10 means STALE_REVIEW, and 12 means the
-live head SHA could not be read or validated.
+live PR identity or merge state could not be read or validated. Exit status 13
+means the merge was refused because it did not complete or auto-merge was detected.
 USAGE
 }
 
@@ -44,6 +46,8 @@ esac
 repo=''
 pr_number=''
 expected_head_sha=''
+expected_base_ref=''
+expected_base_sha=''
 merge_method='squash'
 dry_run=false
 
@@ -63,6 +67,18 @@ while [[ $# -gt 0 ]]; do
       [[ "$subcommand" == 'merge' ]] || usage_error "--expected-head-sha is only valid for merge"
       [[ $# -ge 2 ]] || usage_error "--expected-head-sha requires a value"
       expected_head_sha="$2"
+      shift 2
+      ;;
+    --expected-base-ref)
+      [[ "$subcommand" == 'merge' ]] || usage_error "--expected-base-ref is only valid for merge"
+      [[ $# -ge 2 ]] || usage_error "--expected-base-ref requires a value"
+      expected_base_ref="$2"
+      shift 2
+      ;;
+    --expected-base-sha)
+      [[ "$subcommand" == 'merge' ]] || usage_error "--expected-base-sha is only valid for merge"
+      [[ $# -ge 2 ]] || usage_error "--expected-base-sha requires a value"
+      expected_base_sha="$2"
       shift 2
       ;;
     --merge-method)
@@ -95,6 +111,10 @@ done
 if [[ "$subcommand" == 'merge' ]]; then
   [[ -n "$expected_head_sha" ]] || usage_error "--expected-head-sha is required for merge"
   [[ "$expected_head_sha" =~ ^[0-9a-f]{40}$ ]] || usage_error "--expected-head-sha must be a 40-character lowercase hexadecimal SHA"
+  [[ -n "$expected_base_ref" ]] || usage_error "--expected-base-ref is required for merge"
+  [[ "$expected_base_ref" =~ ^[^[:space:]]+$ ]] || usage_error "--expected-base-ref must not contain whitespace"
+  [[ -n "$expected_base_sha" ]] || usage_error "--expected-base-sha is required for merge"
+  [[ "$expected_base_sha" =~ ^[0-9a-f]{40}$ ]] || usage_error "--expected-base-sha must be a 40-character lowercase hexadecimal SHA"
 
   case "$merge_method" in
     merge|squash|rebase)
@@ -110,53 +130,87 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 127
 fi
 
-read_head_sha() {
-  local head_sha
+read_identity_snapshot() {
+  local identity_snapshot
+  local live_head_sha
+  local live_base_ref
+  local live_base_sha
 
-  if ! head_sha="$(gh pr view "$pr_number" --repo "$repo" --json headRefOid --jq '.headRefOid')"; then
-    printf 'error: failed to read live head SHA for %s#%s\n' "$repo" "$pr_number" >&2
+  if ! identity_snapshot="$(gh pr view "$pr_number" --repo "$repo" \
+    --json headRefOid,baseRefName,baseRefOid \
+    --jq '[.headRefOid, .baseRefName, .baseRefOid] | @tsv')"; then
+    printf 'error: failed to read live PR identity for %s#%s\n' "$repo" "$pr_number" >&2
     return 1
   fi
 
-  if [[ ! "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
-    printf 'error: live head SHA is missing or invalid for %s#%s\n' "$repo" "$pr_number" >&2
+  IFS=$'\t' read -r live_head_sha live_base_ref live_base_sha <<< "$identity_snapshot"
+  if [[ ! "$live_head_sha" =~ ^[0-9a-f]{40}$ ]] \
+    || [[ ! "$live_base_ref" =~ ^[^[:space:]]+$ ]] \
+    || [[ ! "$live_base_sha" =~ ^[0-9a-f]{40}$ ]]; then
+    printf 'error: live PR identity is missing or invalid for %s#%s\n' "$repo" "$pr_number" >&2
     return 1
   fi
 
-  printf '%s\n' "$head_sha"
+  printf '%s\t%s\t%s\n' "$live_head_sha" "$live_base_ref" "$live_base_sha"
+}
+
+read_merge_state() {
+  local merge_state_snapshot
+
+  if ! merge_state_snapshot="$(gh pr view "$pr_number" --repo "$repo" \
+    --json state,mergedAt,autoMergeRequest \
+    --jq '[.state, (.mergedAt // "NONE"), (if .autoMergeRequest == null then "NONE" else "PRESENT" end)] | @tsv')"; then
+    printf 'error: failed to read post-merge state for %s#%s\n' "$repo" "$pr_number" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$merge_state_snapshot"
 }
 
 if [[ "$subcommand" == 'capture' ]]; then
-  if ! captured_head_sha="$(read_head_sha)"; then
+  if ! captured_identity="$(read_identity_snapshot)"; then
     exit 12
   fi
+  IFS=$'\t' read -r captured_head_sha captured_base_ref captured_base_sha <<< "$captured_identity"
 
   printf 'CAPTURED_HEAD_SHA=%s\n' "$captured_head_sha"
+  printf 'CAPTURED_BASE_REF=%s\n' "$captured_base_ref"
+  printf 'CAPTURED_BASE_SHA=%s\n' "$captured_base_sha"
   exit 0
 fi
 
 # All draft, check, approval, conflict, and review-thread gates are evaluated by
 # the caller before this final head comparison. This adapter never uses --admin.
-if ! current_head_sha="$(read_head_sha)"; then
+if ! current_identity="$(read_identity_snapshot)"; then
   exit 12
 fi
+IFS=$'\t' read -r current_head_sha current_base_ref current_base_sha <<< "$current_identity"
 
-if [[ "$current_head_sha" != "$expected_head_sha" ]]; then
-  printf 'STALE_REVIEW expected_head_sha=%s current_head_sha=%s\n' \
-    "$expected_head_sha" "$current_head_sha" >&2
+if [[ "$current_head_sha" != "$expected_head_sha" ]] \
+  || [[ "$current_base_ref" != "$expected_base_ref" ]] \
+  || [[ "$current_base_sha" != "$expected_base_sha" ]]; then
+  printf 'STALE_REVIEW expected_head_sha=%s current_head_sha=%s expected_base_ref=%s current_base_ref=%s expected_base_sha=%s current_base_sha=%s\n' \
+    "$expected_head_sha" "$current_head_sha" "$expected_base_ref" "$current_base_ref" \
+    "$expected_base_sha" "$current_base_sha" >&2
   exit 10
 fi
 
 if [[ "$dry_run" == true ]]; then
-  printf 'MERGE_READY expected_head_sha=%s\n' "$expected_head_sha"
-  printf 'DRY_RUN=gh pr merge %s --repo %s --%s --match-head-commit %s\n' \
-    "$pr_number" "$repo" "$merge_method" "$expected_head_sha"
+  printf 'MERGE_READY expected_head_sha=%s expected_base_ref=%s expected_base_sha=%s\n' \
+    "$expected_head_sha" "$expected_base_ref" "$expected_base_sha"
+  printf 'DRY_RUN=gh pr merge %s --repo %s --disable-auto --match-head-commit %s --%s\n' \
+    "$pr_number" "$repo" "$expected_head_sha" "$merge_method"
   exit 0
 fi
 
+# `gh pr merge` can return success by enabling auto-merge for a merge-queue base
+# while required checks are pending. --disable-auto rejects that implicit path;
+# the post-command state check below prevents any non-merged result from being
+# reported as accepted.
 merge_args=(
   pr merge "$pr_number"
   --repo "$repo"
+  --disable-auto
   --match-head-commit "$expected_head_sha"
 )
 case "$merge_method" in
@@ -171,10 +225,35 @@ case "$merge_method" in
     ;;
 esac
 
+merge_status=0
 if gh "${merge_args[@]}"; then
-  printf 'MERGE_ACCEPTED expected_head_sha=%s\n' "$expected_head_sha"
+  :
 else
   merge_status=$?
-  printf 'error: conditional merge failed expected_head_sha=%s\n' "$expected_head_sha" >&2
+fi
+
+if ! merge_state="$(read_merge_state)"; then
+  exit 12
+fi
+IFS=$'\t' read -r final_state final_merged_at final_auto_merge <<< "$merge_state"
+
+if [[ "$final_auto_merge" == 'PRESENT' ]]; then
+  printf 'AUTO_MERGE_REFUSED expected_head_sha=%s expected_base_ref=%s expected_base_sha=%s\n' \
+    "$expected_head_sha" "$expected_base_ref" "$expected_base_sha" >&2
+  exit 13
+fi
+
+if [[ "$merge_status" -ne 0 ]]; then
+  printf 'error: conditional merge failed expected_head_sha=%s expected_base_ref=%s expected_base_sha=%s status=%s\n' \
+    "$expected_head_sha" "$expected_base_ref" "$expected_base_sha" "$merge_status" >&2
   exit "$merge_status"
 fi
+
+if [[ "$final_state" != 'MERGED' || "$final_merged_at" == 'NONE' ]]; then
+  printf 'MERGE_NOT_COMPLETED state=%s expected_head_sha=%s expected_base_ref=%s expected_base_sha=%s\n' \
+    "$final_state" "$expected_head_sha" "$expected_base_ref" "$expected_base_sha" >&2
+  exit 13
+fi
+
+printf 'MERGE_ACCEPTED expected_head_sha=%s expected_base_ref=%s expected_base_sha=%s\n' \
+  "$expected_head_sha" "$expected_base_ref" "$expected_base_sha"
