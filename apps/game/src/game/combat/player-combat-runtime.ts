@@ -5,6 +5,7 @@ import {
   type SkillDefinition,
 } from "@typing-roguelike/shared";
 import { playRuntimeBgm, playWeaponImpactSound } from "../audio/runtime-audio";
+import { CombatApEffectController } from "./combat-ap-effects";
 import type { CombatEncounterInitialization } from "./encounter-initializer";
 import { CombatState, type CombatUpdate } from "./combat-state";
 import { EnemyAttackTimeline } from "./enemy-attack-timeline";
@@ -14,6 +15,7 @@ import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome
 export type PlayerCombatRuntimeConfig = Readonly<{
   combat: CombatState;
   enemyTimeline: EnemyAttackTimeline;
+  apEffects: CombatApEffectController;
   runState: Readonly<RunState>;
   initialization: CombatEncounterInitialization;
   nextNodeIds?: readonly string[];
@@ -37,6 +39,7 @@ const resolveAttackPower = (initialization: CombatEncounterInitialization): numb
 export class PlayerCombatRuntime {
   private readonly combat: CombatState;
   private readonly enemyTimeline: EnemyAttackTimeline;
+  private readonly apEffects: CombatApEffectController;
   private runState: RunState;
   private readonly initialization: CombatEncounterInitialization;
   private readonly nextNodeIds: readonly string[];
@@ -50,6 +53,7 @@ export class PlayerCombatRuntime {
   constructor(config: PlayerCombatRuntimeConfig) {
     this.combat = config.combat;
     this.enemyTimeline = config.enemyTimeline;
+    this.apEffects = config.apEffects;
     this.runState = config.runState as RunState;
     this.initialization = config.initialization;
     this.nextNodeIds = config.nextNodeIds ?? [];
@@ -95,7 +99,9 @@ export class PlayerCombatRuntime {
           actor: this.player,
           target,
         });
-        if (result.applied && target.id !== "player" && result.damageApplied > 0) {
+        if (!result.applied) continue;
+        this.apEffects.onSkillImpact(skill);
+        if (target.id !== "player" && result.damageApplied > 0) {
           playWeaponImpactSound(this.initialization.player.equipmentIds);
         }
       }
