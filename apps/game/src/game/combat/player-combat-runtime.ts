@@ -9,6 +9,8 @@ import {
   playRuntimeBgm,
   playWeaponImpactSound,
 } from "../audio/runtime-audio";
+import { ActionPointResource } from "./action-point-resource";
+import { CombatApEffectController } from "./combat-ap-effects";
 import type {
   CombatEnemyInitialization,
   CombatEncounterInitialization,
@@ -33,6 +35,8 @@ import {
 export type PlayerCombatRuntimeConfig = Readonly<{
   combat: CombatState;
   enemyTimeline: EnemyAttackTimeline;
+  actionPoints?: ActionPointResource;
+  apEffects?: CombatApEffectController;
   runState: Readonly<RunState>;
   initialization: CombatEncounterInitialization;
   nextNodeIds?: readonly string[];
@@ -44,6 +48,7 @@ export type PlayerCombatRuntimeUpdate = Readonly<{
   combat: CombatUpdate;
   enemyTimeline: EnemyAttackTimelineUpdate;
   playerHp: number;
+  playerAp: number;
   enemyHp: Readonly<Record<string, number>>;
   route: CombatOutcomeRoute | null;
 }>;
@@ -70,6 +75,8 @@ const validateRandomValue = (value: number): number => {
 export class PlayerCombatRuntime {
   private readonly combat: CombatState;
   private readonly enemyTimeline: EnemyAttackTimeline;
+  private readonly actionPoints: ActionPointResource;
+  private readonly apEffects: CombatApEffectController;
   private runState: RunState;
   private readonly initialization: CombatEncounterInitialization;
   private readonly nextNodeIds: readonly string[];
@@ -88,6 +95,8 @@ export class PlayerCombatRuntime {
   constructor(config: PlayerCombatRuntimeConfig) {
     this.combat = config.combat;
     this.enemyTimeline = config.enemyTimeline;
+    this.actionPoints = config.actionPoints ?? new ActionPointResource();
+    this.apEffects = config.apEffects ?? new CombatApEffectController({ actionPoints: this.actionPoints });
     this.runState = config.runState as RunState;
     this.initialization = config.initialization;
     this.nextNodeIds = config.nextNodeIds ?? [];
@@ -178,6 +187,7 @@ export class PlayerCombatRuntime {
           ? enemyTimelineUpdate
           : this.enemyTimeline.advance(0),
       playerHp: this.playerHp,
+      playerAp: this.actionPoints.snapshot.currentAp,
       enemyHp: this.enemyHp,
       route: this.route,
     };
@@ -204,6 +214,8 @@ export class PlayerCombatRuntime {
         target,
       });
       if (!result.applied) continue;
+
+      this.apEffects.onSkillImpact(skill);
 
       if (result.damageApplied > 0 && target.id !== this.player.id) {
         playWeaponImpactSound(this.initialization.player.equipmentIds);
@@ -252,6 +264,10 @@ export class PlayerCombatRuntime {
         defendedDamageMultiplier,
       });
       if (!result.applied) continue;
+
+      if (action.apDelta !== undefined) {
+        this.actionPoints.adjust(action.apDelta);
+      }
 
       playPlayerHitSound({
         defended: result.defended,
