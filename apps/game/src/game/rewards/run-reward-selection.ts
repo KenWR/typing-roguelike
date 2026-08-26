@@ -135,6 +135,17 @@ export const createRunRewardSelectionFlow = ({
     throw new RangeError("At least one equipment reward is required.");
   }
 
+  const completeRewardNode = (currentRunState: RunState): RunState => {
+    if (completionTarget === undefined) return currentRunState;
+
+    const completion = completeMapNode(
+      currentRunState.map,
+      completionTarget.nodeId,
+      completionTarget.nextNodeIds,
+    );
+    return completion.applied ? { ...currentRunState, map: completion.map } : currentRunState;
+  };
+
   const adapter = createRewardSelectionAdapter<RunState>({
     initialViewState: createRewardSelectionViewState({
       candidates: equipmentRewards.map(toRewardCandidate),
@@ -142,18 +153,11 @@ export const createRunRewardSelectionFlow = ({
       currency: runState.runCurrency,
     }),
     initialRunState: runState,
-    applySelection: (currentRunState, reward) => {
-      const rewardedRun = applyEquipmentReward(currentRunState, reward.id);
-      if (completionTarget === undefined) return rewardedRun;
-
-      const completion = completeMapNode(
-        rewardedRun.map,
-        completionTarget.nodeId,
-        completionTarget.nextNodeIds,
-      );
-      return completion.applied ? { ...rewardedRun, map: completion.map } : rewardedRun;
-    },
+    applySelection: (currentRunState, reward) =>
+      completeRewardNode(applyEquipmentReward(currentRunState, reward.id)),
+    applySkip: completeRewardNode,
     onContinue: (completedRunState) => onContinue?.(completedRunState),
+    onSkip: (completedRunState) => onContinue?.(completedRunState),
   });
 
   return {
