@@ -49,11 +49,13 @@ describe("core RunState integration", () => {
         runState: route.runState,
         outcome: "victory",
         nextNodeIds: selectable.nextNodeKeys,
+        rewardCount: 1,
+        rewardRandom: () => 0,
       });
       expect(outcome.sceneKey).toBe(SCENE_KEYS.reward);
       expect(outcome.runState.map.seed).toBe(17);
       expect(outcome.runState.status).toBe("active");
-      expect(outcome.payload.runState).toBe(outcome.runState);
+      expect(outcome.payload.runState).toEqual(outcome.runState);
       expect(outcome.payload.adapter).toBeDefined();
       expect(outcome.payload.nextSceneKey).toBe(SCENE_KEYS.map);
     }
