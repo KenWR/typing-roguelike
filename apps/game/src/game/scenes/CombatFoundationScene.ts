@@ -105,10 +105,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.backgroundLayer.add([this.background, this.overlay]);
 
     this.playerPlaceholder = this.createActorPlaceholder("플레이어", 0x3f7f84);
-    const enemyLabel = initialization.enemies.length === 0
-      ? "적"
-      : initialization.enemies.map((enemy) => enemy.name).join(" / ");
-    this.enemyPlaceholder = this.createActorPlaceholder(enemyLabel, 0x8d4b52);
+    this.enemyPlaceholder = this.createActorPlaceholder(
+      this.createEnemyLabel(initialization),
+      0x8d4b52,
+    );
     this.worldLayer.add([this.playerPlaceholder, this.enemyPlaceholder]);
 
     const encounterLabel = this.add
@@ -217,12 +217,21 @@ export class CombatFoundationScene extends Phaser.Scene {
     const safeDelta = Math.max(0, delta);
     const ap = this.actionPoints.advance(safeDelta);
     this.combatHud.update({ ap: ap.currentAp });
-    const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
-    this.enemyAttackGauge.update(enemyUpdate.snapshot);
 
     const runtimeUpdate = this.playerCombatRuntime?.advance(safeDelta);
-    if (runtimeUpdate?.route !== null && runtimeUpdate?.route !== undefined) {
+    if (runtimeUpdate === undefined) {
+      const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
+      this.enemyAttackGauge.update(enemyUpdate.snapshot);
+      return;
+    }
+
+    this.enemyAttackGauge.update(runtimeUpdate.enemyTimeline.snapshot);
+    this.combatHud.update({ hp: runtimeUpdate.playerHp });
+    this.updateEnemyLabel(runtimeUpdate.enemyHp);
+
+    if (runtimeUpdate.route !== null) {
       this.transitionStarted = true;
+      this.releaseCommandInputElement();
       const transition = resolveSceneTransition(
         runtimeUpdate.route.sceneKey,
         runtimeUpdate.route.payload,
@@ -371,6 +380,26 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandCompletionCleanup?.();
     this.commandCompletionCleanup = undefined;
     this.isComposing = false;
+  }
+
+  private createEnemyLabel(initialization: CombatEncounterInitialization): string {
+    return initialization.enemies.length === 0
+      ? "적"
+      : initialization.enemies
+          .map((enemy) => `${enemy.name} HP ${enemy.hp}/${enemy.hp}`)
+          .join(" / ");
+  }
+
+  private updateEnemyLabel(enemyHp: Readonly<Record<string, number>>): void {
+    const initialization = this.combatInitialization;
+    const label = this.enemyPlaceholder.list[1] as Phaser.GameObjects.Text | undefined;
+    if (initialization === undefined || label === undefined) return;
+
+    label.setText(
+      initialization.enemies
+        .map((enemy) => `${enemy.name} HP ${enemyHp[enemy.instanceId] ?? 0}/${enemy.hp}`)
+        .join(" / "),
+    );
   }
 
   private createActorPlaceholder(
