@@ -36,6 +36,18 @@ const withAvailableRound = (
   };
 };
 
+const findRoundWithNodeType = (
+  nodeType: GeneratedMapNode["type"],
+  round: number,
+  choicePath: readonly number[],
+): { runState: RunState; nodes: GeneratedMapNode[] } => {
+  for (let seed = 0; seed < 1000; seed += 1) {
+    const candidate = withAvailableRound(seed, round, choicePath);
+    if (candidate.nodes.some((node) => node.type === nodeType)) return candidate;
+  }
+  throw new Error(`Could not find ${nodeType} node for round ${round}`);
+};
+
 const expectAdvancedMap = (
   runState: RunState,
   completedNode: GeneratedMapNode,
@@ -67,7 +79,7 @@ describe("map round progression after node completion", () => {
   });
 
   test("SHOP completion advances to its connected next round", () => {
-    const { runState, nodes } = withAvailableRound(0, 2, [1]);
+    const { runState, nodes } = findRoundWithNodeType("shop", 2, [1]);
     const node = nodes.find((candidate) => candidate.type === "shop")!;
     const started: RunState = { ...runState, map: beginMapNode(runState.map, node.key) };
 

@@ -5,17 +5,22 @@ import {
 } from "@typing-roguelike/shared";
 import { CombatState } from "../src/game/combat/combat-state";
 import { EnemyAttackTimeline } from "../src/game/combat/enemy-attack-timeline";
-import { finalizeCombatOutcome } from "../src/game/combat/combat-outcome-routing";
+import {
+  calculateCombatVictoryGold,
+  finalizeCombatOutcome,
+} from "../src/game/combat/combat-outcome-routing";
 import type { RewardSelectionAdapter } from "../src/game/rewards/reward-selection-adapter";
 import type { RunState } from "@typing-roguelike/shared";
 
-const createInProgressRun = (): RunState => {
+const createInProgressRun = (currentRound = 1): RunState => {
   const runState = createInitialRunState({ seed: 55 });
   return {
     ...runState,
     map: {
       ...runState.map,
       currentNodeId: "node-1",
+      currentRound,
+      choicePath: Array.from({ length: currentRound - 1 }, () => 1),
       nodeStatuses: {
         "node-1": "in_progress" as const,
         "node-2": "locked" as const,
@@ -25,10 +30,16 @@ const createInProgressRun = (): RunState => {
 };
 
 describe("combat outcome routing", () => {
-  test("victory stops combat, clears the node and opens reward selection", () => {
+  test("scales victory gold by floor and reward tier", () => {
+    expect(calculateCombatVictoryGold(1, "normal")).toBe(10);
+    expect(calculateCombatVictoryGold(4, "elite")).toBe(80);
+    expect(calculateCombatVictoryGold(5, "boss")).toBe(150);
+  });
+
+  test("victory stops combat, grants gold, clears the node and opens reward selection", () => {
     const combat = new CombatState();
     const timeline = new EnemyAttackTimeline();
-    const runState = createInProgressRun();
+    const runState = createInProgressRun(3);
     const ownedEquipmentId = EQUIPMENT_CONFIGS.find(
       ({ rarity }) => rarity !== "hidden",
     )!.id;
@@ -37,6 +48,7 @@ describe("combat outcome routing", () => {
       enemyTimeline: timeline,
       runState: {
         ...runState,
+        runCurrency: 7,
         inventory: {
           ...runState.inventory,
           itemInstances: [ownedEquipmentId],
@@ -51,6 +63,8 @@ describe("combat outcome routing", () => {
     expect(combat.snapshot.canAcceptInput).toBe(false);
     expect(timeline.snapshot.status).toBe("victory");
     expect(result.sceneKey).toBe("RewardSelectionScene");
+    expect(result.runState.runCurrency).toBe(37);
+    expect(result.payload.goldReward).toBe(30);
     expect(result.runState.map.nodeStatuses["node-1"]).toBe("cleared");
     expect(result.runState.map.nodeStatuses["node-2"]).toBe("available");
     expect(result.payload.nextSceneKey).toBe("MapScene");
@@ -63,13 +77,29 @@ describe("combat outcome routing", () => {
     const selectedEquipmentId = candidates[0]!.id;
     adapter.selectReward(selectedEquipmentId);
     adapter.continue();
+    expect(adapter.getRunState().runCurrency).toBe(37);
     expect(adapter.getRunState().inventory.itemInstances).toContain(
       selectedEquipmentId,
     );
   });
 
-  test("victory falls back to map when every normal reward is already owned", () => {
-    const runState = createInProgressRun();
+  test("elite victory grants the higher tier gold reward", () => {
+    const result = finalizeCombatOutcome({
+      combat: new CombatState(),
+      enemyTimeline: new EnemyAttackTimeline(),
+      runState: createInProgressRun(4),
+      outcome: "victory",
+      nextNodeIds: ["node-2"],
+      rewardTier: "elite",
+      rewardRandom: () => 0,
+    });
+
+    expect(result.runState.runCurrency).toBe(80);
+    expect(result.payload.goldReward).toBe(80);
+  });
+
+  test("victory still grants gold when every equipment reward is already owned", () => {
+    const runState = createInProgressRun(2);
     const result = finalizeCombatOutcome({
       combat: new CombatState(),
       enemyTimeline: new EnemyAttackTimeline(),
@@ -89,17 +119,20 @@ describe("combat outcome routing", () => {
 
     expect(result.applied).toBe(true);
     expect(result.sceneKey).toBe("MapScene");
+    expect(result.runState.runCurrency).toBe(20);
+    expect(result.payload.goldReward).toBe(20);
     expect(result.runState.map.nodeStatuses["node-1"]).toBe("cleared");
     expect(result.runState.map.nodeStatuses["node-2"]).toBe("available");
   });
 
-  test("defeat stops combat, ends the run and routes to death settlement", () => {
+  test("defeat stops combat, ends the run and grants no gold", () => {
     const combat = new CombatState();
     const timeline = new EnemyAttackTimeline();
+    const runState = createInProgressRun();
     const result = finalizeCombatOutcome({
       combat,
       enemyTimeline: timeline,
-      runState: createInProgressRun(),
+      runState: { ...runState, runCurrency: 25 },
       outcome: "defeat",
     });
 
@@ -107,17 +140,18 @@ describe("combat outcome routing", () => {
     expect(combat.snapshot.canAcceptInput).toBe(false);
     expect(timeline.snapshot.status).toBe("defeat");
     expect(result.runState.status).toBe("dead");
+    expect(result.runState.runCurrency).toBe(25);
     expect(result.sceneKey).toBe("RunResultScene");
     expect(result.payload.result).toBe("death");
   });
 
-  test("reapplying a cleared victory result is idempotent", () => {
+  test("reapplying a cleared victory result does not grant gold twice", () => {
     const combat = new CombatState();
     const timeline = new EnemyAttackTimeline();
     const first = finalizeCombatOutcome({
       combat,
       enemyTimeline: timeline,
-      runState: createInProgressRun(),
+      runState: createInProgressRun(3),
       outcome: "victory",
       nextNodeIds: ["node-2"],
       rewardRandom: () => 0,
@@ -131,8 +165,10 @@ describe("combat outcome routing", () => {
       rewardRandom: () => 0,
     });
 
+    expect(first.runState.runCurrency).toBe(30);
     expect(second.applied).toBe(false);
     expect(second.sceneKey).toBe("MapScene");
     expect(second.runState).toEqual(first.runState);
+    expect(second.runState.runCurrency).toBe(30);
   });
 });
