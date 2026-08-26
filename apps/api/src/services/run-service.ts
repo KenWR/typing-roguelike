@@ -1,9 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
-  createInitialRunState,
-  generateNodeChoices,
-  type CompleteRunRequest,
-  type RunState,
+	createInitialRunState,
+	generateNodeChoices,
+	MAP_ROUND_COUNT,
+	START_NODE_KEY,
+	type CompleteRunRequest,
+	type RunState,
 } from "@typing-roguelike/shared";
 import { database } from "../config/database.ts";
 
@@ -62,33 +64,81 @@ export const saveCheckpoint = (
   expectedVersion: number,
   state: RunState,
 ) => {
-  const nodeKey = `${round}-${choice}`;
-  if (state.map.currentRound !== round || state.map.choicePath.at(-1) !== choice) {
-    throw new Error("NODE_STATE_MISMATCH");
-  }
-  const stateJson = JSON.stringify(state);
-  const stateHash = hashState(state);
-  const timestamp = now();
-  const transaction = database.transaction(() => {
-    const result = database.prepare(`
-      UPDATE game_runs
+	let savedAt = "";
+	const transaction = database.transaction(() => {
+		const storedRun = database.prepare(`
+			SELECT current_node_id AS nodeId, state_snapshot AS state
+			FROM game_runs
+			WHERE id = ? AND anonymous_player_id = ? AND status = 'active' AND state_version = ?
+		`).get(runId, playerId, expectedVersion) as { nodeId: string; state: string } | null;
+		if (!storedRun) throw new Error("STALE_STATE_VERSION");
+
+		const storedState = JSON.parse(storedRun.state) as RunState;
+		const previousPath = storedState.map.choicePath;
+		const expectedRound = previousPath.length + 1;
+		if (round !== expectedRound || round > MAP_ROUND_COUNT) {
+			throw new Error("NODE_STATE_MISMATCH");
+		}
+
+		const selectedNode = generateNodeChoices(
+			storedState.map.seed,
+			round,
+			previousPath,
+		).find((node) => node.choice === choice);
+		const legacyParentKey = previousPath.length === 0
+			? START_NODE_KEY
+			: `${round - 1}-${previousPath.at(-1)}`;
+		if (
+			selectedNode === undefined ||
+			(selectedNode.parentKey !== storedRun.nodeId && storedRun.nodeId !== legacyParentKey)
+		) {
+			throw new Error("NODE_STATE_MISMATCH");
+		}
+
+		const nextPath = [...previousPath, choice];
+		if (
+			state.map.mapId !== storedState.map.mapId ||
+			state.map.seed !== storedState.map.seed ||
+			state.map.currentRound !== round ||
+			state.map.choicePath.length !== nextPath.length ||
+			state.map.choicePath.some((value, index) => value !== nextPath[index])
+		) {
+			throw new Error("NODE_STATE_MISMATCH");
+		}
+
+		const checkpointState: RunState = {
+			...state,
+			map: {
+				...state.map,
+				currentNodeId: selectedNode.key,
+				choicePath: nextPath,
+			},
+		};
+		const stateJson = JSON.stringify(checkpointState);
+		const stateHash = hashState(checkpointState);
+		const timestamp = now();
+		savedAt = timestamp;
+		const result = database.prepare(`
+			UPDATE game_runs
       SET current_node_id = ?, current_floor = ?, state_snapshot = ?, state_hash = ?,
           state_version = state_version + 1, last_saved_at = ?
       WHERE id = ? AND anonymous_player_id = ? AND status = 'active' AND state_version = ?
-    `).run(nodeKey, round, stateJson, stateHash, timestamp, runId, playerId, expectedVersion);
-    if (result.changes === 0) throw new Error("STALE_STATE_VERSION");
-    database.prepare(`
+		`).run(selectedNode.key, round, stateJson, stateHash, timestamp, runId, playerId, expectedVersion);
+		if (result.changes === 0) throw new Error("STALE_STATE_VERSION");
+		database.prepare(`
       INSERT INTO run_checkpoints
         (id, run_id, sequence_no, reason, node_id, floor, state_snapshot, state_hash, created_at)
       SELECT ?, ?, state_version, 'node_entered', ?, ?, ?, ?, ? FROM game_runs WHERE id = ?
-    `).run(randomUUID(), runId, nodeKey, round, stateJson, stateHash, timestamp, runId);
-  });
-  transaction();
-  return {
-    stateVersion: expectedVersion + 1,
-    savedAt: timestamp,
-    nodeChoices: generateNodeChoices(state.map.seed, round + 1, state.map.choicePath),
-  };
+		`).run(randomUUID(), runId, selectedNode.key, round, stateJson, stateHash, timestamp, runId);
+	});
+	transaction();
+	return {
+		stateVersion: expectedVersion + 1,
+		savedAt,
+		nodeChoices: round < MAP_ROUND_COUNT
+			? generateNodeChoices(state.map.seed, round + 1, state.map.choicePath)
+			: [],
+	};
 };
 
 export const completeRun = (playerId: string, runId: string, input: CompleteRunRequest) => {
