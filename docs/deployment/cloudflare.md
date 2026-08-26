@@ -26,19 +26,23 @@ The checked-in Wrangler contracts define the following resources:
 | Game routing   | SPA fallback through `not_found_handling = "single-page-application"` |
 
 The production D1 name and ID are supplied through the GitHub `production`
-Environment. The local placeholder in `apps/api/wrangler.toml` is never used by
-the production deployment. The workflow creates a short-lived runner-temporary
-Wrangler config with absolute repository paths and the production D1 metadata;
-it does not write that config to the repository, job summary, logs, or
-artifacts.
+Environment. The workflow creates a short-lived runner-temporary Wrangler
+config, replaces the D1 name and ID with those Environment values, and preserves
+the checked-in `DB` binding. This works whether `apps/api/wrangler.toml`
+contains local placeholders or production metadata. When production metadata is
+checked in, the workflow requires identical Environment values so workflow and
+direct deployments target the same database. The temporary config uses
+absolute repository paths and is not written to the repository, job summary,
+logs, or artifacts.
 
 ## GitHub Environment setup
 
 Create an Environment named `production` and restrict deployments to the
 repository's protected `main` branch. Add required reviewers when a human
 approval is part of the production release policy. The workflow references this
-Environment explicitly. Configure these values in the Environment; do not
-commit them to Wrangler files or `.env` files.
+Environment explicitly. Configure these workflow values in the Environment.
+Do not commit secrets or `.env` files. Non-secret D1 metadata may also be kept
+in `apps/api/wrangler.toml`; keep both copies synchronized.
 
 ### Secret
 
@@ -108,9 +112,13 @@ The summary is written with `if: always()` and records each stage as
   automatic rollback. Inspect the URLs and stage outcomes before retrying.
 
 The workflow uses one concurrency group with `cancel-in-progress: false`, so
-production deployments are serialized and a queued deployment is not silently
-cancelled. The main-SHA check prevents a queued run from deploying an older
-main commit after a newer commit has been pushed.
+an in-progress deployment is not cancelled. GitHub Actions keeps at most one
+pending run per concurrency group: if another validation completes while a run
+is pending, the newer run replaces the older pending run. Production
+deployments therefore intentionally coalesce to the newest validated `main`
+commit rather than forming a lossless queue, and a superseded pending run does
+not get its own deployment summary. The main-SHA check prevents a stale pending
+run from mutating production if `main` advances before that run starts.
 
 ## Rollback
 
@@ -132,9 +140,9 @@ by the same API/game compatibility and health checks.
 
 The implementation can be validated without Cloudflare credentials by checking
 workflow syntax, installing the frozen lockfile, running the repository checks,
-and running Wrangler dry-runs against the checked-in local placeholder
-configuration. The commands that change a remote D1 database or upload either
-Worker are intentionally excluded from local validation.
+and running Wrangler dry-runs against the checked-in configuration. Dry-runs
+do not change a remote D1 database or upload either Worker; those remote
+commands are intentionally excluded from local validation.
 
 Production deployment, production smoke tests, and credential validation are
 `NOT_RUN` in this change when the `production` Environment is not configured.
