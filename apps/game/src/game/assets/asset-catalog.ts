@@ -1,4 +1,5 @@
 import { COMBAT_BACKGROUND_ASSET, ENEMY_IMAGE_ASSETS } from "./enemy-visual-assets";
+import { EQUIPMENT_ICON_ASSETS } from "./equipment-icon-assets";
 import { PLAYER_WEAPON_IMAGE_ASSETS } from "./player-visual-assets";
 import { RELIC_CONFIGS } from "@typing-roguelike/shared";
 
