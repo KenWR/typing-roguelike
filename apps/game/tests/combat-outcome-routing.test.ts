@@ -65,6 +65,7 @@ describe("combat outcome routing", () => {
     expect(result.sceneKey).toBe("RewardSelectionScene");
     expect(result.runState.runCurrency).toBe(37);
     expect(result.payload.goldReward).toBe(30);
+    expect(result.payload.rewardSource).toBe("combat-victory");
     expect(result.runState.map.nodeStatuses["node-1"]).toBe("cleared");
     expect(result.runState.map.nodeStatuses["node-2"]).toBe("available");
     expect(result.payload.nextSceneKey).toBe("MapScene");
