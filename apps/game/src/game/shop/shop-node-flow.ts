@@ -29,6 +29,8 @@ const createAvailableOffers = (
   return createShopOffers({
     random,
     equipment: EQUIPMENT_CONFIGS.filter((equipment) => !owned.has(equipment.id)),
+    ringCount: 1,
+    excludedRingIds: runState.inventory.itemInstances,
     excludedRelicIds: runState.inventory.relicInstances,
   });
 };

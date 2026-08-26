@@ -1,6 +1,7 @@
 import { EQUIPMENT_CONFIGS } from "../content/equipment.ts";
 import { RELIC_CONFIGS } from "../content/relics.ts";
-import type { EquipmentConfig, RelicConfig } from "../content/types.ts";
+import { RING_CONFIGS } from "../content/rings.ts";
+import type { EquipmentConfig, RelicConfig, RingConfig } from "../content/types.ts";
 import type { RunState } from "../contracts/backend/run-state.ts";
 import {
 	applyRelicAcquisition,
@@ -8,14 +9,19 @@ import {
 	getRelicPrice,
 	ownsRelic,
 } from "./relic-drops.ts";
-import { applyEquipmentAcquisition } from "./equipment-loadout.ts";
+import {
+	applyRingAcquisition,
+	generateRingRewardCandidates,
+	getRingPrice,
+	ownsRing,
+} from "./ring-drops.ts";
 
-export type ShopOfferKind = "equipment" | "relic";
+export type ShopOfferKind = "equipment" | "relic" | "ring";
 
 export type ShopOffer = Readonly<{
 	id: string;
 	kind: ShopOfferKind;
-	/** kind 에 해당하는 장비 또는 유물의 ID */
+	/** kind 에 해당하는 장비, 유물 또는 반지의 ID */
 	itemId: string;
 	price: number;
 }>;
@@ -37,11 +43,13 @@ export const normalizeShopOffer = (
 export type CreateShopOffersInput = Readonly<{
 	count?: number;
 	relicCount?: number;
+	ringCount?: number;
 	priceMultiplier?: number;
 	minimumPrice?: number;
 	random?: () => number;
 	equipment?: readonly EquipmentConfig[];
 	excludedRelicIds?: readonly string[];
+	excludedRingIds?: readonly string[];
 }>;
 
 export type ShopPurchaseResult = Readonly<{
@@ -90,14 +98,17 @@ const getRandomIndex = (length: number, random: () => number): number => {
 export const createShopOffers = ({
 	count = 3,
 	relicCount = 2,
+	ringCount = 0,
 	priceMultiplier = 2,
 	minimumPrice = 1,
 	random = Math.random,
 	equipment = EQUIPMENT_CONFIGS,
 	excludedRelicIds = [],
+	excludedRingIds = [],
 }: CreateShopOffersInput = {}): readonly ShopOffer[] => {
 	validateNonNegativeInteger("Shop offer count", count);
 	validateNonNegativeInteger("Shop relic offer count", relicCount);
+	validateNonNegativeInteger("Shop ring offer count", ringCount);
 	validatePositiveNumber("Shop price multiplier", priceMultiplier);
 	validateNonNegativeInteger("Shop minimum price", minimumPrice);
 
@@ -119,7 +130,21 @@ export const createShopOffers = ({
 		});
 	}
 
-	// 유물은 장비 진열과 겹치지 않는 별도 칸을 차지합니다.
+	const rings = generateRingRewardCandidates({
+		count: ringCount,
+		random,
+		excludedRingIds,
+	});
+	for (const ring of rings) {
+		offers.push({
+			id: `shop-offer-${offers.length + 1}-${ring.id}`,
+			kind: "ring",
+			itemId: ring.id,
+			price: Math.max(minimumPrice, getRingPrice(ring)),
+		});
+	}
+
+	// 유물은 장비/반지 진열과 겹치지 않는 별도 칸을 차지합니다.
 	const relics = generateRelicRewardCandidates({
 		count: relicCount,
 		random,
@@ -149,14 +174,20 @@ export const findShopOfferRelic = (offer: ShopOffer): RelicConfig | undefined =>
 		? RELIC_CONFIGS.find((candidate) => candidate.id === offer.itemId)
 		: undefined;
 
+export const findShopOfferRing = (offer: ShopOffer): RingConfig | undefined =>
+	offer.kind === "ring"
+		? RING_CONFIGS.find((candidate) => candidate.id === offer.itemId)
+		: undefined;
+
 /** 진열된 상품을 이미 보유하고 있는지 판단합니다. */
 export const ownsShopOffer = (
 	runState: Readonly<RunState>,
 	offer: ShopOffer,
-): boolean =>
-	offer.kind === "relic"
-		? ownsRelic(runState, offer.itemId)
-		: runState.inventory.itemInstances.includes(offer.itemId);
+): boolean => {
+	if (offer.kind === "relic") return ownsRelic(runState, offer.itemId);
+	if (offer.kind === "ring") return ownsRing(runState, offer.itemId);
+	return runState.inventory.itemInstances.includes(offer.itemId);
+};
 
 export const applyShopPurchase = ({
 	offerId,
@@ -226,19 +257,28 @@ export const applyShopPurchase = ({
 		};
 	}
 
-  const equipment = EQUIPMENT_CONFIGS.find(
-    (candidate) => candidate.id === offer.itemId,
-  );
-  const acquired = equipment === undefined
-    ? {
-        ...runState,
-        inventory: {
-          ...runState.inventory,
-          itemInstances: [...runState.inventory.itemInstances, offer.itemId],
-        },
-      }
-    : applyEquipmentAcquisition(runState, equipment);
-  return {
+	if (offer.kind === "ring") {
+		const acquired = applyRingAcquisition(runState, offer.itemId);
+		return {
+			applied: true,
+			reason: "purchased",
+			offer,
+			beforeCurrency,
+			afterCurrency,
+			runState: { ...acquired, runCurrency: afterCurrency },
+			purchasedOfferIds: nextPurchasedOfferIds,
+		};
+	}
+
+	const equipment = EQUIPMENT_CONFIGS.find(
+		(candidate) => candidate.id === offer.itemId,
+	);
+	const loadout = equipment === undefined
+		? runState.loadout
+		: equipment.slot === "weapon"
+			? { ...runState.loadout, weaponId: equipment.id }
+			: { ...runState.loadout, subweaponId: equipment.id };
+	return {
 		applied: true,
 		reason: "purchased",
 		offer,

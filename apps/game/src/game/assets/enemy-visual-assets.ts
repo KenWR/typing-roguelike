@@ -27,6 +27,7 @@ const ENEMY_NAMES_BY_ID = {
 } as const;
 
 export type EnemyVisualState =
+  | "idle"
   | "ready"
   | "special"
   | "defend"
@@ -34,11 +35,18 @@ export type EnemyVisualState =
   | "disabled";
 
 const FILE_SUFFIX_BY_STATE: Readonly<Record<EnemyVisualState, string>> = {
+  idle: "기본",
   ready: "행동준비",
   special: "특수행동준비",
   defend: "방어",
   hit: "피격",
   disabled: "행동불능",
+};
+
+const CUSTOM_ENEMY_VISUAL_DIRECTORY: Readonly<Record<string, string>> = {
+  "ink-slime": "ink-slime",
+  "red-corrector": "red-corrector",
+  "chain-executor": "chain-executor",
 };
 
 export const enemyTextureKey = (
@@ -48,20 +56,31 @@ export const enemyTextureKey = (
 
 export const ENEMY_IMAGE_ASSETS = Object.entries(ENEMY_NAMES_BY_ID).flatMap(
   ([enemyId, fileName]) =>
-    (Object.entries(FILE_SUFFIX_BY_STATE) as [EnemyVisualState, string][]).map(
-      ([state, suffix]) => ({
+    (Object.entries(FILE_SUFFIX_BY_STATE) as [EnemyVisualState, string][])
+      .filter(
+        ([state]) =>
+          state !== "idle" ||
+          CUSTOM_ENEMY_VISUAL_DIRECTORY[enemyId] !== undefined,
+      )
+      .map(([state, suffix]) => ({
         key: enemyTextureKey(enemyId, state),
-        path: `/assets/monster/${fileName}_${suffix}.png`,
-      }),
-    ),
+        path: CUSTOM_ENEMY_VISUAL_DIRECTORY[enemyId] === undefined
+          ? `/assets/monster/${fileName}_${suffix}.png`
+          : `/assets/images/enemies/${CUSTOM_ENEMY_VISUAL_DIRECTORY[enemyId]}/${state}.png`,
+      })),
 );
 
 export const resolveEnemyTextureKey = (
   enemyId: string | undefined,
-  state: EnemyVisualState = "ready",
+  state: EnemyVisualState = "idle",
 ): string | undefined =>
   enemyId !== undefined && enemyId in ENEMY_NAMES_BY_ID
-    ? enemyTextureKey(enemyId, state)
+    ? enemyTextureKey(
+        enemyId,
+        state === "idle" && CUSTOM_ENEMY_VISUAL_DIRECTORY[enemyId] === undefined
+          ? "ready"
+          : state,
+      )
     : undefined;
 
 export const resolveEnemyVisualState = (input: Readonly<{
@@ -78,5 +97,5 @@ export const resolveEnemyVisualState = (input: Readonly<{
   ) {
     return "special";
   }
-  return "ready";
+  return input.activeAttackId === undefined ? "idle" : "ready";
 };

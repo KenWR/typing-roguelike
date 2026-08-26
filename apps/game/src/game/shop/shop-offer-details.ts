@@ -1,6 +1,7 @@
 import {
   EQUIPMENT_CONFIGS,
   RELIC_CONFIGS,
+  RING_CONFIGS,
   type ShopOffer,
 } from "@typing-roguelike/shared";
 import { getRelicIconTextureKey } from "../assets/asset-catalog";
@@ -8,7 +9,7 @@ import { resolveEquipmentIconTextureKey } from "../assets/equipment-icon-assets"
 
 export type ShopOfferHoverDetails = Readonly<{
   name: string;
-  kindLabel: "유물" | "장비";
+  kindLabel: "유물" | "반지" | "장비";
   rarity: string;
   description: string;
   textureKey?: string;
@@ -32,9 +33,6 @@ export const getShopOfferHoverDetails = (
   offer: Pick<ShopOffer, "kind" | "itemId">,
 ): ShopOfferHoverDetails => {
   if (offer.kind === "relic") {
-    // ShopOffer.itemId is intentionally a string because it also accepts
-    // restored/legacy offers. Find keeps that boundary type-safe and lets the
-    // UI fall back cleanly for an unknown id.
     const relic = RELIC_CONFIGS.find(({ id }) => id === offer.itemId);
     return {
       name: relic?.name ?? "알 수 없는 유물",
@@ -42,6 +40,18 @@ export const getShopOfferHoverDetails = (
       rarity: relic?.rarity ?? "unknown",
       description: relic?.description ?? "설명 정보가 없습니다.",
       textureKey: relic === undefined ? undefined : getRelicIconTextureKey(relic.id),
+    };
+  }
+
+  if (offer.kind === "ring") {
+    const ring = RING_CONFIGS.find(({ id }) => id === offer.itemId);
+    return {
+      name: ring?.name ?? "알 수 없는 반지",
+      kindLabel: "반지",
+      rarity: ring?.rarity ?? "unknown",
+      description: ring === undefined
+        ? "설명 정보가 없습니다."
+        : `${ring.position === "prefix" ? "접두사" : "접미사"} · ${ring.commandAffix}\n${ring.description}`,
     };
   }
 

@@ -75,6 +75,7 @@ const createAttackAction = (enemy: EnemyDefinition): EnemyActionConfig => ({
   damage: enemy.attackDamage,
   windupMs: enemy.attackWindupMs,
   recoveryMs: 300,
+  shieldAmount: createShieldAmount(enemy, "attack", enemy.attackWindupMs),
   description: enemy.attackDescription,
   animation: createAnimationRefs(enemy.id, "attack"),
 });
@@ -109,6 +110,7 @@ const createSpecialActions = (enemy: EnemyDefinition): readonly EnemyActionConfi
     damage: special.damage,
     windupMs: special.windupMs,
     recoveryMs: special.recoveryMs,
+    shieldAmount: createShieldAmount(enemy, "special", special.windupMs),
     ...(special.apDelta === undefined ? {} : { apDelta: special.apDelta }),
     description: special.description,
     animation: createAnimationRefs(enemy.id, special.id),

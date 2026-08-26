@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   EQUIPMENT_CONFIGS,
   RELIC_CONFIGS,
+  RING_CONFIGS,
   createInitialRunState,
 } from "@typing-roguelike/shared";
 import { createInventoryView } from "../src/game/inventory/inventory-view";
@@ -54,6 +55,36 @@ describe("inventory view", () => {
         isActive: true,
       },
     ]);
+  });
+
+  test("renders an owned ring with its real name, affix, effect, and equipped state", () => {
+    const ring = RING_CONFIGS[0]!;
+    const runState = createInitialRunState({ seed: 343 });
+    const view = createInventoryView({
+      ...runState,
+      inventory: {
+        ...runState.inventory,
+        itemInstances: [ring.id],
+      },
+      loadout: {
+        ...runState.loadout,
+        ring1Id: ring.id,
+      },
+    });
+
+    expect(view.equipment).toHaveLength(1);
+    expect(view.equipment[0]).toMatchObject({
+      id: ring.id,
+      name: ring.name,
+      rarity: ring.rarity,
+      isEquipped: true,
+    });
+    expect(view.equipment[0]!.skills[0]).toMatchObject({
+      name: ring.position === "prefix" ? "반지 · 접두사" : "반지 · 접미사",
+      effect: ring.description,
+    });
+    expect(view.equipment[0]!.skills[0]!.command).toContain(ring.commandAffix);
+    expect(view.equipment[0]!.skills[0]!.effect).not.toBe("등록되지 않은 장비입니다.");
   });
 
   test("keeps unknown relics and empty inventory safe", () => {

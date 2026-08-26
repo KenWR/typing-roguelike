@@ -1,14 +1,17 @@
 import {
   EQUIPMENT_CONFIGS,
   RELIC_CONFIGS,
+  RING_CONFIGS,
   applyRelicAcquisition,
+  applyRingAcquisition,
   completeMapNode,
   generateEquipmentRewardCandidates,
   generateRelicRewardCandidates,
-  applyEquipmentAcquisition,
-  type EquipmentRewardTier,
+  generateRingRewardCandidates,
+  resolveSkillsWithRings,
   type EquipmentConfig,
   type RelicConfig,
+  type RingConfig,
   type RunState,
   type SkillConfig,
 } from "@typing-roguelike/shared";
@@ -25,10 +28,10 @@ import {
   type RewardRarity,
 } from "./reward-selection-view-state";
 
-/** 보상 후보 칸 수. 이 중 일부가 유물로 바뀐다. */
+/** 보상 후보 칸 수. 특수 보상이 섞여도 최소 한 칸은 장비로 남긴다. */
 const REWARD_CANDIDATE_COUNT = 3;
-/** 칸별 유물 등장 확률. 최소 한 칸은 장비로 남긴다. */
-const MIN_RELIC_REWARD_COUNT = 2;
+const RELIC_REWARD_CHANCE = 1 / 3;
+const RING_REWARD_CHANCE = 1 / 3;
 
 const findEquipment = (equipmentId: string): EquipmentConfig => {
   const equipment = EQUIPMENT_CONFIGS.find((candidate) => candidate.id === equipmentId);
@@ -49,15 +52,33 @@ const findRelic = (relicId: string): RelicConfig => {
   return relic;
 };
 
+const findRing = (ringId: string): RingConfig => {
+  const ring = RING_CONFIGS.find((candidate) => candidate.id === ringId);
+  if (ring === undefined) {
+    throw new Error(`Unknown ring reward: ${ringId}`);
+  }
+  return ring;
+};
+
 const toRelicRewardCandidate = (relic: RelicConfig): RewardCandidate => ({
   id: relic.id,
   kind: "relic",
   name: relic.name,
   rarity: toRewardRarity(relic.rarity),
   description: relic.description,
-  effect: `유물 · 획득 시 바로 장착`,
+  effect: "유물 · 획득 시 바로 장착",
   icon: "◈",
   imageKey: getRelicIconTextureKey(relic.id),
+});
+
+const toRingRewardCandidate = (ring: RingConfig): RewardCandidate => ({
+  id: ring.id,
+  kind: "ring",
+  name: ring.name,
+  rarity: toRewardRarity(ring.rarity),
+  description: ring.description,
+  effect: `${ring.position === "prefix" ? "접두사" : "접미사"} · ${ring.commandAffix}`,
+  icon: "◌",
 });
 
 const toRewardCandidate = (equipment: EquipmentConfig): RewardCandidate => ({
@@ -91,13 +112,7 @@ const createSeededRandom = (seed: number): (() => number) => {
   };
 };
 
-/**
- * 장비와 유물이 섞인 보상 후보를 만든다.
- *
- * 칸 수는 그대로 두고 일부를 유물로 바꾼다. 유물만 나와서 무기를 갱신할
- * 기회가 사라지지 않도록 최소 한 칸은 장비로 남긴다. 같은 seed 와 노드에서는
- * 항상 같은 결과가 나온다.
- */
+/** 같은 seed/node에서 결정적인 장비·유물·반지 혼합 보상을 만든다. */
 const getRewardCandidates = (
   runState: Readonly<RunState>,
   nodeId: string | undefined,
@@ -113,37 +128,58 @@ const getRewardCandidates = (
     runState.map.seed ^ hashString(nodeId ?? runState.map.currentNodeId),
   );
 
+  let relicCount = 0;
+  let ringCount = 0;
+  for (let slot = 0; slot < REWARD_CANDIDATE_COUNT - 1; slot += 1) {
+    const roll = random();
+    if (roll < RING_REWARD_CHANCE) ringCount += 1;
+    else if (roll < RING_REWARD_CHANCE + RELIC_REWARD_CHANCE) relicCount += 1;
+  }
+
+  const rings = generateRingRewardCandidates({
+    count: ringCount,
+    random,
+    excludedRingIds: runState.inventory.itemInstances,
+  });
   const relics = generateRelicRewardCandidates({
     count: MIN_RELIC_REWARD_COUNT,
     random,
     excludedRelicIds: runState.inventory.relicInstances,
   });
   const equipment = generateEquipmentRewardCandidates({
-    tier: equipmentTier,
-    count: candidateCount - relics.length,
+    tier: "normal",
+    count: REWARD_CANDIDATE_COUNT - rings.length - relics.length,
     random,
     excludedEquipmentIds: runState.inventory.itemInstances,
   });
 
-  return [...equipment.map(toRewardCandidate), ...relics.map(toRelicRewardCandidate)];
+  return [
+    ...equipment.map(toRewardCandidate),
+    ...rings.map(toRingRewardCandidate),
+    ...relics.map(toRelicRewardCandidate),
+  ];
 };
 
 export const getRunAvailableSkills = (runState: Readonly<RunState>): readonly SkillConfig[] => {
   const equippedIds = [runState.loadout.weaponId, runState.loadout.subweaponId].filter(
     (equipmentId): equipmentId is string => equipmentId !== null,
   );
-
-  return equippedIds.flatMap((equipmentId) => findEquipment(equipmentId).skills);
+  const baseSkills = equippedIds.flatMap((equipmentId) => findEquipment(equipmentId).skills);
+  return resolveSkillsWithRings(baseSkills, [
+    runState.loadout.ring1Id,
+    runState.loadout.ring2Id,
+  ]).map(({ skill }) => skill);
 };
 
 /** 선택한 보상 종류에 맞는 획득 처리를 고른다. */
 export const applyRunReward = (
   runState: Readonly<RunState>,
   reward: Pick<RewardCandidate, "id" | "kind">,
-): RunState =>
-  reward.kind === "relic"
-    ? applyRelicAcquisition(runState, reward.id)
-    : applyEquipmentReward(runState, reward.id);
+): RunState => {
+  if (reward.kind === "relic") return applyRelicAcquisition(runState, reward.id);
+  if (reward.kind === "ring") return applyRingAcquisition(runState, reward.id);
+  return applyEquipmentReward(runState, reward.id);
+};
 
 export const applyEquipmentReward = (
   runState: Readonly<RunState>,
@@ -165,9 +201,7 @@ export type CreateRunRewardSelectionFlowOptions = Readonly<{
   nextNodeIds?: readonly string[];
   equipmentIds?: readonly string[];
   relicIds?: readonly string[];
-  equipmentTier?: EquipmentRewardTier;
-  rewardCount?: number;
-  random?: () => number;
+  ringIds?: readonly string[];
   mapCompletion?: Readonly<{
     nodeId: string;
     nextNodeIds: readonly string[];
@@ -181,25 +215,18 @@ export const createRunRewardSelectionFlow = ({
   nextNodeIds = [],
   equipmentIds,
   relicIds,
-  equipmentTier = "normal",
-  rewardCount = REWARD_CANDIDATE_COUNT,
-  random,
+  ringIds,
   mapCompletion,
   onContinue,
 }: CreateRunRewardSelectionFlowOptions): RunRewardSelectionFlow => {
   const completionTarget = mapCompletion ?? (nodeId === undefined ? undefined : { nodeId, nextNodeIds });
   const overrides = [
     ...(equipmentIds ?? []).map((id) => toRewardCandidate(findEquipment(id))),
+    ...(ringIds ?? []).map((id) => toRingRewardCandidate(findRing(id))),
     ...(relicIds ?? []).map((id) => toRelicRewardCandidate(findRelic(id))),
   ];
-  const rewards = equipmentIds === undefined && relicIds === undefined
-    ? getRewardCandidates(
-        runState,
-        completionTarget?.nodeId ?? nodeId,
-        random,
-        equipmentTier,
-        rewardCount,
-      )
+  const rewards = equipmentIds === undefined && relicIds === undefined && ringIds === undefined
+    ? getRewardCandidates(runState, completionTarget?.nodeId ?? nodeId)
     : overrides;
   if (rewards.length === 0) {
     throw new RangeError("At least one reward candidate is required.");

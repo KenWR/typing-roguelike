@@ -466,7 +466,6 @@ export class PlayerCombatRuntime {
     enemyId: string,
     action: CombatEnemyInitialization["actions"][number],
   ): void {
-    if (action.kind !== "defense") return;
     const amount = action.shieldAmount ?? 0;
     if (amount <= 0 || action.windupMs <= 0) return;
 
