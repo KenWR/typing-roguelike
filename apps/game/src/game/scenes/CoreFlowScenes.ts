@@ -1,4 +1,6 @@
 import Phaser from "phaser";
+import type { RunState } from "@typing-roguelike/shared";
+import { getAvailableNodeIds } from "../run/run-start-map";
 import { LobbyRunStarter } from "./lobby-run-start";
 import {
   DEFAULT_MENU_SETTINGS,
@@ -160,8 +162,42 @@ export class LobbyScene extends EmptyCoreScene {
 }
 
 export class MapScene extends EmptyCoreScene {
+  private runState?: Readonly<RunState>;
+
   constructor() {
     super(SCENE_KEYS.map);
+  }
+
+  init(data: { runState?: Readonly<RunState> }): void {
+    this.runState = data.runState;
+  }
+
+  create(): void {
+    const { width, height } = this.scale.gameSize;
+    this.add.rectangle(0, 0, width, height, 0x111827).setOrigin(0);
+    this.add
+      .text(width / 2, height * 0.32, "맵", {
+        fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
+        fontSize: "48px",
+        color: "#f9fafb",
+      })
+      .setOrigin(0.5);
+
+    const availableNodes = this.runState === undefined ? [] : getAvailableNodeIds(this.runState);
+    this.add
+      .text(
+        width / 2,
+        height * 0.5,
+        this.runState === undefined
+          ? "런 상태를 찾을 수 없습니다."
+          : `1층 시작 · 선택 가능한 노드 ${availableNodes.length}개`,
+        {
+          fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
+          fontSize: "24px",
+          color: "#9ca3af",
+        },
+      )
+      .setOrigin(0.5);
   }
 }
 
