@@ -4,7 +4,6 @@ import { CombatState } from "../src/game/combat/combat-state";
 import { EnemyAttackTimeline } from "../src/game/combat/enemy-attack-timeline";
 import { finalizeCombatOutcome } from "../src/game/combat/combat-outcome-routing";
 import { RunSession } from "../src/game/run/run-session";
-import { routeMapNodeSelection } from "../src/game/run/map-node-routing";
 import { SettlementCompletionController } from "../src/game/settlement/settlement-completion";
 import { completeRestNode, createRestNodeFlow } from "../src/game/rest/rest-node-flow";
 import { completeShopNode, createShopNodeFlow } from "../src/game/shop/shop-node-flow";
@@ -30,35 +29,42 @@ const firstNodeRun = (): { run: RunState; nodeId: string } => {
 };
 
 describe("core RunState integration", () => {
-  test("run session survives map selection and combat victory without replacing run data", () => {
+  test("run session survives combat victory and reward routing without replacing run data", () => {
     const storage = memoryStorage();
     const session = new RunSession(storage);
     const created = session.create({ seed: 17 });
-    const nodes = generateNodeChoices(created.map.seed, 1, []);
-    session.update((run) => ({ ...run, map: { ...run.map, nodeStatuses: Object.fromEntries(nodes.map((node) => [node.key, "available" as const])) } }));
+    const fighting: RunState = {
+      ...created,
+      map: {
+        ...created.map,
+        currentNodeId: "integration-combat",
+        nodeStatuses: {
+          "integration-combat": "in_progress",
+          "integration-next": "locked",
+        },
+      },
+    };
+    session.update(() => fighting);
 
-    const selectable = nodes.find((node) => node.type === "combat" || node.type === "elite") ?? nodes[0]!;
-    const route = routeMapNodeSelection(session.require(), selectable.key);
-    expect(route.applied).toBe(true);
-    session.update(() => route.runState);
+    const outcome = finalizeCombatOutcome({
+      combat: new CombatState(),
+      enemyTimeline: new EnemyAttackTimeline(),
+      runState: session.require(),
+      outcome: "victory",
+      nextNodeIds: ["integration-next"],
+      rewardCount: 1,
+      rewardRandom: () => 0,
+    });
 
-    if (route.sceneKey === SCENE_KEYS.combat) {
-      const outcome = finalizeCombatOutcome({
-        combat: new CombatState(),
-        enemyTimeline: new EnemyAttackTimeline(),
-        runState: route.runState,
-        outcome: "victory",
-        nextNodeIds: selectable.nextNodeKeys,
-        rewardCount: 1,
-        rewardRandom: () => 0,
-      });
-      expect(outcome.sceneKey).toBe(SCENE_KEYS.reward);
-      expect(outcome.runState.map.seed).toBe(17);
-      expect(outcome.runState.status).toBe("active");
-      expect(outcome.payload.runState).toEqual(outcome.runState);
-      expect(outcome.payload.adapter).toBeDefined();
-      expect(outcome.payload.nextSceneKey).toBe(SCENE_KEYS.map);
-    }
+    expect(outcome.applied).toBe(true);
+    expect(outcome.sceneKey).toBe(SCENE_KEYS.reward);
+    expect(outcome.runState.map.seed).toBe(17);
+    expect(outcome.runState.status).toBe("active");
+    expect(outcome.runState.map.nodeStatuses["integration-combat"]).toBe("cleared");
+    expect(outcome.runState.map.nodeStatuses["integration-next"]).toBe("available");
+    expect(outcome.payload.runState).toEqual(outcome.runState);
+    expect(outcome.payload.adapter).toBeDefined();
+    expect(outcome.payload.nextSceneKey).toBe(SCENE_KEYS.map);
   });
 
   test("shop and rest completion preserve RunState and return to the map contract", () => {
