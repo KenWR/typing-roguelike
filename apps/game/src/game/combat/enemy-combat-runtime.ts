@@ -1,25 +1,18 @@
 import type { RunState } from "@typing-roguelike/shared";
 import { playPlayerHitSound } from "../audio/runtime-audio";
-import {
-  finalizeCombatOutcome,
-  type CombatOutcomeRoute,
-} from "./combat-outcome-routing";
+import { ActionPointResource } from "./action-point-resource";
+import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome-routing";
 import { CombatState } from "./combat-state";
 import { DefenseWindowTracker } from "./defense-window";
-import type {
-  CombatEncounterInitialization,
-  CombatEnemyInitialization,
-} from "./encounter-initializer";
+import type { CombatEncounterInitialization, CombatEnemyInitialization } from "./encounter-initializer";
 import { EnemyImpactResolver } from "./enemy-impact-resolver";
-import {
-  EnemyAttackTimeline,
-  type EnemyAttackTimelineSnapshot,
-} from "./enemy-attack-timeline";
+import { EnemyAttackTimeline, type EnemyAttackTimelineSnapshot } from "./enemy-attack-timeline";
 import { SkillCombatantState } from "./skill-impact-resolver";
 
 export type EnemyCombatRuntimeConfig = Readonly<{
   combat: CombatState;
   enemyTimeline: EnemyAttackTimeline;
+  actionPoints: ActionPointResource;
   runState: RunState;
   initialization: CombatEncounterInitialization;
   random?: () => number;
@@ -27,21 +20,21 @@ export type EnemyCombatRuntimeConfig = Readonly<{
 
 export type EnemyCombatRuntimeUpdate = Readonly<{
   playerHp: number;
+  playerAp: number;
   runState: RunState;
   timeline: EnemyAttackTimelineSnapshot;
   route: CombatOutcomeRoute | null;
 }>;
 
 const validateRandomValue = (value: number): number => {
-  if (!Number.isFinite(value) || value < 0 || value >= 1) {
-    throw new RangeError("Enemy attack random value must be in [0, 1).");
-  }
+  if (!Number.isFinite(value) || value < 0 || value >= 1) throw new RangeError("Enemy attack random value must be in [0, 1).");
   return value;
 };
 
 export class EnemyCombatRuntime {
   private readonly combat: CombatState;
   private readonly enemyTimeline: EnemyAttackTimeline;
+  private readonly actionPoints: ActionPointResource;
   private readonly initialization: CombatEncounterInitialization;
   private readonly random: () => number;
   private readonly player: SkillCombatantState;
@@ -56,12 +49,11 @@ export class EnemyCombatRuntime {
   constructor(config: EnemyCombatRuntimeConfig) {
     this.combat = config.combat;
     this.enemyTimeline = config.enemyTimeline;
+    this.actionPoints = config.actionPoints;
     this.initialization = config.initialization;
     this.random = config.random ?? Math.random;
     this.runState = config.runState;
-    this.enemyHp = Object.fromEntries(
-      config.initialization.enemies.map((enemy) => [enemy.instanceId, enemy.hp]),
-    );
+    this.enemyHp = Object.fromEntries(config.initialization.enemies.map((enemy) => [enemy.instanceId, enemy.hp]));
     this.player = new SkillCombatantState({
       id: "player",
       attackPower: 0,
@@ -102,6 +94,7 @@ export class EnemyCombatRuntime {
       });
       if (!result.applied) continue;
 
+      if (action.apDelta !== undefined) this.actionPoints.adjust(action.apDelta);
       playPlayerHitSound({ defended: result.defended, special: action.kind === "special" });
       completedEnemyIds.add(enemy.instanceId);
       this.activeTimelineByEnemy.delete(enemy.instanceId);
@@ -112,12 +105,7 @@ export class EnemyCombatRuntime {
     }
 
     if (this.player.snapshot.health.isDead) {
-      this.route = finalizeCombatOutcome({
-        combat: this.combat,
-        enemyTimeline: this.enemyTimeline,
-        runState: this.runState,
-        outcome: "defeat",
-      });
+      this.route = finalizeCombatOutcome({ combat: this.combat, enemyTimeline: this.enemyTimeline, runState: this.runState, outcome: "defeat" });
       this.runState = this.route.runState;
       return this.snapshot();
     }
@@ -158,6 +146,12 @@ export class EnemyCombatRuntime {
   }
 
   private snapshot(): EnemyCombatRuntimeUpdate {
-    return { playerHp: this.playerHp, runState: this.runState, timeline: this.enemyTimeline.snapshot, route: this.route };
+    return {
+      playerHp: this.playerHp,
+      playerAp: this.actionPoints.snapshot.currentAp,
+      runState: this.runState,
+      timeline: this.enemyTimeline.snapshot,
+      route: this.route,
+    };
   }
 }
