@@ -19,6 +19,14 @@ describe("enemy health bar", () => {
     });
   });
 
+  test("starts each enemy telegraph empty until its own action begins", () => {
+    expect(createEnemyHealthBarState(24, 30)).toMatchObject({
+      telegraphAttackName: "",
+      telegraphAttackType: null,
+      telegraphProgress: 0,
+    });
+  });
+
   test("formats hp and shield totals beside each other", () => {
     const state = createEnemyHealthBarState(56, 56, {
       shield: 0,

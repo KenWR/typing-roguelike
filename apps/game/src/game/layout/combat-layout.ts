@@ -12,7 +12,7 @@ export type CombatLayout = {
 };
 
 /** Local y offset of the enemy HP bar relative to its actor anchor. */
-export const ENEMY_HEALTH_BAR_OFFSET_Y = -130;
+export const ENEMY_HEALTH_BAR_OFFSET_Y = -170;
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -25,7 +25,10 @@ export function createCombatLayout(width: number, height: number): CombatLayout 
   const relicHudHeight = 48;
   const topContentY = safeInset + relicHudHeight + 8;
   const hudHeight = isCompact ? clamp(height * 0.14, 96, 124) : clamp(height * 0.18, 72, 156);
-  const enemyAttackGaugeHeight = isCompact ? clamp(height * 0.15, 112, 136) : hudHeight;
+  // The former global gauge is retained as a layout reservation for backwards
+  // compatible callers, but it is now compact because telegraphs render on
+  // each enemy health bar instead.
+  const enemyAttackGaugeHeight = isCompact ? clamp(height * 0.15, 112, 136) : Math.min(hudHeight, 88);
   const hudWidth = isCompact ? contentWidth : clamp(contentWidth * 0.34, 300, 420);
   const enemyAttackGaugeWidth = isCompact ? contentWidth : Math.min(420, contentWidth);
   const commandHudHeight = clamp(height * 0.2, 132, 172);
@@ -42,8 +45,8 @@ export function createCombatLayout(width: number, height: number): CombatLayout 
   );
   const enemyAttackGaugeY = clamp(
     enemyHealthBarTop - enemyAttackGaugeHeight - 8,
-    topContentY,
-    Math.max(topContentY, height - safeInset - commandHudHeight - enemyAttackGaugeHeight - 8),
+    safeInset,
+    Math.max(safeInset, height - safeInset - commandHudHeight - enemyAttackGaugeHeight - 8),
   );
 
   return {

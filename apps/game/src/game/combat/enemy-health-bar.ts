@@ -9,6 +9,9 @@ export type EnemyHealthBarState = Readonly<{
   shieldRatio: number;
   targeted: boolean;
   defeated: boolean;
+  telegraphAttackName: string;
+  telegraphAttackType: "attack" | "defense" | "buff" | "debuff" | null;
+  telegraphProgress: number;
 }>;
 
 export type EnemyHealthBarOptions = Readonly<{
@@ -17,12 +20,14 @@ export type EnemyHealthBarOptions = Readonly<{
   targeted?: boolean;
 }>;
 
-const ENEMY_HEALTH_BAR_PANEL_WIDTH = 220;
-const PANEL_HEIGHT = 40;
+export const ENEMY_HEALTH_BAR_PANEL_WIDTH = 220;
+export const ENEMY_HEALTH_BAR_REGION_TOP = -56;
+export const ENEMY_HEALTH_BAR_REGION_BOTTOM = 28;
 export const ENEMY_HEALTH_BAR_TRACK_WIDTH = 190;
 const TRACK_HEIGHT = 11;
 const TRACK_X = -ENEMY_HEALTH_BAR_TRACK_WIDTH / 2;
 const TRACK_Y = -7;
+const TELEGRAPH_TRACK_Y = -30;
 
 const clamp = (value: number, maximum: number): number => Math.min(Math.max(0, value), Math.max(0, maximum));
 
@@ -58,6 +63,9 @@ export const createEnemyHealthBarState = (
     shieldRatio: barTotal > 0 ? shield / barTotal : 0,
     targeted: options.targeted === true,
     defeated: safeCurrentHp <= 0,
+    telegraphAttackName: "",
+    telegraphAttackType: null,
+    telegraphProgress: 0,
   };
 };
 
@@ -68,6 +76,9 @@ export class EnemyHealthBar {
   private readonly track: Phaser.GameObjects.Rectangle;
   private readonly hpFill: Phaser.GameObjects.Rectangle;
   private readonly shieldFill: Phaser.GameObjects.Rectangle;
+  private readonly telegraphTrack: Phaser.GameObjects.Rectangle;
+  private readonly telegraphFill: Phaser.GameObjects.Rectangle;
+  private readonly telegraphName: Phaser.GameObjects.Text;
   private readonly value: Phaser.GameObjects.Text;
   private state: EnemyHealthBarState;
 
@@ -75,8 +86,29 @@ export class EnemyHealthBar {
     this.state = createEnemyHealthBarState(currentHp, maxHp, options);
     this.container = scene.add.container(0, 0);
     this.panel = scene.add
-      .rectangle(0, 0, ENEMY_HEALTH_BAR_PANEL_WIDTH, PANEL_HEIGHT, 0x24151c, 0.94)
-      .setStrokeStyle(2, 0x64748b, 0.8);
+      // Keep the area around the bars transparent; only the bar tracks and
+      // text should remain visible near the monster.
+      .rectangle(
+        0,
+        0,
+        ENEMY_HEALTH_BAR_PANEL_WIDTH,
+        ENEMY_HEALTH_BAR_REGION_BOTTOM - ENEMY_HEALTH_BAR_REGION_TOP,
+        0,
+        0,
+      );
+    this.telegraphTrack = scene.add
+      .rectangle(TRACK_X, TELEGRAPH_TRACK_Y, ENEMY_HEALTH_BAR_TRACK_WIDTH, 6, 0x0f172a, 0.95)
+      .setOrigin(0, 0.5);
+    this.telegraphFill = scene.add.rectangle(TRACK_X, TELEGRAPH_TRACK_Y, 0, 6, 0xef4444, 1).setOrigin(0, 0.5);
+    this.telegraphName = scene.add
+      .text(0, ENEMY_HEALTH_BAR_REGION_TOP + 2, "", {
+        color: "#f8fafc",
+        fontFamily: "Galmuri9, monospace",
+        fontSize: "13px",
+        align: "center",
+        wordWrap: { width: ENEMY_HEALTH_BAR_PANEL_WIDTH - 12 },
+      })
+      .setOrigin(0.5, 0);
     this.track = scene.add
       .rectangle(TRACK_X, TRACK_Y, ENEMY_HEALTH_BAR_TRACK_WIDTH, TRACK_HEIGHT, 0x0f172a, 0.95)
       .setOrigin(0, 0.5);
@@ -93,8 +125,17 @@ export class EnemyHealthBar {
       })
       .setOrigin(0.5, 0);
 
-    this.container.add([this.panel, this.track, this.hpFill, this.shieldFill, this.value]);
-    this.container.setSize(ENEMY_HEALTH_BAR_PANEL_WIDTH, PANEL_HEIGHT);
+    this.container.add([
+      this.panel,
+      this.telegraphTrack,
+      this.telegraphFill,
+      this.telegraphName,
+      this.track,
+      this.hpFill,
+      this.shieldFill,
+      this.value,
+    ]);
+    this.container.setSize(ENEMY_HEALTH_BAR_PANEL_WIDTH, ENEMY_HEALTH_BAR_REGION_BOTTOM - ENEMY_HEALTH_BAR_REGION_TOP);
     this.refresh();
   }
 
@@ -109,21 +150,41 @@ export class EnemyHealthBar {
     this.refresh();
   }
 
+  updateTelegraph(
+    attackName: string | undefined,
+    attackType: EnemyHealthBarState["telegraphAttackType"],
+    progress: number,
+  ): void {
+    const safeProgress = Math.min(Math.max(0, Number.isFinite(progress) ? progress : 0), 1);
+    this.state = {
+      ...this.state,
+      telegraphAttackName: attackName?.trim() ?? "",
+      telegraphAttackType: attackType,
+      telegraphProgress: safeProgress,
+    };
+    this.refresh();
+  }
+
   getState(): EnemyHealthBarState {
     return { ...this.state };
   }
 
   private refresh(): void {
     const { healthRatio, shieldRatio } = this.state;
+    const telegraphColor = this.state.telegraphAttackType === "defense" ? 0x60a5fa : 0xef4444;
     this.hpFill.setSize(ENEMY_HEALTH_BAR_TRACK_WIDTH * healthRatio, TRACK_HEIGHT);
+    this.telegraphFill
+      .setSize(ENEMY_HEALTH_BAR_TRACK_WIDTH * this.state.telegraphProgress, 6)
+      .setFillStyle(telegraphColor, 1);
+    this.telegraphTrack.setVisible(this.state.telegraphAttackName.length > 0);
+    this.telegraphFill.setVisible(this.state.telegraphAttackName.length > 0);
+    this.telegraphName.setText(this.state.telegraphAttackName).setVisible(this.state.telegraphAttackName.length > 0);
     this.shieldFill
       .setVisible(shieldRatio > 0)
       .setPosition(TRACK_X + ENEMY_HEALTH_BAR_TRACK_WIDTH * healthRatio, TRACK_Y)
       .setSize(ENEMY_HEALTH_BAR_TRACK_WIDTH * shieldRatio, TRACK_HEIGHT);
     this.value.setText(formatEnemyHealthBarLabel(this.state));
-    this.panel
-      .setStrokeStyle(2, this.state.targeted ? 0xffd166 : 0x64748b, this.state.targeted ? 0.95 : 0.8)
-      .setAlpha(this.state.defeated ? 0.58 : 1);
+    this.panel.setAlpha(0);
     this.value.setAlpha(this.state.defeated ? 0.62 : 1);
   }
 }

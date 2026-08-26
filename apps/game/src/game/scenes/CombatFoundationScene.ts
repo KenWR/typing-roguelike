@@ -11,14 +11,18 @@ import { CombatState } from "../combat/combat-state";
 import { CombatTargetingController } from "../combat/combat-targeting";
 import { CombatPauseController, type PauseDocument, type PauseWindow } from "../combat/combat-pause-controller";
 import type { CombatEncounterInitialization, CombatEnemyInitialization } from "../combat/encounter-initializer";
-import { EnemyHealthBar } from "../combat/enemy-health-bar";
+import {
+  ENEMY_HEALTH_BAR_PANEL_WIDTH,
+  ENEMY_HEALTH_BAR_REGION_BOTTOM,
+  ENEMY_HEALTH_BAR_REGION_TOP,
+  EnemyHealthBar,
+} from "../combat/enemy-health-bar";
 import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
 import type { ComboSnapshot } from "../combat/combo-tracker";
 import { CombatFeedbackController, playProceduralCombatSound } from "../feedback/combat-feedback";
 import { CombatHud } from "../hud/combat-hud";
 import { CommandHud } from "../hud/command-hud";
-import { EnemyAttackGauge } from "../hud/enemy-attack-gauge";
 import { RelicHud } from "../hud/relic-hud";
 import { CommandInputBuffer } from "../input/command-input-buffer";
 import { installCommandInputClipboardGuard } from "../input/command-input-clipboard-guard";
@@ -76,7 +80,6 @@ export class CombatFoundationScene extends Phaser.Scene {
   private encounterLabel!: Phaser.GameObjects.Text;
   private combatHud!: CombatHud;
   private relicHud!: RelicHud;
-  private enemyAttackGauge!: EnemyAttackGauge;
   private enemyAttackTimeline!: EnemyAttackTimeline;
   private actionPoints!: ActionPointResource;
   private apEffects!: CombatApEffectController;
@@ -181,7 +184,14 @@ export class CombatFoundationScene extends Phaser.Scene {
       placeholder.add(healthBar.container);
       this.enemyHealthBars.set(enemy.instanceId, healthBar);
       const marker = this.add
-        .rectangle(0, 0, 200, 250, 0x000000, 0)
+        .rectangle(
+          0,
+          ENEMY_HEALTH_BAR_OFFSET_Y + (ENEMY_HEALTH_BAR_REGION_TOP + ENEMY_HEALTH_BAR_REGION_BOTTOM) / 2,
+          ENEMY_HEALTH_BAR_PANEL_WIDTH + 10,
+          ENEMY_HEALTH_BAR_REGION_BOTTOM - ENEMY_HEALTH_BAR_REGION_TOP + 10,
+          0x000000,
+          0,
+        )
         .setStrokeStyle(3, 0xffd166, 0.95)
         .setVisible(false);
       placeholder.add(marker);
@@ -241,9 +251,6 @@ export class CombatFoundationScene extends Phaser.Scene {
         });
       }
     }
-    this.enemyAttackGauge = new EnemyAttackGauge(this, this.enemyAttackTimeline.snapshot);
-    this.uiLayer.add(this.enemyAttackGauge.container);
-
     const availableSkills =
       initialization.player.skills.length > 0
         ? initialization.player.skills.map((skill) => defineSkill(skill))
@@ -281,8 +288,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       // windup. Sync the HUD immediately so the initial defense state is
       // visible before the first Phaser update tick.
       this.displayedEnemyShield = this.playerCombatRuntime.enemyShield;
-      this.enemyAttackGauge.update(this.enemyAttackTimeline.snapshot);
-      this.updateEnemyHealth(this.playerCombatRuntime.enemyHp);
+      this.updateEnemyHealth(this.playerCombatRuntime.enemyHp, this.enemyAttackTimeline.snapshot);
       this.refreshTargetPresentation();
     }
 
@@ -353,14 +359,11 @@ export class CombatFoundationScene extends Phaser.Scene {
     const playerUpdate = this.playerCombatRuntime?.advance(safeDelta);
     if (playerUpdate === undefined) {
       const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
-      this.enemyAttackGauge.update(enemyUpdate.snapshot);
-      this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
       this.updateEnemyVisuals(Object.fromEntries(this.displayedEnemyHp), safeDelta, enemyUpdate.snapshot);
+      this.updateEnemyHealth(Object.fromEntries(this.displayedEnemyHp), enemyUpdate.snapshot);
       return;
     }
 
-    this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);
-    this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
     this.combatHud.update({
       hp: playerUpdate.playerHp,
       ap: playerUpdate.playerAp,
@@ -370,13 +373,9 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.updateEnemyVisuals(playerUpdate.enemyHp, safeDelta, playerUpdate.enemyTimeline.snapshot);
     this.targeting?.refresh();
     this.refreshTargetPresentation();
-    this.updateEnemyHealth(playerUpdate.enemyHp);
+    this.updateEnemyHealth(playerUpdate.enemyHp, playerUpdate.enemyTimeline.snapshot);
 
     if (previousPlayerHp !== undefined && playerUpdate.playerHp < previousPlayerHp) {
-      this.skillStarter?.breakCombo("player-hit");
-      this.updateComboDisplay(this.skillStarter?.comboSnapshot);
-      this.feedback?.trigger("command-failure");
-      playComboBreakSound();
       this.feedback?.trigger("player-hit");
     }
 
@@ -428,13 +427,23 @@ export class CombatFoundationScene extends Phaser.Scene {
       }
     }
   }
-  private updateEnemyHealth(enemyHp: Readonly<Record<string, number>>): void {
+  private updateEnemyHealth(
+    enemyHp: Readonly<Record<string, number>>,
+    timeline: Readonly<EnemyAttackTimeline["snapshot"]> = this.enemyAttackTimeline.snapshot,
+  ): void {
     for (const enemy of this.combatInitialization?.enemies ?? []) {
-      this.enemyHealthBars.get(enemy.instanceId)?.update(enemyHp[enemy.instanceId] ?? enemy.hp, enemy.hp, {
+      const activeAttack = timeline.attacks.find(
+        (attack) => attack.enemyId === enemy.instanceId && attack.phase !== "resolved",
+      );
+      const telegraphProgress =
+        activeAttack?.phase === "windup" ? activeAttack.phaseProgress : activeAttack === undefined ? 0 : 1;
+      const healthBar = this.enemyHealthBars.get(enemy.instanceId);
+      healthBar?.update(enemyHp[enemy.instanceId] ?? enemy.hp, enemy.hp, {
         shield: this.displayedEnemyShield[enemy.instanceId] ?? 0,
         maxShield: resolveEnemyMaxShield(enemy),
         ...(this.targeting?.targetId === undefined ? {} : { targeted: this.targeting.targetId === enemy.instanceId }),
       });
+      healthBar?.updateTelegraph(activeAttack?.attackName, activeAttack?.attackType ?? null, telegraphProgress);
     }
   }
 
@@ -451,7 +460,6 @@ export class CombatFoundationScene extends Phaser.Scene {
   /** 지정한 적에게만 조준 테두리를 보여 주고 나머지는 살짝 흐리게 둡니다. */
   private refreshTargetPresentation(): void {
     const targetId = this.targeting?.targetId;
-    this.enemyAttackGauge?.setTargetedEnemy(targetId);
     for (const [enemyId, marker] of this.enemyTargetMarkers) {
       const alive = (this.displayedEnemyHp.get(enemyId) ?? 0) > 0;
       marker.setVisible(alive && enemyId === targetId);
@@ -530,8 +538,6 @@ export class CombatFoundationScene extends Phaser.Scene {
       .setVisible(width >= 720);
     this.combatHud.setPosition(layout.hudReservation.x, layout.hudReservation.y);
     this.combatHud.setSize(layout.hudReservation.width, layout.hudReservation.height);
-    this.enemyAttackGauge.setPosition(layout.enemyAttackGaugeReservation.x, layout.enemyAttackGaugeReservation.y);
-    this.enemyAttackGauge.setSize(layout.enemyAttackGaugeReservation.width, layout.enemyAttackGaugeReservation.height);
     this.commandHud.setPosition(layout.commandHudReservation.x, layout.commandHudReservation.y);
     this.commandHud.setSize(layout.commandHudReservation.width, layout.commandHudReservation.height);
     this.comboText.setPosition(width - 24, height - 24).setVisible(this.skillStarter !== undefined);
