@@ -77,6 +77,18 @@ describe("combat encounter initializer", () => {
     }
   });
 
+  test("initializes a floor-five normal combat encounter", () => {
+    const runState = createInitialRunState({ seed: 13 });
+    const result = initializeCombatEncounter(runState, createNode(5, "combat"));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.combat.floor).toBe(5);
+    expect(result.combat.nodeType).toBe("combat");
+    expect(result.combat.rewardPolicy).toBe("standard");
+    expect(result.combat.enemies.length).toBeGreaterThan(0);
+  });
+
   test("recovers non-combat or missing encounter nodes to map", () => {
     const runState = createInitialRunState({ seed: 1 });
 

@@ -1,6 +1,7 @@
 import { EQUIPMENT_CONFIGS } from "@typing-roguelike/shared";
 
 const EQUIPMENT_ICON_DIRECTORY = "/assets/images/weapon_icons_pixel/96";
+const SUBWEAPON_ICON_DIRECTORY = "/assets/subweapons";
 
 /**
  * 장비 ID 에서 `weapon_icons_pixel` 파일 이름으로의 대응표.
@@ -9,7 +10,7 @@ const EQUIPMENT_ICON_DIRECTORY = "/assets/images/weapon_icons_pixel/96";
  * 여기에 없다. 장비 이름이 바뀌어도 조용히 깨지지 않도록 자동 매칭 대신
  * 명시적인 표로 관리한다.
  */
-const EQUIPMENT_ICON_FILE_BY_ID: Readonly<Record<string, string>> = {
+const WEAPON_ICON_FILE_BY_ID: Readonly<Record<string, string>> = {
   equipment_rusty_sword: "sword_common_rusty",
   equipment_blood_sword: "sword_uncommon_bloodletting",
   equipment_wind_sword: "sword_uncommon_wind",
@@ -66,6 +67,38 @@ const EQUIPMENT_ICON_FILE_BY_ID: Readonly<Record<string, string>> = {
   equipment_laughing_destroyer: "club_epic_laughing_destruction",
 };
 
+const SUBWEAPON_ICON_FILE_BY_ID: Readonly<Record<string, string>> = {
+  equipment_guard_round_shield: "equipment_guard_round_shield",
+  equipment_thorn_shield: "equipment_thorn_shield",
+  equipment_mirror_steel_shield: "equipment_mirror_steel_shield",
+  equipment_fortress_shield: "equipment_fortress_shield",
+  equipment_mobile_wall: "equipment_mobile_wall",
+  equipment_reversal_crest_shield: "equipment_reversal_crest_shield",
+  equipment_bronze_repair_tome: "equipment_bronze_repair_tome",
+  equipment_flame_guard_tome: "equipment_flame_guard_tome",
+  equipment_frost_veil_tome: "equipment_frost_veil_tome",
+  equipment_reflection_grammar: "equipment_reflection_grammar",
+  equipment_infinite_pages: "equipment_infinite_pages",
+  equipment_final_chapter: "equipment_final_chapter",
+  equipment_forewarning_orb: "equipment_forewarning_orb",
+  equipment_clear_crystal_orb: "equipment_clear_crystal_orb",
+  equipment_binocular_orb: "equipment_binocular_orb",
+  equipment_perfect_crystal_orb: "equipment_perfect_crystal_orb",
+  equipment_time_observer: "equipment_time_observer",
+  equipment_fate_branch_orb: "equipment_fate_branch_orb",
+  equipment_bloodfeather_quiver: "equipment_bloodfeather_quiver",
+  equipment_armorpiercing_quiver: "equipment_armorpiercing_quiver",
+  equipment_twin_arrow_quiver: "equipment_twin_arrow_quiver",
+  equipment_hunters_quiver: "equipment_hunters_quiver",
+  equipment_infinite_track_quiver: "equipment_infinite_track_quiver",
+  equipment_comet_quiver: "equipment_comet_quiver",
+};
+
+const EQUIPMENT_ICON_FILE_BY_ID: Readonly<Record<string, string>> = {
+  ...WEAPON_ICON_FILE_BY_ID,
+  ...SUBWEAPON_ICON_FILE_BY_ID,
+};
+
 export const getEquipmentIconTextureKey = (equipmentId: string): string =>
   `equipment-icon:${equipmentId}`;
 
@@ -80,10 +113,20 @@ export const resolveEquipmentIconTextureKey = (
 export const EQUIPMENT_ICON_ASSETS: readonly {
   key: string;
   path: string;
-}[] = Object.entries(EQUIPMENT_ICON_FILE_BY_ID).map(([equipmentId, file]) => ({
-  key: getEquipmentIconTextureKey(equipmentId),
-  path: `${EQUIPMENT_ICON_DIRECTORY}/${file}.png`,
-}));
+}[] = [
+  ...Object.entries(WEAPON_ICON_FILE_BY_ID).map(([equipmentId, file]) => ({
+    key: getEquipmentIconTextureKey(equipmentId),
+    path: `${EQUIPMENT_ICON_DIRECTORY}/${file}.png`,
+  })),
+  ...Object.entries(SUBWEAPON_ICON_FILE_BY_ID).map(([equipmentId, file]) => ({
+    key: getEquipmentIconTextureKey(equipmentId),
+    path: `${SUBWEAPON_ICON_DIRECTORY}/${file}.png`,
+  })),
+];
+
+export const SUBWEAPON_ICON_ASSETS = EQUIPMENT_ICON_ASSETS.filter((asset) =>
+  asset.path.startsWith(`${SUBWEAPON_ICON_DIRECTORY}/`),
+);
 
 /** 아이콘이 준비되지 않은 장비. 표시 대체 규칙을 테스트로 고정하기 위해 노출한다. */
 export const EQUIPMENT_IDS_WITHOUT_ICON: readonly string[] = EQUIPMENT_CONFIGS

@@ -215,6 +215,7 @@ export class PlayerCombatRuntime {
     const enemyTimelineUpdate = this.enemyTimeline.advance(deltaMs);
 
     if (this.route === null) {
+      this.releaseFinishedWindupShields(enemyTimelineUpdate.snapshot);
       this.resolveImpactsChronologically(
         combatUpdate,
         enemyTimelineUpdate.events,
@@ -274,17 +275,23 @@ export class PlayerCombatRuntime {
     }
 
     if (orderedImpacts.length === 0) this.resolveOutcome();
-    this.releaseFinishedWindupShields(enemyEvents);
     this.shields.pruneExpired(this.elapsedMs);
   }
 
   /** 선딜이 끝나는 순간 적의 실드는 남은 양과 상관없이 사라집니다. */
   private releaseFinishedWindupShields(
-    enemyEvents: readonly EnemyAttackEvent[],
+    timeline: Readonly<EnemyAttackTimeline["snapshot"]>,
   ): void {
-    for (const event of enemyEvents) {
-      if (event.type !== "cast-completed") continue;
-      this.releaseEnemyShield(event.timelineId);
+    const activeWindupTimelineIds = new Set(
+      timeline.attacks
+        .filter((attack) => attack.phase === "windup")
+        .map((attack) => attack.timelineId),
+    );
+
+    for (const timelineId of this.enemyShieldIdByTimelineId.keys()) {
+      if (!activeWindupTimelineIds.has(timelineId)) {
+        this.releaseEnemyShield(timelineId);
+      }
     }
   }
 

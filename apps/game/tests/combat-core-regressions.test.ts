@@ -182,6 +182,24 @@ describe("combat core regressions with production equipment configs", () => {
     expect(context.runtime.playerHp).toBe(100);
   });
 
+  test("does not keep a defense shield after its windup action is removed", () => {
+    const context = createRuntime([getEquipment("equipment_rusty_sword").id], () => 0.4);
+    const enemyId = context.initialization.enemies[0]!.instanceId;
+
+    context.runtime.start();
+    const timelineId = context.enemyTimeline.snapshot.attacks[0]?.timelineId;
+    if (timelineId === undefined) throw new Error("Expected a defense timeline");
+    expect(context.runtime.enemyShield[enemyId]).toBeGreaterThan(0);
+
+    // A canceled windup has no cast-completed event in the next runtime update.
+    // The shield must still be removed from the phase snapshot instead of being
+    // reset or left active until its old duration expires.
+    expect(context.enemyTimeline.cancelAttack(timelineId)).toBe(true);
+    context.runtime.advance(0);
+
+    expect(context.runtime.enemyShield[enemyId]).toBe(0);
+  });
+
   test("breaking the shield inside the windup cancels that enemy action", () => {
     const rustySword = getEquipment("equipment_rusty_sword");
     const slash = defineSkill(rustySword.skills[0]!);

@@ -1,5 +1,6 @@
-import Phaser from "phaser";
+import type Phaser from "phaser";
 import { resolveEffectTextureKey } from "../assets/effect-visual-assets";
+import { RING_CONFIGS } from "@typing-roguelike/shared";
 import { MENU_SETTINGS_REGISTRY_KEYS, type CommandLanguage } from "../scenes/menu-settings";
 import type {
   CommandInputSnapshot,
@@ -31,6 +32,11 @@ export type CommandHudState = Readonly<{
 
 export type CommandHudCharacterState = "matched" | "incorrect" | "pending";
 export type CommandHudCharacter = Readonly<{ value: string; state: CommandHudCharacterState }>;
+export type CommandHudSegments = Readonly<{
+  prefix?: string;
+  baseCommand: string;
+  suffix?: string;
+}>;
 
 type CommandHudPresentation = Readonly<{ labelKo: string; labelEn: string; color: string; accent: number }>;
 
@@ -89,11 +95,64 @@ const EFFECT_RADIUS = 7;
 const MISSING_ASSET_TEXTURE_KEY = "placeholder:missing-asset";
 const effectTextureKey = (effectId: string): string =>
   resolveEffectTextureKey(effectId) ?? MISSING_ASSET_TEXTURE_KEY;
+const SCENE_UPDATE_EVENT = "update";
+const SCENE_SHUTDOWN_EVENT = "shutdown";
+const SCENE_DESTROY_EVENT = "destroy";
+const POINTER_OVER_EVENT = "pointerover";
 
 const clamp = (value: number, minimum: number, maximum: number): number => Math.min(Math.max(value, minimum), maximum);
 
 export function formatAvailableCommands(commands: readonly string[]): string {
   return commands.join(", ");
+}
+
+/** Ring registry를 기준으로 표시용 접두사/기본 명령어/접미사를 분리한다. */
+export function splitRingCommand(command: string): CommandHudSegments {
+  let baseCommand = command;
+  let prefix: string | undefined;
+  let suffix: string | undefined;
+  const prefixes = RING_CONFIGS
+    .filter((ring) => ring.position === "prefix")
+    .sort((left, right) => right.commandAffix.length - left.commandAffix.length);
+  const suffixes = RING_CONFIGS
+    .filter((ring) => ring.position === "suffix")
+    .sort((left, right) => right.commandAffix.length - left.commandAffix.length);
+
+  for (const ring of prefixes) {
+    const token = `${ring.commandAffix} `;
+    if (baseCommand.startsWith(token)) {
+      prefix = ring.commandAffix;
+      baseCommand = baseCommand.slice(token.length);
+      break;
+    }
+  }
+  for (const ring of suffixes) {
+    const token = ` ${ring.commandAffix}`;
+    if (baseCommand.endsWith(token)) {
+      suffix = ring.commandAffix;
+      baseCommand = baseCommand.slice(0, -token.length);
+      break;
+    }
+  }
+
+  return {
+    ...(prefix === undefined ? {} : { prefix }),
+    baseCommand,
+    ...(suffix === undefined ? {} : { suffix }),
+  };
+}
+
+export function formatSegmentedCommand(command: string): string {
+  const segments = splitRingCommand(command);
+  return [
+    segments.prefix === undefined ? null : `접두사: ${segments.prefix}`,
+    `명령어: ${segments.baseCommand}`,
+    segments.suffix === undefined ? null : `접미사: ${segments.suffix}`,
+  ].filter((part): part is string => part !== null).join("  |  ");
+}
+
+export function formatSegmentedAvailableCommands(commands: readonly string[]): string {
+  return commands.map(formatSegmentedCommand).join("\n");
 }
 
 export function getEffectDarknessRatio(effect: Pick<CommandHudEffect, "durationMs" | "remainingMs">): number {
@@ -228,9 +287,9 @@ export class CommandHud {
     this.tooltipText = scene.add.text(0, 0, "", { color: "#f8fafc", fontFamily: "Galmuri9, monospace", fontSize: "11px", lineSpacing: 4, wordWrap: { width: 196, useAdvancedWrap: true } }).setVisible(false);
     this.container.add([this.panel, this.title, this.commandText, this.inputText, this.statusText, this.progressTrack, this.progressFill, this.feedbackText, this.tooltipBackground, this.tooltipText]);
     this.container.setSize(this.panelWidth, this.panelHeight);
-    scene.events.on(Phaser.Scenes.Events.UPDATE, this.refreshEffects, this);
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.release, this);
-    scene.events.once(Phaser.Scenes.Events.DESTROY, this.release, this);
+    scene.events.on(SCENE_UPDATE_EVENT, this.refreshEffects, this);
+    scene.events.once(SCENE_SHUTDOWN_EVENT, this.release, this);
+    scene.events.once(SCENE_DESTROY_EVENT, this.release, this);
     this.refresh();
   }
 
@@ -308,7 +367,7 @@ export class CommandHud {
     const darknessMask = maskShape.createGeometryMask();
     const darkness = this.scene.add.rectangle(0, EFFECT_SIZE, EFFECT_SIZE, 0, 0x000000, 0.68).setOrigin(0).setMask(darknessMask);
     const hitArea = this.scene.add.zone(0, 0, EFFECT_SIZE, EFFECT_SIZE).setOrigin(0).setInteractive({ useHandCursor: true });
-    hitArea.on("pointerover", () => {
+    hitArea.on(POINTER_OVER_EVENT, () => {
       const effect = hitArea.getData("effect") as CommandHudEffect | undefined;
       if (effect === undefined) return;
       this.hoveredEffectId = effect.id;
@@ -345,7 +404,7 @@ export class CommandHud {
   }
 
   private release(): void {
-    this.scene.events.off(Phaser.Scenes.Events.UPDATE, this.refreshEffects, this);
+    this.scene.events.off(SCENE_UPDATE_EVENT, this.refreshEffects, this);
     for (const visual of this.effectVisuals) visual.darknessMask.destroy();
   }
 
@@ -368,7 +427,7 @@ export class CommandHud {
       .setPosition(contentLeft, 30)
       .setFontSize(commandFontSize)
       .setWordWrapWidth(Math.max(120, this.panelWidth - contentLeft - 18), true)
-      .setText(formatAvailableCommands(this.state.commands))
+      .setText(formatSegmentedAvailableCommands(this.state.commands))
       .setColor("#f8fafc");
 
     const listBottom = 30 + this.commandText.height;
@@ -389,7 +448,7 @@ export class CommandHud {
     const statusLabel = language === "ko" ? presentation.labelKo : presentation.labelEn;
     this.statusText
       .setPosition(18, statusY)
-      .setText(`${activePrefix}: ${this.state.command} · ${statusLabel} ${matchedLength}/${commandLength}`)
+      .setText(`${activePrefix}: ${formatSegmentedCommand(this.state.command)} · ${statusLabel} ${matchedLength}/${commandLength}`)
       .setColor(presentation.color);
 
     this.progressTrack.setPosition(18, progressY).setSize(progressWidth, 8);

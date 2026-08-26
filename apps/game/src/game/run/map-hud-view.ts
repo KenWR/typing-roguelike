@@ -3,6 +3,7 @@ import {
   START_NODE_KEY,
   generateMap,
   getMapNodeKey,
+  type MapNodeIconType,
   type MapNodeStatus,
   type RunState,
 } from "@typing-roguelike/shared";
@@ -10,6 +11,7 @@ import {
 export type MapHudNodeView = Readonly<{
   id: string;
   type: string;
+  iconType: MapNodeIconType;
   status: MapNodeStatus;
   round: number;
   choice: number;
@@ -65,6 +67,7 @@ export const createMapHudView = (runState: Readonly<RunState>): MapHudView => {
     roundNodes.map((node) => ({
       id: node.key,
       type: node.type,
+      iconType: node.iconType,
       status: runState.map.nodeStatuses[node.key] ?? "locked",
       round: node.round,
       choice: node.choice,
