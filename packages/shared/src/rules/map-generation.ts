@@ -117,7 +117,7 @@ const hasEliteEncounter = (round: number): boolean =>
 	);
 
 const getNodeTypes = (seed: number, round: number): MapNodeType[] => {
-	if (round === 9) return ["rest", "rest", "rest"];
+	if (round === 9) return ["rest"];
 	if (round === MAP_ROUND_COUNT) return ["boss"];
 
 	const candidates = NODE_TYPES.filter((type) => {
@@ -133,7 +133,8 @@ const getNodeTypes = (seed: number, round: number): MapNodeType[] => {
 /**
  * Builds a Slay-the-Spire-like sparse transition: every lane keeps one upward
  * route and at most one lane on a floor receives one extra adjacent branch.
- * That guarantees reachability without turning each floor into an all-to-all graph.
+ * Floors 9 and 10 are single-node rounds, so every floor-8 lane converges to
+ * the rest node before entering the boss.
  */
 const nextChoicesFor = (
 	seed: number,
@@ -141,7 +142,7 @@ const nextChoicesFor = (
 	choice: MapNodeChoice,
 ): MapNodeChoice[] => {
 	if (round >= MAP_ROUND_COUNT) return [];
-	if (round === MAP_ROUND_COUNT - 1) return [1];
+	if (round >= MAP_ROUND_COUNT - 2) return [1];
 
 	const choices: MapNodeChoice[] = [choice];
 	const [branchFrom, branchTo] = DIAGONAL_EDGES[hash(`${seed}:edge:${round}`) % DIAGONAL_EDGES.length]!;
