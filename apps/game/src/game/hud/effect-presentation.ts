@@ -23,6 +23,28 @@ export type EffectPresentation = Readonly<{
   textureKey: string;
 }>;
 
+export type TimedStatusLike = Readonly<{
+  statusId: string;
+  durationMs: number;
+  remainingMs: number;
+  stacks: number;
+}>;
+
+export type ShieldLike = Readonly<{
+  id: string;
+  amount: number;
+  maxAmount: number;
+  startsAtMs: number;
+  endsAtMs: number;
+}>;
+
+export type TimedApEffectLike = Readonly<{
+  id: string;
+  amountPerSecond: number;
+  durationMs: number;
+  remainingMs: number;
+}>;
+
 const EFFECT_COPY: Readonly<Record<string, Readonly<{ name: string; description: string }>>> = {
   guard: { name: "방어 태세", description: "받는 피해를 줄이는 방어 효과" },
   oath: { name: "맹세", description: "맹세 계열 강화 효과" },
@@ -84,6 +106,62 @@ export function resolveEffectPresentation(input: EffectPresentationInput): Effec
     stacks: Math.max(1, Math.floor(input.stacks ?? 1)),
     textureKey: resolveEffectTextureKey(effectId) ?? EFFECT_PLACEHOLDER_TEXTURE_KEY,
   };
+}
+
+export function createActorEffectPresentations(input: Readonly<{
+  statuses?: readonly TimedStatusLike[];
+  shields?: readonly ShieldLike[];
+  apEffects?: readonly TimedApEffectLike[];
+  atMs?: number;
+}>): EffectPresentation[] {
+  const atMs = input.atMs ?? 0;
+  const statusGroups = new Map<string, TimedStatusLike[]>();
+  for (const status of input.statuses ?? []) {
+    if (status.remainingMs <= 0) continue;
+    const key = resolvePresentationEffectId(status.statusId);
+    const group = statusGroups.get(key) ?? [];
+    group.push(status);
+    statusGroups.set(key, group);
+  }
+
+  const statuses = Array.from(statusGroups.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([effectId, group]) => {
+      const durationMs = Math.max(...group.map((status) => status.durationMs));
+      const remainingMs = Math.max(...group.map((status) => status.remainingMs));
+      const stacks = group.reduce((sum, status) => sum + status.stacks, 0);
+      return resolveEffectPresentation({
+        id: `status:${effectId}`,
+        effectId,
+        durationMs,
+        remainingMs,
+        stacks,
+      });
+    });
+
+  const shields = (input.shields ?? [])
+    .filter((shield) => shield.amount > 0 && shield.endsAtMs > atMs)
+    .sort((left, right) => left.endsAtMs - right.endsAtMs || left.id.localeCompare(right.id))
+    .map((shield) => resolveEffectPresentation({
+      id: `shield:${shield.id}`,
+      effectId: "shield",
+      description: `실드 ${shield.amount} / ${shield.maxAmount}`,
+      durationMs: Math.max(0, shield.endsAtMs - shield.startsAtMs),
+      remainingMs: Math.max(0, shield.endsAtMs - atMs),
+    }));
+
+  const apEffects = (input.apEffects ?? [])
+    .filter((effect) => effect.remainingMs > 0)
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((effect) => resolveEffectPresentation({
+      id: `ap:${effect.id}`,
+      effectId: effect.amountPerSecond >= 0 ? "ap-regen-up" : "ap-regen-down",
+      description: `AP 재생 ${effect.amountPerSecond >= 0 ? "+" : ""}${effect.amountPerSecond}/초`,
+      durationMs: effect.durationMs,
+      remainingMs: effect.remainingMs,
+    }));
+
+  return [...statuses, ...shields, ...apEffects];
 }
 
 export function getEffectDarknessRatio(
