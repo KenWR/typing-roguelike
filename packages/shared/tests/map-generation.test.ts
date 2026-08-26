@@ -1,12 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import { ENCOUNTER_CONFIGS } from "../src/content/encounters";
-import { generateMap, generateNodeChoices, getMapNodeKey, MAP_ROUND_COUNT, MAX_MAP_CHOICES } from "../src/rules/map-generation";
+import {
+	generateMap,
+	generateNodeChoices,
+	getMapNodeKey,
+	MAP_ROUND_COUNT,
+	MAX_MAP_CHOICES,
+} from "../src/rules/map-generation";
 
-const pathForRound = (round: number): number[] => Array.from({ length: round - 1 }, () => 1);
+const pathForRound = (round: number): number[] =>
+	Array.from({ length: round - 1 }, () => 1);
 
 describe("map generation", () => {
 	test("models a fixed-width ten-floor graph with at most three nodes per floor", () => {
 		const map = generateMap(20260826);
+
 		expect(map.rounds).toHaveLength(MAP_ROUND_COUNT);
 		expect(map.rounds.slice(0, -1).every(({ nodes }) => nodes.length <= MAX_MAP_CHOICES)).toBe(true);
 		expect(map.rounds.at(-1)?.nodes).toHaveLength(1);

@@ -5,12 +5,26 @@ export const MAX_MAP_CHOICES = 3;
 export const START_NODE_KEY = "start";
 
 export type MapNodeChoice = 1 | 2 | 3;
-export type MapNodeType = "combat" | "elite" | "reward" | "shop" | "rest" | "boss";
+export type MapNodeType =
+	| "combat"
+	| "elite"
+	| "reward"
+	| "shop"
+	| "rest"
+	| "boss";
 export type MapNodeIconType = MapNodeType;
 
-export interface GeneratedMapNode { choice: MapNodeChoice; icon: MapNodeIconType; iconType: MapNodeIconType; key: string; parentKey: string; nextNodeKeys: string[]; round: number; type: MapNodeType; monsterId?: string; }
-export interface GeneratedMapRound { round: number; nodes: GeneratedMapNode[]; }
-export interface GeneratedMap { seed: number; rounds: GeneratedMapRound[]; }
+export interface GeneratedMapNode {
+	choice: MapNodeChoice;
+	icon: MapNodeIconType;
+	iconType: MapNodeIconType;
+	key: string;
+	parentKey: string;
+	nextNodeKeys: string[];
+	round: number;
+	type: MapNodeType;
+	monsterId?: string;
+}
 
 export interface GeneratedMapRound {
 	round: number;
@@ -36,12 +50,14 @@ const DIAGONAL_EDGES: readonly (readonly [MapNodeChoice, MapNodeChoice])[] = [
 	[3, 2],
 ];
 
-const hash = (value: string): number => { let result = 2166136261; for (let index = 0; index < value.length; index += 1) { result ^= value.charCodeAt(index); result = Math.imul(result, 16777619); } return result >>> 0; };
-const shuffle = <T>(values: readonly T[], seed: number): T[] => { const result = [...values]; for (let index = result.length - 1; index > 0; index -= 1) { const swapIndex = hash(`${seed}:${index}`) % (index + 1); [result[index], result[swapIndex]] = [result[swapIndex], result[index]]; } return result; };
-const validateSeed = (seed: number): void => { if (!Number.isSafeInteger(seed) || seed < 0) throw new RangeError("Map seed must be a non-negative safe integer."); };
-const validateRound = (round: number): void => { if (!Number.isSafeInteger(round) || round < 1 || round > MAP_ROUND_COUNT) throw new RangeError(`Map round must be an integer from 1 to ${MAP_ROUND_COUNT}.`); };
-const validateChoicePath = (round: number, choicePath: readonly number[]): void => { if (choicePath.length !== round - 1) throw new RangeError(`A round ${round} map choice path must contain ${round - 1} choices.`); for (const choice of choicePath) if (!Number.isInteger(choice) || choice < 1 || choice > MAX_MAP_CHOICES) throw new RangeError("Map choices must be integers from 1 to 3."); };
-const nodeKey = (round: number, path: readonly number[]): string => `${round}-${path.join("-")}`;
+const hash = (value: string): number => {
+	let result = 2166136261;
+	for (let index = 0; index < value.length; index += 1) {
+		result ^= value.charCodeAt(index);
+		result = Math.imul(result, 16777619);
+	}
+	return result >>> 0;
+};
 
 const shuffle = <T>(values: readonly T[], seed: number): T[] => {
 	const result = [...values];
