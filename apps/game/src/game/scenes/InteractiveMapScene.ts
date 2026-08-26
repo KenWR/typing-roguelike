@@ -35,7 +35,7 @@ const NODE_LABEL: Record<string, string> = {
 };
 
 export class InteractiveMapScene extends MapScene {
-  protected override readonly renderLegacyMapChoices = false;
+  protected override readonly renderLegacyMapChoices: boolean = false;
   private routeRunState?: Readonly<RunState>;
   private selectionLocked = false;
 
@@ -55,9 +55,6 @@ export class InteractiveMapScene extends MapScene {
     const view = createMapHudView(activeRun);
     const centerX = width / 2;
 
-    // MapScene is retained as the legacy base scene, but its old right-side
-    // NODE STATUS panel is no longer part of the map UI. Cover both legacy
-    // side panels here so the interactive map has a clean HUD without them.
     const hudSideMargin = width < 960 ? 16 : 28;
     const hudPanelWidth = Phaser.Math.Clamp(Math.floor((width - 360) / 2), 220, 300);
     const leftHudX = hudSideMargin;
@@ -127,15 +124,7 @@ export class InteractiveMapScene extends MapScene {
         const nextX = laneXs[next.choice - 1] ?? centerX;
         const nextY = floorY(next.round);
         const line = this.add
-          .line(
-            0,
-            0,
-            x,
-            y - MAP_NODE_HEIGHT / 2,
-            nextX,
-            nextY + MAP_NODE_HEIGHT / 2,
-            0x4b5563,
-          )
+          .line(0, 0, x, y - MAP_NODE_HEIGHT / 2, nextX, nextY + MAP_NODE_HEIGHT / 2, 0x4b5563)
           .setOrigin(0)
           .setLineWidth(3);
         mapContainer.add(line);
@@ -149,29 +138,22 @@ export class InteractiveMapScene extends MapScene {
       const label = NODE_LABEL[node.status] ?? "LOCKED";
 
       const card = this.add.rectangle(x, y, MAP_NODE_WIDTH, MAP_NODE_HEIGHT, fill).setOrigin(0.5);
-      const typeText = this.add
-        .text(x, y - 17, `${node.round}F · ${node.type.toUpperCase()}`, {
-          fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
-          fontSize: node.type === "boss" ? "18px" : "15px",
-          color: "#ffffff",
-          align: "center",
-        })
-        .setOrigin(0.5);
-      const statusText = this.add
-        .text(x, y + 16, label, {
-          fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
-          fontSize: "12px",
-          color: "#e5e7eb",
-        })
-        .setOrigin(0.5);
+      const typeText = this.add.text(x, y - 17, `${node.round}F · ${node.type.toUpperCase()}`, {
+        fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
+        fontSize: node.type === "boss" ? "18px" : "15px",
+        color: "#ffffff",
+        align: "center",
+      }).setOrigin(0.5);
+      const statusText = this.add.text(x, y + 16, label, {
+        fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
+        fontSize: "12px",
+        color: "#e5e7eb",
+      }).setOrigin(0.5);
       mapContainer.add([card, typeText, statusText]);
 
       if (node.status !== "available") continue;
 
-      const hitArea = this.add
-        .rectangle(x, y, MAP_NODE_WIDTH, MAP_NODE_HEIGHT, 0xffffff, 0.001)
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true });
+      const hitArea = this.add.rectangle(x, y, MAP_NODE_WIDTH, MAP_NODE_HEIGHT, 0xffffff, 0.001).setOrigin(0.5).setInteractive({ useHandCursor: true });
       mapContainer.add(hitArea);
 
       hitArea.on("pointerover", () => hitArea.setFillStyle(0xffffff, 0.08));
@@ -211,25 +193,14 @@ export class InteractiveMapScene extends MapScene {
     const currentY = floorY(Math.min(10, Math.max(1, activeRun.map.currentRound)));
     mapContainer.y = Phaser.Math.Clamp(currentNodeViewportY - currentY, minY, maxY);
 
-    this.input.on(
-      "wheel",
-      (
-        _pointer: Phaser.Input.Pointer,
-        _gameObjects: Phaser.GameObjects.GameObject[],
-        _deltaX: number,
-        deltaY: number,
-      ) => {
-        mapContainer.y = Phaser.Math.Clamp(mapContainer.y - deltaY * 0.65, minY, maxY);
-      },
-    );
+    this.input.on("wheel", (_pointer: Phaser.Input.Pointer, _gameObjects: Phaser.GameObjects.GameObject[], _deltaX: number, deltaY: number) => {
+      mapContainer.y = Phaser.Math.Clamp(mapContainer.y - deltaY * 0.65, minY, maxY);
+    });
 
-    this.add
-      .text(centerX, height - 8, "마우스 휠로 전체 경로 스크롤", {
-        fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
-        fontSize: "13px",
-        color: "#9ca3af",
-      })
-      .setOrigin(0.5, 1)
-      .setDepth(100);
+    this.add.text(centerX, height - 8, "마우스 휠로 전체 경로 스크롤", {
+      fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
+      fontSize: "13px",
+      color: "#9ca3af",
+    }).setOrigin(0.5, 1).setDepth(100);
   }
 }
