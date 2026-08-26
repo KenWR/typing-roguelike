@@ -4,18 +4,12 @@ import {
   type RunState,
   type SkillDefinition,
 } from "@typing-roguelike/shared";
-import { playImpactHitSound, playRuntimeBgm } from "../audio/runtime-audio";
+import { playRuntimeBgm, playWeaponImpactSound } from "../audio/runtime-audio";
 import type { CombatEncounterInitialization } from "./encounter-initializer";
 import { CombatState, type CombatUpdate } from "./combat-state";
 import { EnemyAttackTimeline } from "./enemy-attack-timeline";
-import {
-  SkillCombatantState,
-  SkillImpactResolver,
-} from "./skill-impact-resolver";
-import {
-  finalizeCombatOutcome,
-  type CombatOutcomeRoute,
-} from "./combat-outcome-routing";
+import { SkillCombatantState, SkillImpactResolver } from "./skill-impact-resolver";
+import { finalizeCombatOutcome, type CombatOutcomeRoute } from "./combat-outcome-routing";
 
 export type PlayerCombatRuntimeConfig = Readonly<{
   combat: CombatState;
@@ -32,14 +26,11 @@ export type PlayerCombatRuntimeUpdate = Readonly<{
   route: CombatOutcomeRoute | null;
 }>;
 
-const resolveAttackPower = (
-  initialization: CombatEncounterInitialization,
-): number => {
+const resolveAttackPower = (initialization: CombatEncounterInitialization): number => {
   const total = initialization.player.equipmentIds.reduce((sum, equipmentId) => {
     const equipment = EQUIPMENT_CONFIGS.find(({ id }) => id === equipmentId);
     return sum + (equipment?.baseAttack ?? 10);
   }, 0);
-
   return Math.max(1, total);
 };
 
@@ -71,76 +62,45 @@ export class PlayerCombatRuntime {
       maxHp: config.initialization.player.maxHp,
       initialHp: config.initialization.player.currentHp,
     });
-
     for (const enemy of config.initialization.enemies) {
-      this.enemies.set(
-        enemy.instanceId,
-        new SkillCombatantState({
-          id: enemy.instanceId,
-          attackPower: 0,
-          defense: 0,
-          maxHp: enemy.hp,
-          initialHp: enemy.hp,
-        }),
-      );
+      this.enemies.set(enemy.instanceId, new SkillCombatantState({
+        id: enemy.instanceId,
+        attackPower: 0,
+        defense: 0,
+        maxHp: enemy.hp,
+        initialHp: enemy.hp,
+      }));
     }
   }
 
-  registerAction(actionId: string, skill: SkillDefinition): void {
-    this.skillsByActionId.set(actionId, skill);
-  }
-
-  setRunState(runState: Readonly<RunState>): void {
-    this.runState = runState as RunState;
-  }
-
-  get currentRunState(): RunState {
-    return this.runState;
-  }
-
+  registerAction(actionId: string, skill: SkillDefinition): void { this.skillsByActionId.set(actionId, skill); }
+  setRunState(runState: Readonly<RunState>): void { this.runState = runState as RunState; }
+  get currentRunState(): RunState { return this.runState; }
   get enemyHp(): Readonly<Record<string, number>> {
-    return Object.fromEntries(
-      Array.from(this.enemies, ([enemyId, enemy]) => [
-        enemyId,
-        enemy.snapshot.health.currentHp,
-      ]),
-    );
+    return Object.fromEntries(Array.from(this.enemies, ([enemyId, enemy]) => [enemyId, enemy.snapshot.health.currentHp]));
   }
 
   advance(deltaMs: number): PlayerCombatRuntimeUpdate {
     const combatUpdate = this.combat.advance(deltaMs);
-
     if (this.route === null) {
       for (const event of combatUpdate.events) {
         if (event.type !== "impact-resolved") continue;
         const skill = this.skillsByActionId.get(event.actionId);
         if (skill === undefined) continue;
-
-        const target = event.targetId === "player"
-          ? this.player
-          : this.resolveLivingEnemyTarget(event.targetId);
+        const target = event.targetId === "player" ? this.player : this.resolveLivingEnemyTarget(event.targetId);
         if (target === undefined) continue;
-
-        const hpBeforeImpact = target.snapshot.health.currentHp;
         const result = this.impactResolver.resolve({
           event: target.id === event.targetId ? event : { ...event, targetId: target.id },
           skill,
           actor: this.player,
           target,
         });
-        if (
-          result.applied &&
-          target.id !== "player" &&
-          target.snapshot.health.currentHp < hpBeforeImpact
-        ) {
-          playImpactHitSound();
+        if (result.applied && target.id !== "player" && result.damageApplied > 0) {
+          playWeaponImpactSound(this.initialization.player.equipmentIds);
         }
       }
 
-      if (
-        this.enemies.size > 0 &&
-        Array.from(this.enemies.values()).every((enemy) => enemy.snapshot.health.isDead)
-      ) {
+      if (this.enemies.size > 0 && Array.from(this.enemies.values()).every((enemy) => enemy.snapshot.health.isDead)) {
         this.route = finalizeCombatOutcome({
           combat: this.combat,
           enemyTimeline: this.enemyTimeline,
@@ -148,29 +108,16 @@ export class PlayerCombatRuntime {
           outcome: "victory",
           nextNodeIds: this.nextNodeIds,
           bossNode: this.bossNode,
-          rewardTier:
-            this.initialization.rewardPolicy === "standard"
-              ? "normal"
-              : this.initialization.rewardPolicy,
+          rewardTier: this.initialization.rewardPolicy === "standard" ? "normal" : this.initialization.rewardPolicy,
         });
       }
     }
-
-    return {
-      combat: combatUpdate,
-      enemyHp: this.enemyHp,
-      route: this.route,
-    };
+    return { combat: combatUpdate, enemyHp: this.enemyHp, route: this.route };
   }
 
   private resolveLivingEnemyTarget(targetId: string): SkillCombatantState | undefined {
     const requestedTarget = this.enemies.get(targetId);
-    if (requestedTarget !== undefined && !requestedTarget.snapshot.health.isDead) {
-      return requestedTarget;
-    }
-
-    return Array.from(this.enemies.values()).find(
-      (enemy) => !enemy.snapshot.health.isDead,
-    );
+    if (requestedTarget !== undefined && !requestedTarget.snapshot.health.isDead) return requestedTarget;
+    return Array.from(this.enemies.values()).find((enemy) => !enemy.snapshot.health.isDead);
   }
 }
