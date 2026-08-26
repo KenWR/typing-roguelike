@@ -1,6 +1,7 @@
 import type { RunState } from "@typing-roguelike/shared";
 import { createMapHudView } from "../run/map-hud-view";
 import { routeMapNodeSelection } from "../run/map-node-routing";
+import { runRemotePersistence } from "../run/run-remote-persistence";
 import { runSession } from "../run/run-session";
 import { MapScene } from "./CoreFlowScenes";
 
@@ -47,6 +48,7 @@ export class InteractiveMapScene extends MapScene {
         if (runSession.get()?.status === "active") {
           runSession.update(() => route.runState);
         }
+        void runRemotePersistence.checkpoint(route.runState);
         this.scene.start(route.sceneKey, route.payload);
       });
     });
