@@ -6,6 +6,10 @@ import {
   resolveEnemyVisualState,
 } from "../src/game/assets/enemy-visual-assets";
 
+/** 실행 위치와 무관하게 정적 에셋을 찾도록 테스트 파일 기준으로 해석한다. */
+const publicFile = (publicPath: string) =>
+  Bun.file(`${import.meta.dir}/../public${publicPath}`);
+
 describe("enemy visual assets", () => {
   test("preloads the combat background and every visual state", () => {
     expect(COMBAT_BACKGROUND_ASSET.path).toBe("/assets/background/전투 배경.png");
@@ -21,6 +25,19 @@ describe("enemy visual assets", () => {
       key: "enemy:ink-slime:disabled",
       path: "/assets/monster/먹물 슬라임_행동불능.png",
     });
+  });
+
+  test("ships a file for every enemy image it preloads", async () => {
+    // 카탈로그에만 등록되고 파일이 없으면 전투에서 X 플레이스홀더로 대체된다.
+    const missing: string[] = [];
+
+    for (const asset of [COMBAT_BACKGROUND_ASSET, ...ENEMY_IMAGE_ASSETS]) {
+      if (!(await publicFile(asset.path).exists())) {
+        missing.push(asset.path);
+      }
+    }
+
+    expect(missing).toEqual([]);
   });
 
   test("resolves known enemy states and leaves unknown enemies on the placeholder", () => {
