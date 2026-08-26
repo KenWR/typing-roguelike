@@ -28,7 +28,27 @@ describe("CommandInputBuffer", () => {
     });
   });
 
-  test("emits completion once until the buffer is reset", () => {
+  test("clears the live buffer immediately after a command completes", () => {
+    const buffer = new CommandInputBuffer("베기");
+    const completed: string[] = [];
+    buffer.onCompleted(({ input }) => completed.push(input));
+
+    expect(buffer.updateInput("베기")).toMatchObject({
+      input: "베기",
+      committedInput: "베기",
+      status: "complete",
+      matchedLength: 2,
+    });
+    expect(completed).toEqual(["베기"]);
+    expect(buffer.snapshot).toMatchObject({
+      input: "",
+      committedInput: "",
+      status: "idle",
+      matchedLength: 0,
+    });
+  });
+
+  test("emits completion once for duplicate DOM completion values", () => {
     const buffer = new CommandInputBuffer("휘두르기");
     const completed: string[] = [];
     buffer.onCompleted(({ command }) => completed.push(command));
@@ -90,6 +110,11 @@ describe("CommandInputBuffer", () => {
       status: "complete",
     });
     expect(completionCount).toBe(1);
+    expect(buffer.snapshot).toMatchObject({
+      input: "",
+      committedInput: "",
+      status: "idle",
+    });
   });
 
   test("matches canonically equivalent Unicode input", () => {
