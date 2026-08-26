@@ -1,4 +1,5 @@
 name = "typing-roguelike-api"
+main = "src/worker.ts"
 compatibility_date = "2026-08-26"
 
 [[d1_databases]]

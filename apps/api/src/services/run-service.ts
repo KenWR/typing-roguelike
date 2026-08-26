@@ -1,4 +1,3 @@
-import { createHash, randomUUID } from "node:crypto";
 import {
   createInitialRunState,
   generateNodeChoices,
@@ -47,8 +46,16 @@ export interface RunService {
 }
 
 const now = (): string => new Date().toISOString();
-const hashState = (state: RunState): string =>
-  createHash("sha256").update(JSON.stringify(state)).digest("hex");
+const newId = (): string => globalThis.crypto.randomUUID();
+
+const hashState = async (state: RunState): Promise<string> => {
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(JSON.stringify(state)),
+  );
+
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+};
 
 const randomMapSeed = (): number => Math.floor(Math.random() * 2_147_483_647);
 
@@ -97,7 +104,7 @@ const assertCheckpointRequest = (request: CheckpointRequest): void => {
 
 export const createRunService = (repository: RunRepository): RunService => ({
   async createRun(playerId, requestedSeed) {
-    const runId = randomUUID();
+    const runId = newId();
     const timestamp = now();
     const mapSeed = Number.isSafeInteger(requestedSeed) && requestedSeed !== undefined && requestedSeed >= 0
       ? requestedSeed
@@ -105,10 +112,10 @@ export const createRunService = (repository: RunRepository): RunService => ({
     const state = createInitialRunState({ seed: mapSeed });
     const result = await repository.createRun({
       runId,
-      checkpointId: randomUUID(),
+      checkpointId: newId(),
       playerId,
       state,
-      stateHash: hashState(state),
+      stateHash: await hashState(state),
       timestamp,
     });
 
@@ -192,14 +199,14 @@ export const createRunService = (repository: RunRepository): RunService => ({
     };
     const savedAt = now();
     const result = await repository.saveCheckpoint({
-      checkpointId: randomUUID(),
+      checkpointId: newId(),
       playerId,
       runId,
       expectedVersion: request.stateVersion,
       nodeId: selectedNode.key,
       floor: request.round,
       state: checkpointState,
-      stateHash: hashState(checkpointState),
+      stateHash: await hashState(checkpointState),
       timestamp: savedAt,
     });
 
