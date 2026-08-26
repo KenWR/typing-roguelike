@@ -5,6 +5,7 @@ import {
   type RunState,
 } from "@typing-roguelike/shared";
 import { RunApiError, runApiClient, type RunApiClient } from "../api/run-api-client";
+import { normalizeRestoredRunState } from "./run-persistence";
 import { ensurePlayableRunLoadout, runSession } from "./run-session";
 import { initializeRunMap } from "./run-start-map";
 
@@ -44,7 +45,7 @@ const normalizeServerState = (state: Readonly<RunState>): RunState => {
     };
   }
 
-  return normalized;
+  return normalizeRestoredRunState(normalized);
 };
 
 const toServerCheckpoint = (
