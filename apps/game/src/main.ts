@@ -2,13 +2,13 @@ import Phaser from "phaser";
 import { BootScene } from "./game/scenes/BootScene";
 import { CombatFoundationScene } from "./game/scenes/CombatFoundationScene";
 import {
-  LobbyScene,
   MapScene,
   RestScene,
   SettingsScene,
   ShopScene,
   StartScene,
 } from "./game/scenes/CoreFlowScenes";
+import { CurrencyLobbyScene } from "./game/scenes/CurrencyLobbyScene";
 import { EquipmentScene } from "./game/scenes/EquipmentScene";
 import { RewardSelectionScene } from "./game/scenes/RewardSelectionScene";
 import { CompletableRunResultScene } from "./game/scenes/CompletableRunResultScene";
@@ -32,7 +32,7 @@ const game = new Phaser.Game({
     BootScene,
     StartScene,
     SettingsScene,
-    LobbyScene,
+    CurrencyLobbyScene,
     MapScene,
     CombatFoundationScene,
     RewardSelectionScene,
