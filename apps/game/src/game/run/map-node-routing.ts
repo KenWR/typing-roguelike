@@ -83,6 +83,7 @@ export const routeMapNodeSelection = (
         ...commonPayload,
         adapter: rewardFlow.adapter,
         nextSceneKey: rewardFlow.nextSceneKey,
+        rewardSource: "map-reward",
       },
     };
   }
