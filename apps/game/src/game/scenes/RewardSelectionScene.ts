@@ -41,6 +41,7 @@ const RARITY_PRESENTATION: Record<
 const KIND_LABELS: Record<RewardKind, string> = {
   weapon: "무기",
   relic: "유물",
+  ring: "반지",
   skill: "스킬",
   currency: "재화",
 };

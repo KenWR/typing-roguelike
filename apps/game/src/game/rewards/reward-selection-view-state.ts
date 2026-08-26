@@ -1,4 +1,4 @@
-export type RewardKind = "weapon" | "relic" | "skill" | "currency";
+export type RewardKind = "weapon" | "relic" | "ring" | "skill" | "currency";
 
 export type RewardRarity =
   | "common"

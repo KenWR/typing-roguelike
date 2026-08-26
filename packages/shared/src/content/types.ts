@@ -35,6 +35,39 @@ export interface SkillConfig {
 }
 export interface EquipmentConfig { id: string; name: string; slot: "weapon" | "subweapon"; kind: EquipmentKind; rarity: Rarity; sellValue: number; baseAttack?: number; skills: readonly SkillConfig[]; }
 export interface RelicConfig { id: string; name: string; rarity: Rarity; description: string; maxStacks: number; skillTags: readonly SkillCategory[]; effects: readonly string[]; }
+
+/** 반지의 문자열이 기본 커맨드 앞/뒤 중 어디에 붙는지 결정한다. 장착 슬롯 번호와 무관하다. */
+export type RingPosition = "prefix" | "suffix";
+
+export type RingSkillModifier = Readonly<{
+  /** 지정하지 않으면 모든 스킬 카테고리에 적용한다. */
+  skillCategories?: readonly SkillCategory[];
+  /** AP 비용에 더한다. 음수도 허용하며 최종 비용은 0 미만이 되지 않는다. */
+  apCostDelta?: number;
+  /** 선딜에 곱한다. */
+  windupMultiplier?: number;
+  /** 피해 계수에 곱한다. 장착 반지 전체의 최종 피해 증폭은 +100%에서 제한한다. */
+  damageMultiplier?: number;
+  /** 적중 시 추가하는 상태 효과. */
+  onHitStatus?: Readonly<{
+    statusId: string;
+    durationMs: number;
+    stacks?: number;
+  }>;
+}>;
+
+export interface RingConfig {
+  id: string;
+  name: string;
+  position: RingPosition;
+  /** 커맨드 앞/뒤에 실제로 붙는 문자열. 예: `신속한`, `연속으로`. */
+  commandAffix: string;
+  rarity: Rarity;
+  sellValue: number;
+  description: string;
+  modifiers: readonly RingSkillModifier[];
+}
+
 export type RelicDamagePriority = "category" | "conditional" | "final";
 export interface RelicDamageModifier {
   priority: RelicDamagePriority;
