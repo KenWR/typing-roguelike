@@ -52,7 +52,10 @@ in `apps/api/wrangler.toml`; keep both copies synchronized.
 
 Keep the token account-scoped and limited to the permissions required for these
 two operations. Do not use a global API key, and do not print the token in
-diagnostics. The workflow grants GitHub Actions only `contents: read`.
+diagnostics. The token is injected only into the D1 migration, API deployment,
+and game upload steps; checkout, dependency installation, configuration checks,
+game build, and smoke tests do not receive it. The workflow grants GitHub
+Actions only `contents: read`.
 
 ### Variables
 
