@@ -1,5 +1,9 @@
 import Phaser from "phaser";
-import { defineSkill, type RunState } from "@typing-roguelike/shared";
+import {
+  defineSkill,
+  type GeneratedMapNode,
+  type RunState,
+} from "@typing-roguelike/shared";
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
 import { ActionPointResource } from "../combat/action-point-resource";
@@ -10,6 +14,7 @@ import {
   type PauseWindow,
 } from "../combat/combat-pause-controller";
 import type { CombatEncounterInitialization } from "../combat/encounter-initializer";
+import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
 import { CombatHud } from "../hud/combat-hud";
 import { CommandHud } from "../hud/command-hud";
@@ -36,6 +41,8 @@ const MAGIC_SHIELD = defineSkill({
 export type CombatFoundationSceneData = Readonly<{
   combat?: CombatEncounterInitialization;
   runState?: Readonly<RunState>;
+  nextNodeIds?: readonly string[];
+  bossNode?: GeneratedMapNode;
 }>;
 
 export class CombatFoundationScene extends Phaser.Scene {
@@ -51,6 +58,7 @@ export class CombatFoundationScene extends Phaser.Scene {
   private enemyAttackTimeline!: EnemyAttackTimeline;
   private actionPoints!: ActionPointResource;
   private combat!: CombatState;
+  private playerCombatRuntime?: PlayerCombatRuntime;
   private pauseController?: CombatPauseController;
   private pauseOverlay?: Phaser.GameObjects.Text;
   private commandHud!: CommandHud;
@@ -59,6 +67,9 @@ export class CombatFoundationScene extends Phaser.Scene {
   private commandCompletionCleanup?: () => void;
   private combatInitialization?: CombatEncounterInitialization;
   private runState?: Readonly<RunState>;
+  private nextNodeIds: readonly string[] = [];
+  private bossNode?: GeneratedMapNode;
+  private transitionStarted = false;
   private isComposing = false;
 
   constructor() {
@@ -68,6 +79,10 @@ export class CombatFoundationScene extends Phaser.Scene {
   init(data: CombatFoundationSceneData = {}): void {
     this.combatInitialization = data.combat;
     this.runState = data.runState;
+    this.nextNodeIds = data.nextNodeIds ?? [];
+    this.bossNode = data.bossNode;
+    this.playerCombatRuntime = undefined;
+    this.transitionStarted = false;
   }
 
   create(): void {
@@ -150,6 +165,18 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandInputBuffer = new CommandInputBuffer(initialSkill.command);
     this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
     this.uiLayer.add(this.commandHud.container);
+
+    if (this.runState !== undefined) {
+      this.playerCombatRuntime = new PlayerCombatRuntime({
+        combat: this.combat,
+        enemyTimeline: this.enemyAttackTimeline,
+        runState: this.runState,
+        initialization,
+        nextNodeIds: this.nextNodeIds,
+        ...(this.bossNode === undefined ? {} : { bossNode: this.bossNode }),
+      });
+    }
+
     const skillStarter = new SkillCommandStarter({
       skills: availableSkills,
       actionPoints: this.actionPoints,
@@ -165,6 +192,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       (result) => {
         this.combatHud.update({ ap: result.ap.currentAp });
         if (result.started) {
+          this.playerCombatRuntime?.registerAction(result.actionId, result.skill);
           this.commandHud.showSkillStarted();
         }
       },
@@ -183,14 +211,24 @@ export class CombatFoundationScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    if (this.combatInitialization === undefined) {
+    if (this.combatInitialization === undefined || this.transitionStarted) {
       return;
     }
     const safeDelta = Math.max(0, delta);
     const ap = this.actionPoints.advance(safeDelta);
     this.combatHud.update({ ap: ap.currentAp });
-    const update = this.enemyAttackTimeline.advance(safeDelta);
-    this.enemyAttackGauge.update(update.snapshot);
+    const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
+    this.enemyAttackGauge.update(enemyUpdate.snapshot);
+
+    const runtimeUpdate = this.playerCombatRuntime?.advance(safeDelta);
+    if (runtimeUpdate?.route !== null && runtimeUpdate?.route !== undefined) {
+      this.transitionStarted = true;
+      const transition = resolveSceneTransition(
+        runtimeUpdate.route.sceneKey,
+        runtimeUpdate.route.payload,
+      );
+      this.scene.start(transition.key, transition.payload);
+    }
   }
 
   private createPauseHandling(): void {
