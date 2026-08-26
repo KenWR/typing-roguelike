@@ -22,5 +22,6 @@ describe("runtime audio assets", () => {
     expect(RUNTIME_AUDIO_PATHS.bow).toBe("/assets/audio/활.mp3");
     expect(RUNTIME_AUDIO_PATHS.relicPickup).toBe("/assets/audio/유물 줍는 소리.mp3");
     expect(RUNTIME_AUDIO_PATHS.coin).toBe("/assets/audio/동전.mp3");
+    expect(RUNTIME_AUDIO_PATHS.walk).toBe("/assets/audio/걷는소리.mp3");
   });
 });

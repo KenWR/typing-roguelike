@@ -1,3 +1,5 @@
+import { COMBAT_BACKGROUND_ASSET, ENEMY_IMAGE_ASSETS } from "./enemy-visual-assets";
+import { PLAYER_WEAPON_IMAGE_ASSETS } from "./player-visual-assets";
 import { RELIC_CONFIGS } from "@typing-roguelike/shared";
 
 export const ASSET_PATHS = {
@@ -21,7 +23,7 @@ export const getRelicIconTextureKey = (relicId: string): string =>
  * Only assets used by the current runtime foundation belong here.
  * Source images and overview sheets must remain outside the preload list.
  */
-export const RUNTIME_IMAGE_ASSETS: readonly {
+export const RELIC_ICON_ASSETS: readonly {
   key: string;
   path: string;
 }[] = RELIC_CONFIGS.map((relic) => ({
@@ -29,7 +31,16 @@ export const RUNTIME_IMAGE_ASSETS: readonly {
   path: `${ASSET_PATHS.relicIcons.hud}/${relic.id}.png`,
 }));
 
+export const COMBAT_IMAGE_ASSETS: readonly {
+  key: string;
+  path: string;
+}[] = [
+  COMBAT_BACKGROUND_ASSET,
+  ...ENEMY_IMAGE_ASSETS,
+  ...PLAYER_WEAPON_IMAGE_ASSETS,
+];
+
 export const TEXTURE_KEYS = {
-  combatBackground: "placeholder:combat-background",
+  combatBackground: COMBAT_BACKGROUND_ASSET.key,
   missingAsset: "placeholder:missing-asset",
 } as const;
