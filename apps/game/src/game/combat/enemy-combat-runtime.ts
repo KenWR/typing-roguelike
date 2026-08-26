@@ -12,7 +12,7 @@ import { SkillCombatantState } from "./skill-impact-resolver";
 export type EnemyCombatRuntimeConfig = Readonly<{
   combat: CombatState;
   enemyTimeline: EnemyAttackTimeline;
-  actionPoints: ActionPointResource;
+  actionPoints?: ActionPointResource;
   runState: RunState;
   initialization: CombatEncounterInitialization;
   random?: () => number;
@@ -49,7 +49,7 @@ export class EnemyCombatRuntime {
   constructor(config: EnemyCombatRuntimeConfig) {
     this.combat = config.combat;
     this.enemyTimeline = config.enemyTimeline;
-    this.actionPoints = config.actionPoints;
+    this.actionPoints = config.actionPoints ?? new ActionPointResource();
     this.initialization = config.initialization;
     this.random = config.random ?? Math.random;
     this.runState = config.runState;
