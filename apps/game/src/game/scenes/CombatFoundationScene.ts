@@ -4,6 +4,11 @@ import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
 import { ActionPointResource } from "../combat/action-point-resource";
 import { CombatState } from "../combat/combat-state";
+import {
+  CombatPauseController,
+  type PauseDocument,
+  type PauseWindow,
+} from "../combat/combat-pause-controller";
 import type { CombatEncounterInitialization } from "../combat/encounter-initializer";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
 import { CombatHud } from "../hud/combat-hud";
@@ -44,6 +49,10 @@ export class CombatFoundationScene extends Phaser.Scene {
   private combatHud!: CombatHud;
   private enemyAttackGauge!: EnemyAttackGauge;
   private enemyAttackTimeline!: EnemyAttackTimeline;
+  private actionPoints!: ActionPointResource;
+  private combat!: CombatState;
+  private pauseController?: CombatPauseController;
+  private pauseOverlay?: Phaser.GameObjects.Text;
   private commandHud!: CommandHud;
   private commandInputBuffer!: CommandInputBuffer;
   private commandInputCleanup?: () => void;
@@ -101,13 +110,13 @@ export class CombatFoundationScene extends Phaser.Scene {
       .setOrigin(0, 0);
     this.uiLayer.add(encounterLabel);
 
-    const actionPoints = new ActionPointResource();
-    const combat = new CombatState();
+    this.actionPoints = new ActionPointResource();
+    this.combat = new CombatState();
     this.combatHud = new CombatHud(this, {
       hp: initialization.player.currentHp,
       maxHp: initialization.player.maxHp,
-      ap: actionPoints.snapshot.currentAp,
-      maxAp: actionPoints.snapshot.maxAp,
+      ap: this.actionPoints.snapshot.currentAp,
+      maxAp: this.actionPoints.snapshot.maxAp,
     });
     this.uiLayer.add(this.combatHud.container);
 
@@ -143,8 +152,8 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.uiLayer.add(this.commandHud.container);
     const skillStarter = new SkillCommandStarter({
       skills: availableSkills,
-      actionPoints,
-      combat,
+      actionPoints: this.actionPoints,
+      combat: this.combat,
       actorId: "player",
       targetId:
         initialSkill.kind === "defense"
@@ -161,20 +170,15 @@ export class CombatFoundationScene extends Phaser.Scene {
       },
     );
     this.createCommandInputElement();
+    this.createPauseHandling();
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseResizeListener, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseResizeListener, this);
-    this.events.once(
-      Phaser.Scenes.Events.SHUTDOWN,
-      this.releaseCommandInputElement,
-      this,
-    );
-    this.events.once(
-      Phaser.Scenes.Events.DESTROY,
-      this.releaseCommandInputElement,
-      this,
-    );
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseCommandInputElement, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseCommandInputElement, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releasePauseHandling, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.releasePauseHandling, this);
     this.applyLayout(this.scale.gameSize.width, this.scale.gameSize.height);
   }
 
@@ -182,8 +186,43 @@ export class CombatFoundationScene extends Phaser.Scene {
     if (this.combatInitialization === undefined) {
       return;
     }
-    const update = this.enemyAttackTimeline.advance(Math.max(0, delta));
+    const safeDelta = Math.max(0, delta);
+    const ap = this.actionPoints.advance(safeDelta);
+    this.combatHud.update({ ap: ap.currentAp });
+    const update = this.enemyAttackTimeline.advance(safeDelta);
     this.enemyAttackGauge.update(update.snapshot);
+  }
+
+  private createPauseHandling(): void {
+    this.pauseOverlay = this.add.text(0, 0, "일시정지\nESC로 재개", {
+      fontFamily: "Galmuri9, monospace",
+      fontSize: "28px",
+      color: "#f9fafb",
+      backgroundColor: "#111827",
+      align: "center",
+      padding: { x: 30, y: 20 },
+    }).setOrigin(0.5).setDepth(1000).setVisible(false);
+
+    this.pauseController = new CombatPauseController(
+      [this.combat, this.actionPoints, this.enemyAttackTimeline],
+      (paused) => {
+        this.pauseOverlay?.setVisible(paused);
+      },
+    );
+
+    if (typeof document !== "undefined" && typeof window !== "undefined") {
+      this.pauseController.bind(
+        document as unknown as PauseDocument,
+        window as unknown as PauseWindow,
+      );
+    }
+  }
+
+  private releasePauseHandling(): void {
+    this.pauseController?.dispose();
+    this.pauseController = undefined;
+    this.pauseOverlay?.destroy();
+    this.pauseOverlay = undefined;
   }
 
   private handleResize(gameSize: Phaser.Structs.Size): void {
@@ -228,6 +267,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       layout.commandHudReservation.width,
       layout.commandHudReservation.height,
     );
+    this.pauseOverlay?.setPosition(width / 2, height / 2);
   }
 
   private createCommandInputElement(): void {
