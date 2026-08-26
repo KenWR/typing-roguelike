@@ -65,6 +65,7 @@ export const resolveRunResumeRoute = (
   const commonPayload = {
     runState,
     nodeId: node.key,
+    node,
     nextNodeIds,
     resumed: true,
   };
