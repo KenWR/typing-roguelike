@@ -298,7 +298,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandCompletionCleanup = skillStarter.connect(this.commandInputBuffer, (result) => {
       if (result.started) {
         this.apEffects.onSkillStarted(result.skill, result.combo.count);
-        this.playerCombatRuntime?.registerAction(result.actionId, result.skill);
+        this.playerCombatRuntime?.registerAction(result.actionId, result.skill, result.combo.multiplier);
         this.updateComboDisplay(result.combo);
         this.playPlayerAttackVisual(primaryWeaponId, result.skill);
         if (result.skill.kind === "defense") {
@@ -348,6 +348,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     if (playerUpdate === undefined) {
       const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
       this.enemyAttackGauge.update(enemyUpdate.snapshot);
+      this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
       this.playerEffectHud?.update(
         createActorEffectPresentations({
           apEffects: this.actionPoints.snapshot.timedEffects,
@@ -359,6 +360,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     }
 
     this.enemyAttackGauge.update(playerUpdate.enemyTimeline.snapshot);
+    this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
     this.enemyAttackGauge.setTargetedEnemy(this.targeting?.targetId);
     this.combatHud.update({
       hp: playerUpdate.playerHp,
