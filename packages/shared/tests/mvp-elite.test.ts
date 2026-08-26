@@ -12,14 +12,15 @@ describe("MVP elite content contract", () => {
     expect(boss?.allowedFloors).toContain(5);
   });
 
-  test("links the correction lesson to the boss mechanic", () => {
+  test("links the correction lesson to the boss AP effect", () => {
     const elite = ENEMY_BY_ID.get(MVP_ELITE.enemyId)!;
     const boss = ENEMY_BY_ID.get(MVP_ELITE.bossId)!;
     const eliteAction = elite.actions.find((action) => action.id === MVP_ELITE.linkedEliteActionId);
     const bossAction = boss.actions.find((action) => action.id === MVP_ELITE.linkedBossActionId);
 
     expect(eliteAction?.description).toContain("교정");
-    expect(bossAction?.description).toContain("교정");
+    expect(bossAction?.description).toBe("플레이어 AP를 1 감소시킵니다.");
+    expect(bossAction?.apDelta).toBe(-1);
     expect(MVP_ELITE.playerResponse.length).toBeGreaterThan(0);
   });
 

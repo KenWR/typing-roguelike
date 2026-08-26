@@ -45,11 +45,11 @@ describe("boss combat flow", () => {
     if (result.ok) {
       expect(result.combat.nodeType).toBe("boss");
       expect(result.combat.rewardPolicy).toBe("boss");
-      expect(result.runState.map.nodeStatuses[boss.key]).toBe("in_progress");
+      expect(result.runState.map.nodeStatuses[boss.key]).toBe("available");
     }
   });
 
-  test("boss victory clears run and routes to clear settlement", () => {
+  test("legacy in-progress boss victory clears run and routes to clear settlement", () => {
     const result = finalizeBossCombat(run("in_progress"), boss, "victory");
     expect(result.runState.status).toBe("cleared");
     expect(result.runState.map.nodeStatuses[boss.key]).toBe("cleared");
