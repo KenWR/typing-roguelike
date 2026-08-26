@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { MapNodeStatus, RunState } from "@typing-roguelike/shared";
+import { playRuntimeBgm, setRuntimeAudioMuted } from "../audio/runtime-audio";
 import { createMapHudView } from "../run/map-hud-view";
 import { runRemotePersistence } from "../run/run-remote-persistence";
 import { runSession } from "../run/run-session";
@@ -50,6 +51,7 @@ export class StartScene extends EmptyCoreScene {
   }
 
   create(): void {
+    playRuntimeBgm("menu");
     const { width, height } = this.scale.gameSize;
     this.add.rectangle(0, 0, width, height, 0x111827).setOrigin(0);
     this.add
@@ -81,6 +83,7 @@ export class SettingsScene extends EmptyCoreScene {
   }
 
   create(): void {
+    playRuntimeBgm("menu");
     const { width, height } = this.scale.gameSize;
     const storage = typeof localStorage === "undefined" ? undefined : localStorage;
     this.draftSettings = loadMenuSettings(storage);
@@ -103,6 +106,7 @@ export class SettingsScene extends EmptyCoreScene {
     createMenuButton(this, width / 2, height * 0.62, "적용", () => {
       saveMenuSettings(this.draftSettings, storage);
       this.sound.mute = !this.draftSettings.soundEnabled;
+      setRuntimeAudioMuted(!this.draftSettings.soundEnabled);
     });
 
     createMenuButton(this, width / 2, height * 0.76, "뒤로", () => {
@@ -124,6 +128,7 @@ export class LobbyScene extends EmptyCoreScene {
   }
 
   create(): void {
+    playRuntimeBgm("tower");
     const { width, height } = this.scale.gameSize;
     this.add.rectangle(0, 0, width, height, 0x111827).setOrigin(0);
     this.add
@@ -186,6 +191,7 @@ export class MapScene extends EmptyCoreScene {
   }
 
   create(): void {
+    playRuntimeBgm("tower");
     const { width, height } = this.scale.gameSize;
     const activeRun = this.runState ?? runSession.get();
     this.add.rectangle(0, 0, width, height, 0x111827).setOrigin(0);

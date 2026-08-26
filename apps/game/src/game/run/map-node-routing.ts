@@ -6,7 +6,6 @@ import {
 } from "@typing-roguelike/shared";
 import { enterBossCombat } from "../combat/boss-combat-flow";
 import { initializeCombatEncounter } from "../combat/encounter-initializer";
-import { createRunRewardSelectionFlow } from "../rewards/run-reward-selection";
 import { SCENE_KEYS } from "../scenes/scene-contract";
 
 export type MapNodeRoute = Readonly<{
@@ -16,7 +15,6 @@ export type MapNodeRoute = Readonly<{
     | typeof SCENE_KEYS.combat
     | typeof SCENE_KEYS.shop
     | typeof SCENE_KEYS.rest
-    | typeof SCENE_KEYS.reward
     | typeof SCENE_KEYS.map;
   payload: Readonly<Record<string, unknown>>;
 }>;
@@ -37,6 +35,10 @@ export const routeMapNodeSelection = (
 ): MapNodeRoute => {
   const node = findCurrentNode(runState, nodeId);
   if (node === undefined || runState.map.nodeStatuses[nodeId] !== "available") {
+    return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };
+  }
+
+  if (node.type === "reward") {
     return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };
   }
 
@@ -70,23 +72,6 @@ export const routeMapNodeSelection = (
 
   if (node.type === "shop") return { applied: true, runState: selectedRun, sceneKey: SCENE_KEYS.shop, payload: commonPayload };
   if (node.type === "rest") return { applied: true, runState: selectedRun, sceneKey: SCENE_KEYS.rest, payload: commonPayload };
-  if (node.type === "reward") {
-    const rewardFlow = createRunRewardSelectionFlow({
-      runState: selectedRun,
-      mapCompletion: { nodeId: node.key, nextNodeIds: node.nextNodeKeys },
-    });
-    return {
-      applied: true,
-      runState: selectedRun,
-      sceneKey: SCENE_KEYS.reward,
-      payload: {
-        ...commonPayload,
-        adapter: rewardFlow.adapter,
-        nextSceneKey: rewardFlow.nextSceneKey,
-        rewardSource: "map-reward",
-      },
-    };
-  }
 
   const encounter = initializeCombatEncounter(selectedRun, node);
   if (!encounter.ok) {
