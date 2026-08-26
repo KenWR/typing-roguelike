@@ -1,5 +1,6 @@
 import {
   EQUIPMENT_CONFIGS,
+  completeMapNode,
   type EquipmentConfig,
   type RunState,
   type SkillConfig,
@@ -77,6 +78,10 @@ export type RunRewardSelectionFlow = Readonly<{
 export type CreateRunRewardSelectionFlowOptions = Readonly<{
   runState: RunState;
   equipmentIds?: readonly string[];
+  mapCompletion?: Readonly<{
+    nodeId: string;
+    nextNodeIds: readonly string[];
+  }>;
 }>;
 
 export const createRunRewardSelectionFlow = ({
@@ -84,6 +89,7 @@ export const createRunRewardSelectionFlow = ({
   equipmentIds = EQUIPMENT_CONFIGS.filter((equipment) => equipment.rarity !== "hidden")
     .slice(0, 3)
     .map((equipment) => equipment.id),
+  mapCompletion,
 }: CreateRunRewardSelectionFlowOptions): RunRewardSelectionFlow => {
   const equipmentRewards = equipmentIds.map(findEquipment);
   if (equipmentRewards.length === 0) {
@@ -97,8 +103,18 @@ export const createRunRewardSelectionFlow = ({
       currency: runState.runCurrency,
     }),
     initialRunState: runState,
-    applySelection: (currentRunState, reward) =>
-      applyEquipmentReward(currentRunState, reward.id),
+    applySelection: (currentRunState, reward) => {
+      const rewardedRunState = applyEquipmentReward(currentRunState, reward.id);
+      if (mapCompletion === undefined) {
+        return rewardedRunState;
+      }
+      const completion = completeMapNode(
+        rewardedRunState.map,
+        mapCompletion.nodeId,
+        mapCompletion.nextNodeIds,
+      );
+      return { ...rewardedRunState, map: completion.map };
+    },
   });
 
   return {
