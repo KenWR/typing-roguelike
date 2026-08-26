@@ -15,6 +15,7 @@ export type MapNodeRoute = Readonly<{
     | typeof SCENE_KEYS.combat
     | typeof SCENE_KEYS.shop
     | typeof SCENE_KEYS.rest
+    | typeof SCENE_KEYS.reward
     | typeof SCENE_KEYS.map;
   payload: Readonly<Record<string, unknown>>;
 }>;
@@ -38,12 +39,29 @@ export const routeMapNodeSelection = (
     return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };
   }
 
+  const selectedRun: RunState = { ...runState, map: beginMapNode(runState.map, node.key) };
+  const commonPayload = {
+    runState: selectedRun,
+    nodeId: node.key,
+    node,
+    nextNodeIds: node.nextNodeKeys,
+  };
+
   if (node.type === "reward") {
-    return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };
+    return {
+      applied: true,
+      runState: selectedRun,
+      sceneKey: SCENE_KEYS.reward,
+      payload: {
+        ...commonPayload,
+        rewardSource: "map-reward",
+        nextSceneKey: SCENE_KEYS.map,
+      },
+    };
   }
 
   if (node.type === "boss") {
-    const entry = enterBossCombat(runState as RunState, node);
+    const entry = enterBossCombat(selectedRun, node);
     if (!entry.ok) {
       return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };
     }
@@ -52,23 +70,13 @@ export const routeMapNodeSelection = (
       runState: entry.runState,
       sceneKey: entry.sceneKey,
       payload: {
+        ...commonPayload,
         runState: entry.runState,
-        nodeId: node.key,
-        node,
-        nextNodeIds: [],
         bossNode: node,
         combat: entry.combat,
       },
     };
   }
-
-  const selectedRun: RunState = { ...runState, map: beginMapNode(runState.map, node.key) };
-  const commonPayload = {
-    runState: selectedRun,
-    nodeId: node.key,
-    node,
-    nextNodeIds: node.nextNodeKeys,
-  };
 
   if (node.type === "shop") return { applied: true, runState: selectedRun, sceneKey: SCENE_KEYS.shop, payload: commonPayload };
   if (node.type === "rest") return { applied: true, runState: selectedRun, sceneKey: SCENE_KEYS.rest, payload: commonPayload };
