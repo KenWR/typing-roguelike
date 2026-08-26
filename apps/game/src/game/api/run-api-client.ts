@@ -95,17 +95,16 @@ export class RunApiClient {
     for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+      const headers = new Headers(init.headers);
+      headers.set("Accept", "application/json");
+      if (init.body !== undefined) headers.set("Content-Type", "application/json");
 
       try {
         const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
           ...init,
           credentials: "include",
           signal: controller.signal,
-          headers: {
-            Accept: "application/json",
-            ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
-            ...init.headers,
-          },
+          headers,
         });
 
         if (!response.ok) {
