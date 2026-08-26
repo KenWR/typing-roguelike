@@ -213,7 +213,9 @@ export class CombatFoundationScene extends Phaser.Scene {
       ? initialization.player.skills.map((skill) => defineSkill(skill))
       : [MAGIC_SHIELD];
     const initialSkill = availableSkills[0]!;
-    this.commandInputBuffer = new CommandInputBuffer(initialSkill.command);
+    this.commandInputBuffer = new CommandInputBuffer(
+      availableSkills.map((skill) => skill.command),
+    );
     this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
     this.uiLayer.add(this.commandHud.container);
     this.commandStatusCleanup = this.commandInputBuffer.onStatusChanged(({ snapshot }) => {
