@@ -12,6 +12,10 @@ export type CombatHudUpdate = Partial<Pick<CombatHudState, "hp" | "ap">>;
 const clamp = (value: number, maximum: number) =>
   Math.min(Math.max(0, value), Math.max(0, maximum));
 
+export function formatCombatHudResourceValue(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 export function createCombatHudState(state: CombatHudState): CombatHudState {
   return {
     hp: clamp(state.hp, state.maxHp),
@@ -39,7 +43,7 @@ export class CombatHud {
   private readonly hpFill: Phaser.GameObjects.Rectangle;
   private readonly apFill: Phaser.GameObjects.Rectangle;
   private state: CombatHudState;
-  private barWidth = 198;
+  private barWidth = 120;
 
   constructor(scene: Phaser.Scene, initialState: CombatHudState) {
     this.state = createCombatHudState(initialState);
@@ -58,8 +62,8 @@ export class CombatHud {
     const apLabel = scene.add.text(18, 76, "AP", this.labelStyle());
     this.hpFill = scene.add.rectangle(60, 47, 1, 12, 0xe35d6a).setOrigin(0, 0.5);
     this.apFill = scene.add.rectangle(60, 85, 1, 12, 0x4f9ee8).setOrigin(0, 0.5);
-    this.hpValue = scene.add.text(0, 30, "", this.valueStyle());
-    this.apValue = scene.add.text(0, 68, "", this.valueStyle());
+    this.hpValue = scene.add.text(0, 30, "", this.valueStyle()).setOrigin(1, 0);
+    this.apValue = scene.add.text(0, 68, "", this.valueStyle()).setOrigin(1, 0);
     this.container.add([panel, title, hpLabel, apLabel, this.hpFill, this.apFill, this.hpValue, this.apValue]);
     this.container.setSize(280, 112);
     this.refresh(this.barWidth);
@@ -87,8 +91,13 @@ export class CombatHud {
   }
 
   private refresh(barWidth: number): void {
-    this.hpValue.setText(`${this.state.hp} / ${this.state.maxHp}`).setPosition(barWidth + 68, 30);
-    this.apValue.setText(`${this.state.ap} / ${this.state.maxAp}`).setPosition(barWidth + 68, 68);
+    const valueRight = barWidth + 142;
+    this.hpValue
+      .setText(`${formatCombatHudResourceValue(this.state.hp)} / ${formatCombatHudResourceValue(this.state.maxHp)}`)
+      .setPosition(valueRight, 30);
+    this.apValue
+      .setText(`${formatCombatHudResourceValue(this.state.ap)} / ${formatCombatHudResourceValue(this.state.maxAp)}`)
+      .setPosition(valueRight, 68);
     this.hpFill.setSize(barWidth * (this.state.maxHp ? this.state.hp / this.state.maxHp : 0), 12);
     this.apFill.setSize(barWidth * (this.state.maxAp ? this.state.ap / this.state.maxAp : 0), 12);
   }
