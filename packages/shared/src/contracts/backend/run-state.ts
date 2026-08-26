@@ -2,6 +2,7 @@ export const RUN_STATE_SCHEMA_VERSION = 1;
 export const DEFAULT_RUN_MAX_HP = 100;
 
 export type RunStateStatus = "active" | "dead" | "cleared" | "abandoned";
+export type MapNodeStatus = "locked" | "available" | "in_progress" | "cleared";
 
 export type RunCharacterState = {
 	currentHp: number;
@@ -30,7 +31,7 @@ export type RunMapState = {
 	currentNodeId: string;
 	currentRound: number;
 	choicePath: number[];
-	nodeStatuses: Record<string, string>;
+	nodeStatuses: Record<string, MapNodeStatus>;
 };
 
 export type RunState = {

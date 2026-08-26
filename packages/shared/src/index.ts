@@ -1,5 +1,6 @@
 export * from "./contracts/backend/leaderboard-contracts.ts";
 export * from "./rules/map-generation.ts";
+export * from "./rules/map-node-state.ts";
 export * from "./contracts/backend/run-contracts.ts";
 export * from "./contracts/backend/run-state.ts";
 export * from "./contracts/gameplay/skill-contract.ts";
