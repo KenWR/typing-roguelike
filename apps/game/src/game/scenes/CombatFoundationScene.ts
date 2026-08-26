@@ -1,15 +1,17 @@
 import Phaser from "phaser";
-import { defineSkill } from "@typing-roguelike/shared";
+import { defineSkill, type RunState } from "@typing-roguelike/shared";
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
 import { ActionPointResource } from "../combat/action-point-resource";
 import { CombatState } from "../combat/combat-state";
+import type { CombatEncounterInitialization } from "../combat/encounter-initializer";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
 import { CombatHud } from "../hud/combat-hud";
 import { CommandHud } from "../hud/command-hud";
 import { EnemyAttackGauge } from "../hud/enemy-attack-gauge";
 import { CommandInputBuffer } from "../input/command-input-buffer";
 import { createCombatLayout } from "../layout/combat-layout";
+import { SCENE_KEYS, resolveSceneTransition } from "./scene-contract";
 
 const BACKGROUND_WIDTH = 1600;
 const BACKGROUND_HEIGHT = 900;
@@ -26,6 +28,11 @@ const MAGIC_SHIELD = defineSkill({
   description: "마법 보호막을 전개한다.",
 });
 
+export type CombatFoundationSceneData = Readonly<{
+  combat?: CombatEncounterInitialization;
+  runState?: Readonly<RunState>;
+}>;
+
 export class CombatFoundationScene extends Phaser.Scene {
   private backgroundLayer!: Phaser.GameObjects.Container;
   private worldLayer!: Phaser.GameObjects.Container;
@@ -41,13 +48,30 @@ export class CombatFoundationScene extends Phaser.Scene {
   private commandInputBuffer!: CommandInputBuffer;
   private commandInputCleanup?: () => void;
   private commandCompletionCleanup?: () => void;
+  private combatInitialization?: CombatEncounterInitialization;
+  private runState?: Readonly<RunState>;
   private isComposing = false;
 
   constructor() {
     super("CombatFoundationScene");
   }
 
+  init(data: CombatFoundationSceneData = {}): void {
+    this.combatInitialization = data.combat;
+    this.runState = data.runState;
+  }
+
   create(): void {
+    const initialization = this.combatInitialization;
+    if (initialization === undefined) {
+      const transition = resolveSceneTransition(
+        SCENE_KEYS.map,
+        this.runState === undefined ? {} : { runState: this.runState },
+      );
+      this.scene.start(transition.key, transition.payload);
+      return;
+    }
+
     this.backgroundLayer = this.add.container(0, 0).setDepth(0);
     this.worldLayer = this.add.container(0, 0).setDepth(100);
     this.uiLayer = this.add.container(0, 0).setDepth(200);
@@ -57,55 +81,75 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.backgroundLayer.add([this.background, this.overlay]);
 
     this.playerPlaceholder = this.createActorPlaceholder("플레이어", 0x3f7f84);
-    this.enemyPlaceholder = this.createActorPlaceholder("적", 0x8d4b52);
+    const enemyLabel = initialization.enemies.length === 0
+      ? "적"
+      : initialization.enemies.map((enemy) => enemy.name).join(" / ");
+    this.enemyPlaceholder = this.createActorPlaceholder(enemyLabel, 0x8d4b52);
     this.worldLayer.add([this.playerPlaceholder, this.enemyPlaceholder]);
+
+    const encounterLabel = this.add
+      .text(
+        24,
+        18,
+        `${initialization.encounterId} · ${initialization.rewardPolicy.toUpperCase()}`,
+        {
+          color: "#9eb0c4",
+          fontFamily: "Galmuri9, monospace",
+          fontSize: "14px",
+        },
+      )
+      .setOrigin(0, 0);
+    this.uiLayer.add(encounterLabel);
 
     const actionPoints = new ActionPointResource();
     const combat = new CombatState();
     this.combatHud = new CombatHud(this, {
-      hp: 80,
-      maxHp: 100,
+      hp: initialization.player.currentHp,
+      maxHp: initialization.player.maxHp,
       ap: actionPoints.snapshot.currentAp,
       maxAp: actionPoints.snapshot.maxAp,
     });
     this.uiLayer.add(this.combatHud.container);
 
     this.enemyAttackTimeline = new EnemyAttackTimeline();
-    this.enemyAttackTimeline.startAttack({
-      timelineId: "ink-slime-telegraph",
-      enemyId: "ink-slime",
-      targetId: "player",
-      attackId: "ink-splash",
-      attackName: "먹물 튀기기",
-      attackType: "debuff",
-      windupMs: 4_800,
-      recoveryMs: 1_000,
-    });
-    this.enemyAttackTimeline.startAttack({
-      timelineId: "reverse-bat-telegraph",
-      enemyId: "reverse-bat",
-      targetId: "player",
-      attackId: "reversed-cry",
-      attackName: "뒤집힌 울음",
-      attackType: "attack",
-      windupMs: 3_200,
-      recoveryMs: 1_400,
-    });
+    for (const enemy of initialization.enemies.slice(0, 2)) {
+      const action = enemy.actions[0];
+      if (action === undefined) {
+        continue;
+      }
+      this.enemyAttackTimeline.startAttack({
+        timelineId: `${enemy.instanceId}:${action.id}`,
+        enemyId: enemy.instanceId,
+        targetId: "player",
+        attackId: action.id,
+        attackName: action.name,
+        attackType: action.kind === "defense" ? "defense" : "attack",
+        windupMs: action.windupMs,
+        recoveryMs: action.recoveryMs,
+      });
+    }
     this.enemyAttackGauge = new EnemyAttackGauge(
       this,
       this.enemyAttackTimeline.snapshot,
     );
     this.uiLayer.add(this.enemyAttackGauge.container);
 
-    this.commandInputBuffer = new CommandInputBuffer(MAGIC_SHIELD.command);
+    const availableSkills = initialization.player.skills.length > 0
+      ? initialization.player.skills.map((skill) => defineSkill(skill))
+      : [MAGIC_SHIELD];
+    const initialSkill = availableSkills[0]!;
+    this.commandInputBuffer = new CommandInputBuffer(initialSkill.command);
     this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
     this.uiLayer.add(this.commandHud.container);
     const skillStarter = new SkillCommandStarter({
-      skills: [MAGIC_SHIELD],
+      skills: availableSkills,
       actionPoints,
       combat,
       actorId: "player",
-      targetId: "player",
+      targetId:
+        initialSkill.kind === "defense"
+          ? "player"
+          : (initialization.enemies[0]?.instanceId ?? "player"),
     });
     this.commandCompletionCleanup = skillStarter.connect(
       this.commandInputBuffer,
@@ -135,6 +179,9 @@ export class CombatFoundationScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    if (this.combatInitialization === undefined) {
+      return;
+    }
     const update = this.enemyAttackTimeline.advance(Math.max(0, delta));
     this.enemyAttackGauge.update(update.snapshot);
   }
@@ -261,6 +308,8 @@ export class CombatFoundationScene extends Phaser.Scene {
         color: "#e5edf5",
         fontFamily: "Galmuri9, monospace",
         fontSize: "18px",
+        align: "center",
+        wordWrap: { width: 180 },
       })
       .setOrigin(0.5);
     container.add([silhouette, name]);
