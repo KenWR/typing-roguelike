@@ -200,7 +200,7 @@ describe("combat core regressions with production equipment configs", () => {
     expect(context.runtime.enemyShield[enemyId]).toBe(0);
   });
 
-  test("does not create a shield during an attack windup", () => {
+  test("breaking the shield inside the windup cancels that enemy action", () => {
     const rustySword = getEquipment("equipment_rusty_sword");
     const slash = defineSkill(rustySword.skills[0]!);
     const context = createRuntime([rustySword.id], () => 0);
@@ -209,23 +209,22 @@ describe("combat core regressions with production equipment configs", () => {
     if (attack === undefined) throw new Error("Ink slime has no attack action");
 
     context.runtime.start();
-    expect(attack.shieldAmount).toBeUndefined();
-    expect(context.runtime.enemyShield[enemyId]).toBe(0);
+    expect(context.runtime.enemyShield[enemyId]).toBe(attack.shieldAmount);
 
-    const beforeHp = context.runtime.enemyHp[enemyId]!;
     resolvePlayerSkill(context, slash, "break:first");
     resolvePlayerSkill(context, slash, "break:second");
+    const beforeHp = context.runtime.enemyHp[enemyId]!;
     resolvePlayerSkill(context, slash, "break:third");
 
     // 22 실드를 9+9+4로 깎아 내고 남은 5만 체력으로 넘어갑니다.
-    expect(beforeHp - context.runtime.enemyHp[enemyId]!).toBe(27);
+    expect(beforeHp - context.runtime.enemyHp[enemyId]!).toBe(5);
     // 취소된 즉시 다음 행동이 시작되므로 실드는 다시 가득 찹니다.
-    expect(context.runtime.enemyShield[enemyId]).toBe(0);
+    expect(context.runtime.enemyShield[enemyId]).toBe(attack.shieldAmount);
 
     // 세 번의 타격으로 0.9초가 지났으므로 4.8초를 더 흘리면 원래 공격이
     // 적중했어야 할 5.7초에 닿습니다. 취소된 공격은 끝내 들어오지 않습니다.
     context.runtime.advance(4_800);
-    expect(context.runtime.playerHp).toBe(93);
+    expect(context.runtime.playerHp).toBe(100);
   });
 
   test("gives a same-frame enemy action its shield before a later player hit lands", () => {

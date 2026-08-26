@@ -137,7 +137,7 @@ export class EnemyCombatRuntime {
       windupMs: action.windupMs,
       recoveryMs: action.recoveryMs,
     });
-    if (action.kind === "defense" && (action.shieldAmount ?? 0) > 0 && action.windupMs > 0) {
+    if ((action.shieldAmount ?? 0) > 0 && action.windupMs > 0) {
       this.shields.grant({
         id: `${timelineId}:shield`,
         ownerId: enemy.instanceId,
