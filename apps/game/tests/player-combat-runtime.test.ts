@@ -127,10 +127,7 @@ describe("PlayerCombatRuntime", () => {
     runtime.advance(skill.windupMs + skill.recoveryMs);
 
     expect(runtime.enemyHp[firstEnemy.instanceId]).toBe(0);
-    // The retargeted hit lands on the living enemy, whose wind-up shield
-    // absorbs the damage before health is reduced.
-    expect(runtime.enemyHp[secondEnemy.instanceId]).toBe(secondHpBefore);
-    expect(runtime.enemyShield[secondEnemy.instanceId]).toBeLessThan(22);
+    expect(runtime.enemyHp[secondEnemy.instanceId]).toBeLessThan(secondHpBefore);
     expect(enemyTimeline.snapshot.attacks).not.toContainEqual(
       expect.objectContaining({ enemyId: firstEnemy.instanceId }),
     );

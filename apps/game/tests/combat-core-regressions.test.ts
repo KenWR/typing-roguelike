@@ -182,6 +182,20 @@ describe("combat core regressions with production equipment configs", () => {
     expect(context.runtime.playerHp).toBe(100);
   });
 
+  test("removes a defense shield at the exact cast-completed frame", () => {
+    const context = createRuntime([getEquipment("equipment_rusty_sword").id], () => 0.4);
+    const enemyId = context.initialization.enemies[0]!.instanceId;
+    const defense = inkSlime.actions.find(({ kind }) => kind === "defense");
+    if (defense === undefined) throw new Error("Ink slime has no defense action");
+
+    context.runtime.start();
+    expect(context.runtime.enemyShield[enemyId]).toBe(defense.shieldAmount);
+    const update = context.runtime.advance(defense.windupMs);
+
+    expect(update.enemyTimeline.snapshot.attacks[0]?.phase).toBe("recovery");
+    expect(update.enemyShield[enemyId]).toBe(0);
+  });
+
   test("does not keep a defense shield after its windup action is removed", () => {
     const context = createRuntime([getEquipment("equipment_rusty_sword").id], () => 0.4);
     const enemyId = context.initialization.enemies[0]!.instanceId;
@@ -200,7 +214,7 @@ describe("combat core regressions with production equipment configs", () => {
     expect(context.runtime.enemyShield[enemyId]).toBe(0);
   });
 
-  test("breaking the shield inside the windup cancels that enemy action", () => {
+  test("does not create a shield during an attack windup", () => {
     const rustySword = getEquipment("equipment_rusty_sword");
     const slash = defineSkill(rustySword.skills[0]!);
     const context = createRuntime([rustySword.id], () => 0);
@@ -209,11 +223,8 @@ describe("combat core regressions with production equipment configs", () => {
     if (attack === undefined) throw new Error("Ink slime has no attack action");
 
     context.runtime.start();
-    const firstTimelineId = context.enemyTimeline.snapshot.attacks.find(
-      ({ enemyId: currentEnemyId }) => currentEnemyId === enemyId,
-    )?.timelineId;
-    if (firstTimelineId === undefined) throw new Error("Expected an enemy timeline");
-    expect(context.runtime.enemyShield[enemyId]).toBe(attack.shieldAmount);
+    expect(attack.shieldAmount).toBeUndefined();
+    expect(context.runtime.enemyShield[enemyId]).toBe(0);
 
     resolvePlayerSkill(context, slash, "break:first");
     resolvePlayerSkill(context, slash, "break:second");
@@ -221,17 +232,14 @@ describe("combat core regressions with production equipment configs", () => {
     resolvePlayerSkill(context, slash, "break:third");
 
     // 22 실드를 9+9+4로 깎아 내고 남은 5만 체력으로 넘어갑니다.
-    expect(beforeHp - context.runtime.enemyHp[enemyId]!).toBe(5);
+    expect(beforeHp - context.runtime.enemyHp[enemyId]!).toBe(9);
     // 취소된 즉시 다음 행동이 시작되므로 실드는 다시 가득 찹니다.
-    expect(context.runtime.enemyShield[enemyId]).toBe(attack.shieldAmount);
-    expect(context.enemyTimeline.snapshot.attacks).not.toContainEqual(
-      expect.objectContaining({ timelineId: firstTimelineId }),
-    );
+    expect(context.runtime.enemyShield[enemyId]).toBe(0);
 
     // 세 번의 타격으로 0.9초가 지났으므로 4.8초를 더 흘리면 원래 공격이
     // 적중했어야 할 5.7초에 닿습니다. 취소된 공격은 끝내 들어오지 않습니다.
     context.runtime.advance(4_800);
-    expect(context.runtime.playerHp).toBe(100);
+    expect(context.runtime.playerHp).toBe(93);
   });
 
   test("gives a same-frame enemy action its shield before a later player hit lands", () => {
