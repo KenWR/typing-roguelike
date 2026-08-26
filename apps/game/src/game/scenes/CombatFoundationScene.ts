@@ -32,8 +32,10 @@ import {
   CombatFeedbackController,
   playProceduralCombatSound,
 } from "../feedback/combat-feedback";
+import { ActorEffectHud } from "../hud/actor-effect-hud";
 import { CombatHud } from "../hud/combat-hud";
 import { CommandHud } from "../hud/command-hud";
+import { createActorEffectPresentations } from "../hud/effect-presentation";
 import { EnemyAttackGauge } from "../hud/enemy-attack-gauge";
 import { RelicHud } from "../hud/relic-hud";
 import { CommandInputBuffer } from "../input/command-input-buffer";
@@ -78,8 +80,10 @@ export class CombatFoundationScene extends Phaser.Scene {
   private playerRestTextureKey?: string;
   private playerAttackReset?: Phaser.Time.TimerEvent;
   private playerAttackTween?: Phaser.Tweens.Tween;
+  private playerEffectHud?: ActorEffectHud;
   private enemyPlaceholders: Phaser.GameObjects.Container[] = [];
   private enemyActorImages = new Map<string, Phaser.GameObjects.Image>();
+  private enemyEffectHuds = new Map<string, ActorEffectHud>();
   private enemyTargetMarkers = new Map<string, Phaser.GameObjects.Rectangle>();
   private enemyHealthBars = new Map<string, EnemyHealthBar>();
   private displayedEnemyHp = new Map<string, number>();
@@ -130,7 +134,9 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.playerRestTextureKey = undefined;
     this.playerAttackReset = undefined;
     this.playerAttackTween = undefined;
+    this.playerEffectHud = undefined;
     this.enemyActorImages.clear();
+    this.enemyEffectHuds.clear();
     this.enemyTargetMarkers.clear();
     this.enemyHealthBars.clear();
     this.displayedEnemyHp.clear();
@@ -179,6 +185,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     if (playerActor instanceof Phaser.GameObjects.Image) {
       this.playerActorImage = playerActor;
     }
+    this.playerEffectHud = new ActorEffectHud(this);
+    this.playerEffectHud.setPosition(0, -184);
+    this.playerPlaceholder.add(this.playerEffectHud.container);
+
     this.enemyPlaceholders = initialization.enemies.map((enemy) => {
       const placeholder = this.createActorPlaceholder(
         enemy.name,
@@ -193,6 +203,10 @@ export class CombatFoundationScene extends Phaser.Scene {
       healthBar.container.setPosition(0, -158);
       placeholder.add(healthBar.container);
       this.enemyHealthBars.set(enemy.instanceId, healthBar);
+      const effectHud = new ActorEffectHud(this);
+      effectHud.setPosition(0, -198);
+      placeholder.add(effectHud.container);
+      this.enemyEffectHuds.set(enemy.instanceId, effectHud);
       const marker = this.add
         .rectangle(0, 0, 200, 250, 0x000000, 0)
         .setStrokeStyle(3, 0xffd166, 0.95)
@@ -348,6 +362,8 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.DESTROY, this.releasePauseHandling, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseTargetHandling, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseTargetHandling, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseActorEffectHuds, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseActorEffectHuds, this);
     this.applyLayout(this.scale.gameSize.width, this.scale.gameSize.height);
   }
 
@@ -362,6 +378,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     if (playerUpdate === undefined) {
       const enemyUpdate = this.enemyAttackTimeline.advance(safeDelta);
       this.enemyAttackGauge.update(enemyUpdate.snapshot);
+      this.playerEffectHud?.update(createActorEffectPresentations({
+        apEffects: this.actionPoints.snapshot.timedEffects,
+        atMs: enemyUpdate.snapshot.elapsedMs,
+      }));
       this.updateEnemyVisuals(
         Object.fromEntries(this.displayedEnemyHp),
         safeDelta,
@@ -377,6 +397,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       shield: playerUpdate.playerShield,
     });
     this.displayedEnemyShield = playerUpdate.enemyShield;
+    this.refreshActorEffects(playerUpdate);
     this.updateEnemyVisuals(
       playerUpdate.enemyHp,
       safeDelta,
@@ -404,6 +425,31 @@ export class CombatFoundationScene extends Phaser.Scene {
         playerUpdate.route.sceneKey,
         playerUpdate.route.payload,
         outcome === "victory" ? 1_500 : 0,
+      );
+    }
+  }
+
+  private refreshActorEffects(
+    update: ReturnType<PlayerCombatRuntime["advance"]>,
+  ): void {
+    const atMs = update.enemyTimeline.snapshot.elapsedMs;
+    this.playerEffectHud?.update(createActorEffectPresentations({
+      statuses: update.playerStatuses,
+      shields: update.playerShields,
+      apEffects: this.actionPoints.snapshot.timedEffects,
+      atMs,
+    }));
+
+    for (const enemy of this.combatInitialization?.enemies ?? []) {
+      const alive = (update.enemyHp[enemy.instanceId] ?? 0) > 0;
+      this.enemyEffectHuds.get(enemy.instanceId)?.update(
+        alive
+          ? createActorEffectPresentations({
+              statuses: update.enemyStatuses[enemy.instanceId] ?? [],
+              shields: update.enemyShields[enemy.instanceId] ?? [],
+              atMs,
+            })
+          : [],
       );
     }
   }
@@ -448,6 +494,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       }
     }
   }
+
   private updateEnemyHealth(enemyHp: Readonly<Record<string, number>>): void {
     for (const enemy of this.combatInitialization?.enemies ?? []) {
       this.enemyHealthBars.get(enemy.instanceId)?.update(
@@ -657,6 +704,13 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandStatusCleanup?.();
     this.commandStatusCleanup = undefined;
     this.isComposing = false;
+  }
+
+  private releaseActorEffectHuds(): void {
+    this.playerEffectHud?.destroy();
+    this.playerEffectHud = undefined;
+    for (const hud of this.enemyEffectHuds.values()) hud.destroy();
+    this.enemyEffectHuds.clear();
   }
 
   private createActorPlaceholder(
