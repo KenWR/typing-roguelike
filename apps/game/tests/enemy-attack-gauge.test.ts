@@ -4,6 +4,7 @@ import { ENEMY_HEALTH_BAR_TRACK_WIDTH } from "../src/game/combat/enemy-health-ba
 import {
   createEnemyAttackGaugeState,
   ENEMY_ATTACK_GAUGE_TRACK_WIDTH,
+  ENEMY_ATTACK_GAUGE_VISIBLE,
   getEnemyAttackTypePresentation,
 } from "../src/game/hud/enemy-attack-gauge";
 
@@ -19,6 +20,10 @@ const createAttack = () => ({
 });
 
 describe("enemy attack gauge state", () => {
+  test("keeps the legacy global telegraph overlay hidden", () => {
+    expect(ENEMY_ATTACK_GAUGE_VISIBLE).toBe(false);
+  });
+
   test("uses the enemy health bar track width", () => {
     expect(ENEMY_ATTACK_GAUGE_TRACK_WIDTH).toBe(ENEMY_HEALTH_BAR_TRACK_WIDTH);
   });
