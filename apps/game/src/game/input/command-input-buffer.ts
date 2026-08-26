@@ -115,24 +115,27 @@ export class CommandInputBuffer {
   }
 
   private prepareInputForNextCycle(rawInput: string): string {
-    if (!this.completionEmitted || this.completedRawInput === null) {
+    if (this.completedRawInput === null) {
       return rawInput;
     }
 
-    if (rawInput === this.completedRawInput) {
+    if (this.completionEmitted && rawInput === this.completedRawInput) {
       return this.input;
     }
 
-    const previousRawInput = this.completedRawInput;
+    if (rawInput.startsWith(this.completedRawInput)) {
+      if (this.completionEmitted) {
+        this.input = "";
+        this.committedInput = "";
+        this.completionEmitted = false;
+      }
+      return rawInput.slice(this.completedRawInput.length);
+    }
+
     this.input = "";
     this.committedInput = "";
     this.completionEmitted = false;
     this.completedRawInput = null;
-
-    if (rawInput.startsWith(previousRawInput)) {
-      return rawInput.slice(previousRawInput.length);
-    }
-
     return rawInput;
   }
 
