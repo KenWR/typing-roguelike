@@ -1,5 +1,5 @@
 import type { RunState } from "@typing-roguelike/shared";
-import { playImpactHitSound } from "../audio/runtime-audio";
+import { playPlayerHitSound } from "../audio/runtime-audio";
 import {
   finalizeCombatOutcome,
   type CombatOutcomeRoute,
@@ -71,36 +71,19 @@ export class EnemyCombatRuntime {
     });
   }
 
-  get currentRunState(): RunState {
-    return this.runState;
-  }
+  get currentRunState(): RunState { return this.runState; }
+  get playerHp(): number { return this.player.snapshot.health.currentHp; }
+  get currentRoute(): CombatOutcomeRoute | null { return this.route; }
 
-  get playerHp(): number {
-    return this.player.snapshot.health.currentHp;
-  }
-
-  get currentRoute(): CombatOutcomeRoute | null {
-    return this.route;
-  }
-
-  setEnemyHp(enemyHp: Readonly<Record<string, number>>): void {
-    this.enemyHp = { ...enemyHp };
-  }
+  setEnemyHp(enemyHp: Readonly<Record<string, number>>): void { this.enemyHp = { ...enemyHp }; }
 
   start(): void {
-    if (this.combat.snapshot.status !== "active" || this.enemyTimeline.snapshot.status !== "active") {
-      return;
-    }
-    for (const enemy of this.initialization.enemies) {
-      this.startNextAttack(enemy);
-    }
+    if (this.combat.snapshot.status !== "active" || this.enemyTimeline.snapshot.status !== "active") return;
+    for (const enemy of this.initialization.enemies) this.startNextAttack(enemy);
   }
 
   advance(deltaMs: number): EnemyCombatRuntimeUpdate {
-    if (this.route !== null) {
-      return this.snapshot();
-    }
-
+    if (this.route !== null) return this.snapshot();
     const update = this.enemyTimeline.advance(deltaMs);
     const completedEnemyIds = new Set<string>();
 
@@ -110,7 +93,6 @@ export class EnemyCombatRuntime {
       const action = enemy?.actions.find((candidate) => candidate.id === event.attackId);
       if (enemy === undefined || action === undefined) continue;
 
-      const playerHpBeforeImpact = this.playerHp;
       const result = this.impactResolver.resolve({
         event,
         damage: action.damage,
@@ -120,17 +102,12 @@ export class EnemyCombatRuntime {
       });
       if (!result.applied) continue;
 
-      if (this.playerHp < playerHpBeforeImpact) {
-        playImpactHitSound();
-      }
+      playPlayerHitSound({ defended: result.defended, special: action.kind === "special" });
       completedEnemyIds.add(enemy.instanceId);
       this.activeTimelineByEnemy.delete(enemy.instanceId);
       this.runState = {
         ...this.runState,
-        character: {
-          ...this.runState.character,
-          currentHp: this.playerHp,
-        },
+        character: { ...this.runState.character, currentHp: this.playerHp },
       };
     }
 
@@ -152,22 +129,16 @@ export class EnemyCombatRuntime {
         if (enemy !== undefined) this.startNextAttack(enemy);
       }
     }
-
     return this.snapshot();
   }
 
   private startNextAttack(enemy: CombatEnemyInitialization): void {
     if ((this.enemyHp[enemy.instanceId] ?? 0) <= 0 || enemy.actions.length === 0) return;
     if (this.activeTimelineByEnemy.has(enemy.instanceId)) return;
-
     const randomValue = validateRandomValue(this.random());
-    const actionIndex = Math.min(
-      Math.floor(randomValue * enemy.actions.length),
-      enemy.actions.length - 1,
-    );
+    const actionIndex = Math.min(Math.floor(randomValue * enemy.actions.length), enemy.actions.length - 1);
     const action = enemy.actions[actionIndex];
     if (action === undefined) return;
-
     const timelineId = `${enemy.instanceId}:${action.id}:${this.sequence++}`;
     this.enemyTimeline.startAttack({
       timelineId,
@@ -187,11 +158,6 @@ export class EnemyCombatRuntime {
   }
 
   private snapshot(): EnemyCombatRuntimeUpdate {
-    return {
-      playerHp: this.playerHp,
-      runState: this.runState,
-      timeline: this.enemyTimeline.snapshot,
-      route: this.route,
-    };
+    return { playerHp: this.playerHp, runState: this.runState, timeline: this.enemyTimeline.snapshot, route: this.route };
   }
 }
