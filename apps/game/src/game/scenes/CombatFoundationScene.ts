@@ -25,6 +25,7 @@ import {
 import { CombatHud } from "../hud/combat-hud";
 import { CommandHud } from "../hud/command-hud";
 import { EnemyAttackGauge } from "../hud/enemy-attack-gauge";
+import { RelicHud } from "../hud/relic-hud";
 import { CommandInputBuffer } from "../input/command-input-buffer";
 import { createCombatLayout } from "../layout/combat-layout";
 import { MENU_SETTINGS_REGISTRY_KEYS } from "./menu-settings";
@@ -61,7 +62,9 @@ export class CombatFoundationScene extends Phaser.Scene {
   private playerPlaceholder!: Phaser.GameObjects.Container;
   private enemyPlaceholder!: Phaser.GameObjects.Container;
   private enemyHealthText!: Phaser.GameObjects.Text;
+  private encounterLabel!: Phaser.GameObjects.Text;
   private combatHud!: CombatHud;
+  private relicHud!: RelicHud;
   private enemyAttackGauge!: EnemyAttackGauge;
   private enemyAttackTimeline!: EnemyAttackTimeline;
   private actionPoints!: ActionPointResource;
@@ -133,10 +136,10 @@ export class CombatFoundationScene extends Phaser.Scene {
     );
     this.worldLayer.add([this.playerPlaceholder, this.enemyPlaceholder]);
 
-    const encounterLabel = this.add
+    this.encounterLabel = this.add
       .text(
-        24,
-        18,
+        0,
+        0,
         `${initialization.encounterId} · ${initialization.rewardPolicy.toUpperCase()}`,
         {
           color: "#9eb0c4",
@@ -144,8 +147,8 @@ export class CombatFoundationScene extends Phaser.Scene {
           fontSize: "14px",
         },
       )
-      .setOrigin(0, 0);
-    this.uiLayer.add(encounterLabel);
+      .setOrigin(1, 0);
+    this.uiLayer.add(this.encounterLabel);
 
     const initialEnemyHp = Object.fromEntries(
       initialization.enemies.map((enemy) => [enemy.instanceId, enemy.hp]),
@@ -179,6 +182,11 @@ export class CombatFoundationScene extends Phaser.Scene {
       ap: this.actionPoints.snapshot.currentAp,
       maxAp: this.actionPoints.snapshot.maxAp,
     });
+    this.relicHud = new RelicHud(
+      this,
+      this.runState?.inventory.relicInstances ?? [],
+    );
+    this.relicHud.container.setDepth(900);
     this.uiLayer.add(this.combatHud.container);
 
     this.enemyAttackTimeline = new EnemyAttackTimeline();
@@ -381,6 +389,21 @@ export class CombatFoundationScene extends Phaser.Scene {
       layout.enemy.y - 135 * layout.actorScale,
     );
 
+    this.relicHud.setPosition(
+      layout.relicHudReservation.x,
+      layout.relicHudReservation.y,
+    );
+    this.relicHud.setSize(
+      layout.relicHudReservation.width,
+      layout.relicHudReservation.height,
+      width >= 720 ? 260 : 0,
+    );
+    this.encounterLabel
+      .setPosition(
+        layout.relicHudReservation.right - 12,
+        layout.relicHudReservation.y + 15,
+      )
+      .setVisible(width >= 720);
     this.combatHud.setPosition(layout.hudReservation.x, layout.hudReservation.y);
     this.combatHud.setSize(layout.hudReservation.width, layout.hudReservation.height);
     this.enemyAttackGauge.setPosition(

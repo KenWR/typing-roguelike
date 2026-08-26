@@ -53,6 +53,7 @@ describe("1280x720 minimum viewport layout", () => {
   test("keeps all reserved combat UI regions inside the supported viewport", () => {
     const layout = createCombatLayout(VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
 
+    expect(isInsideViewport(layout.relicHudReservation)).toBe(true);
     expect(isInsideViewport(layout.hudReservation)).toBe(true);
     expect(isInsideViewport(layout.enemyAttackGaugeReservation)).toBe(true);
     expect(isInsideViewport(layout.commandHudReservation)).toBe(true);
@@ -61,6 +62,8 @@ describe("1280x720 minimum viewport layout", () => {
   test("keeps the combat HUD and enemy attack gauge from overlapping", () => {
     const layout = createCombatLayout(VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
 
+    expect(overlaps(layout.relicHudReservation, layout.hudReservation)).toBe(false);
+    expect(overlaps(layout.relicHudReservation, layout.enemyAttackGaugeReservation)).toBe(false);
     expect(
       overlaps(layout.hudReservation, layout.enemyAttackGaugeReservation),
     ).toBe(false);
