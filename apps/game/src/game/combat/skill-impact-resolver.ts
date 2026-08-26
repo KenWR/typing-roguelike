@@ -123,6 +123,8 @@ export type ResolveSkillImpactInput = Readonly<{
   target: SkillCombatantState;
   /** 대상의 실드 풀. 넘기면 피해가 실드를 먼저 깎고 남은 만큼만 HP로 갑니다. */
   shields?: ShieldPool;
+  /** Combo multiplier captured when the player command started. */
+  damageMultiplier?: number;
 }>;
 
 export type SkillImpactResult = Readonly<{
@@ -144,6 +146,7 @@ export class SkillImpactResolver {
     actor,
     target,
     shields,
+    damageMultiplier = 1,
   }: ResolveSkillImpactInput): SkillImpactResult {
     if (event.type !== "impact-resolved") {
       return this.emptyResult(event.actionId);
@@ -154,6 +157,9 @@ export class SkillImpactResolver {
     if (event.actorId !== actor.id || event.targetId !== target.id) {
       throw new Error(`Skill impact participants do not match action ${event.actionId}.`);
     }
+    if (!Number.isFinite(damageMultiplier) || damageMultiplier <= 0) {
+      throw new RangeError("Skill damage multiplier must be positive and finite.");
+    }
 
     let damageApplied = 0;
     let shieldAbsorbedDamage = 0;
@@ -163,11 +169,12 @@ export class SkillImpactResolver {
     for (const effect of skill.effects) {
       switch (effect.type) {
         case "damage": {
-          const damage = calculateDamage({
+          const baseDamage = calculateDamage({
             attackPower: actor.attackPower,
             damageCoefficient: effect.coefficient,
             defense: target.defense,
           });
+          const damage = Math.max(1, Math.round(baseDamage * damageMultiplier));
           const absorb = shields?.absorb(target.id, damage, event.atMs);
           if (absorb !== undefined) {
             shieldAbsorbedDamage += absorb.absorbedDamage;
