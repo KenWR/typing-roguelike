@@ -15,7 +15,7 @@ import {
   type PauseWindow,
 } from "../combat/combat-pause-controller";
 import type { CombatEncounterInitialization } from "../combat/encounter-initializer";
-import { createEnemyHealthView } from "../combat/enemy-health-view";
+import { createEnemyHealthListLabel } from "../combat/enemy-health-view";
 import { PlayerCombatRuntime } from "../combat/player-combat-runtime";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
 import {
@@ -148,20 +148,23 @@ export class CombatFoundationScene extends Phaser.Scene {
       .setOrigin(0, 0);
     this.uiLayer.add(encounterLabel);
 
-    const targetEnemy = initialization.enemies[0];
-    const enemyHealthView = createEnemyHealthView(
-      targetEnemy?.name,
-      targetEnemy?.hp,
-      targetEnemy?.hp,
+    const initialEnemyHp = Object.fromEntries(
+      initialization.enemies.map((enemy) => [enemy.instanceId, enemy.hp]),
     );
     this.enemyHealthText = this.add
-      .text(0, 0, enemyHealthView.label, {
-        color: "#f4d7da",
-        fontFamily: "Galmuri9, monospace",
-        fontSize: "18px",
-        backgroundColor: "#301b22",
-        padding: { x: 12, y: 7 },
-      })
+      .text(
+        0,
+        0,
+        createEnemyHealthListLabel(initialization.enemies, initialEnemyHp),
+        {
+          color: "#f4d7da",
+          fontFamily: "Galmuri9, monospace",
+          fontSize: "18px",
+          backgroundColor: "#301b22",
+          padding: { x: 12, y: 7 },
+          align: "left",
+        },
+      )
       .setOrigin(0.5);
     this.uiLayer.add(this.enemyHealthText);
 
@@ -309,16 +312,12 @@ export class CombatFoundationScene extends Phaser.Scene {
   }
 
   private updateEnemyHealth(enemyHp: Readonly<Record<string, number>>): void {
-    const targetEnemy = this.combatInitialization?.enemies[0];
-    const currentHp = targetEnemy === undefined
-      ? undefined
-      : enemyHp[targetEnemy.instanceId];
-    const view = createEnemyHealthView(
-      targetEnemy?.name,
-      currentHp,
-      targetEnemy?.hp,
+    this.enemyHealthText.setText(
+      createEnemyHealthListLabel(
+        this.combatInitialization?.enemies ?? [],
+        enemyHp,
+      ),
     );
-    this.enemyHealthText.setText(view.label);
   }
 
   private startCombatRoute(sceneKey: string, payload: Readonly<Record<string, unknown>>): void {
@@ -384,7 +383,7 @@ export class CombatFoundationScene extends Phaser.Scene {
       .setScale(layout.actorScale);
     this.enemyHealthText.setPosition(
       layout.enemy.x,
-      layout.enemy.y - 125 * layout.actorScale,
+      layout.enemy.y - 135 * layout.actorScale,
     );
 
     this.combatHud.setPosition(layout.hudReservation.x, layout.hudReservation.y);
