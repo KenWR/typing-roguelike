@@ -164,6 +164,61 @@ describe("D1 run repository", () => {
       finalizedAt: "2026-08-26T00:00:03.000Z",
     }]);
   });
+
+  test("returns stale_state_version when a concurrent checkpoint loses the optimistic update", async () => {
+    const repository = createRepository();
+    await repository.ensureAnonymousPlayer(playerId, "2026-08-26T00:00:00.000Z");
+    const record = createRecord(
+      "00000000-0000-4000-8000-000000000104",
+      "00000000-0000-4000-8000-000000000204",
+    );
+    await repository.createRun(record);
+
+    const checkpoint = (checkpointId: string) => repository.saveCheckpoint({
+      checkpointId,
+      playerId,
+      runId: record.runId,
+      expectedVersion: 1,
+      nodeId: "1-1",
+      floor: 1,
+      state: record.state,
+      stateHash: record.stateHash,
+      timestamp: "2026-08-26T00:00:01.000Z",
+    });
+    const results = await Promise.allSettled([
+      checkpoint("00000000-0000-4000-8000-000000000205"),
+      checkpoint("00000000-0000-4000-8000-000000000206"),
+    ]);
+
+    expect(results.map((result) => result.status)).toEqual(["fulfilled", "fulfilled"]);
+    expect(results.map((result) => result.status === "fulfilled" ? result.value : result.reason))
+      .toEqual(["saved", "stale_state_version"]);
+  });
+
+  test("returns run_not_active when a concurrent completion loses the optimistic update", async () => {
+    const repository = createRepository();
+    await repository.ensureAnonymousPlayer(playerId, "2026-08-26T00:00:00.000Z");
+    const record = createRecord(
+      "00000000-0000-4000-8000-000000000105",
+      "00000000-0000-4000-8000-000000000205",
+    );
+    await repository.createRun(record);
+    const completion = {
+      playerId,
+      runId: record.runId,
+      input: { endReason: "cleared" as const, score: 900, clearedFloor: 1, accuracy: 92 },
+      timestamp: "2026-08-26T00:00:03.000Z",
+    };
+
+    const results = await Promise.allSettled([
+      repository.completeRun(completion),
+      repository.completeRun(completion),
+    ]);
+
+    expect(results.map((result) => result.status)).toEqual(["fulfilled", "fulfilled"]);
+    expect(results.map((result) => result.status === "fulfilled" ? result.value : result.reason))
+      .toEqual(["completed", "run_not_active"]);
+  });
 });
 
 describe("Express API with the D1 repository", () => {
@@ -276,5 +331,20 @@ describe("Express API with the D1 repository", () => {
       score: -1,
       clearedFloor: 1,
     })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+  });
+
+  test("returns 400 for malformed JSON request bodies", async () => {
+    const repository = createRepository();
+    const running = await listen(repository);
+    activeServer = running.server;
+
+    const response = await fetch(`${running.baseUrl}/runs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{\"seed\":",
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_json" });
   });
 });

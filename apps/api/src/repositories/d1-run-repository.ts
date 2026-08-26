@@ -162,6 +162,7 @@ export class D1RunRepository implements RunRepository {
 
   public async saveCheckpoint(record: CheckpointRecord): Promise<CheckpointWriteResult> {
     const state = serializeState(record.state);
+    // D1 batches run in order, so changes() below refers to this optimistic update.
     const [runUpdate, checkpointInsert] = await this.database.batch([
       this.database.prepare(`
         UPDATE game_runs
@@ -190,7 +191,7 @@ export class D1RunRepository implements RunRepository {
           FROM game_runs
           WHERE id = ? AND anonymous_player_id = ?
             AND status = 'active' AND state_version = ?
-        )
+        ) AND changes() = 1
       `).bind(
         record.checkpointId,
         record.runId,
@@ -221,6 +222,7 @@ export class D1RunRepository implements RunRepository {
 
   public async completeRun(record: CompletionRecord): Promise<CompletionWriteResult> {
     const resultSnapshot = JSON.stringify(record.input.resultSnapshot ?? {});
+    // D1 batches run in order, so changes() below refers to this completion update.
     const [runUpdate, resultInsert] = await this.database.batch([
       this.database.prepare(`
         UPDATE game_runs
@@ -244,7 +246,7 @@ export class D1RunRepository implements RunRepository {
           FROM game_runs
           WHERE id = ? AND anonymous_player_id = ?
             AND status = ? AND ended_at = ?
-        )
+        ) AND changes() = 1
       `).bind(
         record.runId,
         record.input.endReason,

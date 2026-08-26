@@ -7,6 +7,12 @@ import { createLeaderboardRouter } from "./routes/leaderboard.ts";
 import { createRunsRouter } from "./routes/runs.ts";
 import { createRunService } from "./services/run-service.ts";
 
+const isMalformedJsonError = (error: unknown): boolean => {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { status?: unknown; type?: unknown };
+  return candidate.status === 400 && candidate.type === "entity.parse.failed";
+};
+
 export interface CreateAppOptions {
   repository: RunRepository;
 }
@@ -41,8 +47,12 @@ export const createApp = ({ repository }: CreateAppOptions): Express => {
   app.use("/leaderboard", createLeaderboardRouter(service));
   app.use("/runs", createRunsRouter(service));
 
-  const internalErrorHandler: ErrorRequestHandler = (_error, _request, response, _next) => {
+  const internalErrorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
     if (response.headersSent) return;
+    if (isMalformedJsonError(error)) {
+      response.status(400).json({ error: "invalid_json" });
+      return;
+    }
     response.status(500).json({ error: "internal_error" });
   };
   app.use(internalErrorHandler);
