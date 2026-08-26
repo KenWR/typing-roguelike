@@ -10,15 +10,12 @@ permissions:
 
 jobs:
   format:
-    if: github.event.head_commit.message != 'style(combat): apply biome formatting'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feat/344-actor-effect-hud
       - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: package.json
       - run: bun install --frozen-lockfile
       - name: Format effect HUD changes
         run: |
@@ -46,5 +43,5 @@ jobs:
             apps/game/src/game/hud/effect-presentation.ts \
             apps/game/src/game/scenes/CombatFoundationScene.ts \
             apps/game/tests/actor-effect-presentation.test.ts
-          git commit -m 'style(combat): apply biome formatting'
+          git commit -m "style(combat): apply biome formatting"
           git push origin HEAD:feat/344-actor-effect-hud
