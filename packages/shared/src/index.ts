@@ -3,6 +3,7 @@ export * from "./rules/map-generation.ts";
 export * from "./rules/map-node-state.ts";
 export * from "./rules/final-boss-progression.ts";
 export * from "./rules/rest-recovery.ts";
+export * from "./rules/relic-drops.ts";
 export * from "./rules/shop-rules.ts";
 export * from "./rules/loadout-slots.ts";
 export * from "./rules/available-skills.ts";
