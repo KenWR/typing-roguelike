@@ -1,11 +1,13 @@
 import Phaser from "phaser";
 import { defineSkill } from "@typing-roguelike/shared";
 import { TEXTURE_KEYS } from "../assets/asset-catalog";
+import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
 import { ActionPointResource } from "../combat/action-point-resource";
 import { CombatState } from "../combat/combat-state";
 import { SkillCommandStarter } from "../combat/skill-command-starter";
 import { CombatHud } from "../hud/combat-hud";
 import { CommandHud } from "../hud/command-hud";
+import { EnemyAttackGauge } from "../hud/enemy-attack-gauge";
 import { CommandInputBuffer } from "../input/command-input-buffer";
 import { createCombatLayout } from "../layout/combat-layout";
 
@@ -33,6 +35,8 @@ export class CombatFoundationScene extends Phaser.Scene {
   private playerPlaceholder!: Phaser.GameObjects.Container;
   private enemyPlaceholder!: Phaser.GameObjects.Container;
   private combatHud!: CombatHud;
+  private enemyAttackGauge!: EnemyAttackGauge;
+  private enemyAttackTimeline!: EnemyAttackTimeline;
   private commandHud!: CommandHud;
   private commandInputBuffer!: CommandInputBuffer;
   private commandInputCleanup?: () => void;
@@ -65,6 +69,33 @@ export class CombatFoundationScene extends Phaser.Scene {
       maxAp: actionPoints.snapshot.maxAp,
     });
     this.uiLayer.add(this.combatHud.container);
+
+    this.enemyAttackTimeline = new EnemyAttackTimeline();
+    this.enemyAttackTimeline.startAttack({
+      timelineId: "ink-slime-telegraph",
+      enemyId: "ink-slime",
+      targetId: "player",
+      attackId: "ink-splash",
+      attackName: "먹물 튀기기",
+      attackType: "debuff",
+      windupMs: 4_800,
+      recoveryMs: 1_000,
+    });
+    this.enemyAttackTimeline.startAttack({
+      timelineId: "reverse-bat-telegraph",
+      enemyId: "reverse-bat",
+      targetId: "player",
+      attackId: "reversed-cry",
+      attackName: "뒤집힌 울음",
+      attackType: "attack",
+      windupMs: 3_200,
+      recoveryMs: 1_400,
+    });
+    this.enemyAttackGauge = new EnemyAttackGauge(
+      this,
+      this.enemyAttackTimeline.snapshot,
+    );
+    this.uiLayer.add(this.enemyAttackGauge.container);
 
     this.commandInputBuffer = new CommandInputBuffer(MAGIC_SHIELD.command);
     this.commandHud = new CommandHud(this, this.commandInputBuffer.snapshot);
@@ -103,6 +134,11 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.applyLayout(this.scale.gameSize.width, this.scale.gameSize.height);
   }
 
+  update(_time: number, delta: number): void {
+    const update = this.enemyAttackTimeline.advance(Math.max(0, delta));
+    this.enemyAttackGauge.update(update.snapshot);
+  }
+
   private handleResize(gameSize: Phaser.Structs.Size): void {
     this.applyLayout(gameSize.width, gameSize.height);
   }
@@ -129,6 +165,14 @@ export class CombatFoundationScene extends Phaser.Scene {
 
     this.combatHud.setPosition(layout.hudReservation.x, layout.hudReservation.y);
     this.combatHud.setSize(layout.hudReservation.width, layout.hudReservation.height);
+    this.enemyAttackGauge.setPosition(
+      layout.enemyAttackGaugeReservation.x,
+      layout.enemyAttackGaugeReservation.y,
+    );
+    this.enemyAttackGauge.setSize(
+      layout.enemyAttackGaugeReservation.width,
+      layout.enemyAttackGaugeReservation.height,
+    );
     this.commandHud.setPosition(
       layout.commandHudReservation.x,
       layout.commandHudReservation.y,

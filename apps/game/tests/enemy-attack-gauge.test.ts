@@ -1,0 +1,106 @@
+import { describe, expect, test } from "bun:test";
+import { EnemyAttackTimeline } from "../src/game/combat/enemy-attack-timeline";
+import {
+  createEnemyAttackGaugeState,
+  getEnemyAttackTypePresentation,
+} from "../src/game/hud/enemy-attack-gauge";
+
+const createAttack = () => ({
+  timelineId: "slime-ink-1",
+  enemyId: "ink-slime",
+  targetId: "player",
+  attackId: "ink-splash",
+  attackName: "먹물 튀기기",
+  attackType: "debuff" as const,
+  windupMs: 400,
+  recoveryMs: 600,
+});
+
+describe("enemy attack gauge state", () => {
+  test("maps wind-up progress to the horizontal gauge ratio", () => {
+    const timeline = new EnemyAttackTimeline();
+    timeline.startAttack(createAttack());
+
+    const state = createEnemyAttackGaugeState(timeline.advance(100).snapshot);
+
+    expect(state.attacks).toMatchObject([
+      {
+        timelineId: "slime-ink-1",
+        attackName: "먹물 튀기기",
+        attackType: "debuff",
+        phase: "windup",
+        phaseProgress: 0.25,
+        progress: 0.25,
+        phaseLabel: "선딜",
+        typeLabel: "약화",
+        icon: "☠",
+      },
+    ]);
+  });
+
+  test("keeps simultaneous attack timelines as separate typed rows", () => {
+    const timeline = new EnemyAttackTimeline();
+    timeline.startAttack(createAttack());
+    timeline.startAttack({
+      ...createAttack(),
+      timelineId: "bat-cry-1",
+      enemyId: "reverse-bat",
+      attackId: "reversed-cry",
+      attackName: "뒤집힌 울음",
+      attackType: "attack",
+      windupMs: 200,
+      recoveryMs: 100,
+    });
+
+    const state = createEnemyAttackGaugeState(
+      timeline.advance(100).snapshot,
+    );
+
+    expect(state.attacks).toMatchObject([
+      {
+        timelineId: "slime-ink-1",
+        progress: 0.25,
+        typeLabel: "약화",
+      },
+      {
+        timelineId: "bat-cry-1",
+        progress: 0.5,
+        typeLabel: "공격",
+      },
+    ]);
+    expect(state.attacks).toHaveLength(2);
+  });
+
+  test("marks the gauge complete after wind-up and preserves attack type presentation", () => {
+    const timeline = new EnemyAttackTimeline();
+    timeline.startAttack({
+      ...createAttack(),
+      attackType: "buff",
+      windupMs: 100,
+      recoveryMs: 200,
+    });
+
+    const recoveryState = createEnemyAttackGaugeState(
+      timeline.advance(100).snapshot,
+    );
+    const resolvedState = createEnemyAttackGaugeState(
+      timeline.advance(200).snapshot,
+    );
+
+    expect(recoveryState.attacks[0]).toMatchObject({
+      phase: "recovery",
+      phaseProgress: 0,
+      progress: 1,
+      phaseLabel: "후딜",
+    });
+    expect(resolvedState.attacks[0]).toMatchObject({
+      phase: "resolved",
+      progress: 1,
+      phaseLabel: "완료",
+    });
+    expect(getEnemyAttackTypePresentation("buff")).toMatchObject({
+      icon: "✦",
+      label: "강화",
+    });
+  });
+});
