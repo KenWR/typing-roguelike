@@ -1,4 +1,9 @@
-import { createInitialRunState, type CreateInitialRunStateInput, type RunState } from "@typing-roguelike/shared";
+import {
+  EQUIPMENT_CONFIGS,
+  createInitialRunState,
+  type CreateInitialRunStateInput,
+  type RunState,
+} from "@typing-roguelike/shared";
 import {
   clearSavedRun,
   getBrowserRunStorage,
@@ -8,6 +13,56 @@ import {
 } from "./run-persistence";
 
 export type RunStateUpdater = (current: Readonly<RunState>) => RunState;
+
+const getStarterWeapon = () => {
+  const weapon = EQUIPMENT_CONFIGS.find(
+    (equipment) =>
+      equipment.slot === "weapon" &&
+      equipment.skills.some((skill) => skill.kind === "attack"),
+  );
+
+  if (weapon === undefined) {
+    throw new Error("No starter weapon with an attack skill is configured.");
+  }
+
+  return weapon;
+};
+
+const hasEquippedAttackSkill = (runState: Readonly<RunState>): boolean =>
+  [runState.loadout.weaponId, runState.loadout.subweaponId]
+    .filter((equipmentId): equipmentId is string => equipmentId !== null)
+    .some((equipmentId) =>
+      EQUIPMENT_CONFIGS.find((equipment) => equipment.id === equipmentId)?.skills.some(
+        (skill) => skill.kind === "attack",
+      ) ?? false,
+    );
+
+/**
+ * Keeps an active run playable by guaranteeing at least one equipped attack skill.
+ * This also repairs older saves created before starter equipment was introduced.
+ */
+export const ensurePlayableRunLoadout = (runState: Readonly<RunState>): RunState => {
+  if (runState.status !== "active" || hasEquippedAttackSkill(runState)) {
+    return runState as RunState;
+  }
+
+  const starterWeapon = getStarterWeapon();
+  const ownsStarter = runState.inventory.itemInstances.includes(starterWeapon.id);
+
+  return {
+    ...runState,
+    inventory: {
+      ...runState.inventory,
+      itemInstances: ownsStarter
+        ? [...runState.inventory.itemInstances]
+        : [...runState.inventory.itemInstances, starterWeapon.id],
+    },
+    loadout: {
+      ...runState.loadout,
+      weaponId: starterWeapon.id,
+    },
+  };
+};
 
 export class RunSession {
   private activeRun: RunState | null = null;
@@ -19,7 +74,7 @@ export class RunSession {
       throw new Error("An active run already exists.");
     }
 
-    const next = createInitialRunState(input);
+    const next = ensurePlayableRunLoadout(createInitialRunState(input));
     this.activeRun = next;
     saveRunState(next, this.storage);
     return next;
@@ -27,8 +82,17 @@ export class RunSession {
 
   restore(): Readonly<RunState> | null {
     const restored = loadSavedRun(this.storage);
-    this.activeRun = restored;
-    return restored;
+    if (restored === null) {
+      this.activeRun = null;
+      return null;
+    }
+
+    const playable = ensurePlayableRunLoadout(restored);
+    this.activeRun = playable;
+    if (playable.status === "active") {
+      saveRunState(playable, this.storage);
+    }
+    return playable;
   }
 
   get(): Readonly<RunState> | null {
@@ -48,7 +112,7 @@ export class RunSession {
       throw new Error("Finished runs cannot be updated.");
     }
 
-    const next = updater(current);
+    const next = ensurePlayableRunLoadout(updater(current));
     this.activeRun = next;
     if (next.status === "active") saveRunState(next, this.storage);
     else clearSavedRun(this.storage);
