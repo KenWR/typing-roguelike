@@ -28,7 +28,7 @@ describe("CommandInputBuffer", () => {
     });
   });
 
-  test("clears the live buffer immediately after a command completes", () => {
+  test("keeps a completed command visible until the input is explicitly reset", () => {
     const buffer = new CommandInputBuffer("베기");
     const completed: string[] = [];
     buffer.onCompleted(({ input }) => completed.push(input));
@@ -39,8 +39,15 @@ describe("CommandInputBuffer", () => {
       status: "complete",
       matchedLength: 2,
     });
-    expect(completed).toEqual(["베기"]);
     expect(buffer.snapshot).toMatchObject({
+      input: "베기",
+      committedInput: "베기",
+      status: "complete",
+      matchedLength: 2,
+    });
+    expect(completed).toEqual(["베기"]);
+
+    expect(buffer.reset()).toMatchObject({
       input: "",
       committedInput: "",
       status: "idle",
@@ -48,7 +55,7 @@ describe("CommandInputBuffer", () => {
     });
   });
 
-  test("emits completion once for duplicate DOM completion values", () => {
+  test("emits completion once until the buffer is reset", () => {
     const buffer = new CommandInputBuffer("휘두르기");
     const completed: string[] = [];
     buffer.onCompleted(({ command }) => completed.push(command));
@@ -110,11 +117,6 @@ describe("CommandInputBuffer", () => {
       status: "complete",
     });
     expect(completionCount).toBe(1);
-    expect(buffer.snapshot).toMatchObject({
-      input: "",
-      committedInput: "",
-      status: "idle",
-    });
   });
 
   test("matches canonically equivalent Unicode input", () => {
