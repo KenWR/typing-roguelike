@@ -9,6 +9,10 @@ on:
 # The root test command discovers the complete game/shared suite and any future API tests.
 # The API package currently has no test files; workspace typecheck and build cover its paths.
 # The whitespace check uses the merge-base-to-head three-dot range to exclude base-only changes.
+# The dry-run below verifies non-zero command propagation without failing this validation job.
+# Runtime evidence still requires external PR activity for superseded-run cancellation and a
+# shared-package-only change; reproduce those cases by pushing a second head during an active
+# run, or by opening a temporary PR whose only diff is under packages/shared, respectively.
 
 permissions:
   contents: read
@@ -43,6 +47,36 @@ jobs:
 
       - name: Validate whitespace and static diff
         run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+
+      - name: Verify command failure propagation (safe dry-run)
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if bash -e -c 'false; echo "unreachable"'; then
+            echo "Failure probe unexpectedly succeeded." >&2
+            exit 1
+          else
+            status=$?
+          fi
+          test "$status" -ne 0
+          echo "Safe failure probe propagated non-zero status: $status"
+
+      - name: Verify workspace coverage contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          workflow_file=".github/workflows/pr-validation.yml"
+          if grep -Eq '^[[:space:]]+paths(-ignore)?:' "$workflow_file"; then
+            echo "Path filters would allow shared-package changes to bypass validation." >&2
+            exit 1
+          fi
+          grep -Fq 'run: bun run typecheck' "$workflow_file"
+          grep -Fq 'run: bun test' "$workflow_file"
+          grep -Fq 'run: bun run build' "$workflow_file"
+          test -d apps/game
+          test -d apps/api
+          test -d packages/shared
+          echo "Unfiltered root validation covers game, API, and shared workspace paths."
 
       - name: Typecheck complete workspace
         run: bun run typecheck
