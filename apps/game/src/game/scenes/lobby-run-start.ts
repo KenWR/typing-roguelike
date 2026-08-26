@@ -1,10 +1,17 @@
 import type { RunState } from "@typing-roguelike/shared";
+import { initializeRunMap } from "../run/run-start-map";
 import { runSession } from "../run/run-session";
 
 export type RunInitializer = (seed: number) => RunState;
 export type RunSeedFactory = () => number;
 
-const defaultRunInitializer: RunInitializer = (seed) => runSession.create({ seed });
+const defaultRunInitializer: RunInitializer = (seed) => {
+  const created = runSession.create({ seed });
+  const initialized = initializeRunMap(created);
+  runSession.update(() => initialized);
+  return initialized;
+};
+
 const defaultSeedFactory: RunSeedFactory = () => Date.now();
 
 export class LobbyRunStarter {
