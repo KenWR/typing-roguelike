@@ -28,6 +28,30 @@ describe("run reward equipment flow", () => {
     expect(flow.nextSceneKey).toBe("MapScene");
   });
 
+  test("can skip the reward without changing inventory or loadout", () => {
+    const equipment = EQUIPMENT_CONFIGS.find((candidate) => candidate.rarity !== "hidden")!;
+    const initial = createInitialRunState({ seed: 11 });
+    let continued = false;
+    const flow = createRunRewardSelectionFlow({
+      runState: initial,
+      equipmentIds: [equipment.id],
+      onContinue: () => {
+        continued = true;
+      },
+    });
+
+    flow.adapter.skip();
+
+    const updated = flow.adapter.getRunState();
+    expect(updated.inventory).toEqual(initial.inventory);
+    expect(updated.loadout).toEqual(initial.loadout);
+    expect(flow.adapter.getViewState()).toMatchObject({
+      selectedRewardId: null,
+      status: "continued",
+    });
+    expect(continued).toBe(true);
+  });
+
   test("fills or replaces the subweapon slot", () => {
     const subweapons = EQUIPMENT_CONFIGS.filter((equipment) => equipment.slot === "subweapon");
     expect(subweapons.length).toBeGreaterThan(0);
