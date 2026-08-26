@@ -39,12 +39,6 @@ if [[ $# -ge 2 && "$1" == 'pr' && "$2" == 'view' ]]; then
 fi
 
 if [[ $# -ge 2 && "$1" == 'pr' && "$2" == 'merge' ]]; then
-  printf 'merge' >> "$MOCK_GH_LOG"
-  for argument in "$@"; do
-    printf ' %s' "$argument" >> "$MOCK_GH_LOG"
-  done
-  printf '\n' >> "$MOCK_GH_LOG"
-
   has_disable_auto=false
   for argument in "$@"; do
     if [[ "$argument" == '--disable-auto' ]]; then
@@ -52,16 +46,32 @@ if [[ $# -ge 2 && "$1" == 'pr' && "$2" == 'merge' ]]; then
       break
     fi
   done
+
+  if [[ "$has_disable_auto" == true ]]; then
+    printf 'cancel-auto' >> "$MOCK_GH_LOG"
+    for argument in "$@"; do
+      printf ' %s' "$argument" >> "$MOCK_GH_LOG"
+    done
+    printf '\n' >> "$MOCK_GH_LOG"
+    if [[ "$(<"$MOCK_GH_MERGE_STATE")" == $'OPEN\tNONE\tPRESENT' ]]; then
+      printf 'OPEN\tNONE\tNONE\n' > "$MOCK_GH_MERGE_STATE"
+      exit 0
+    fi
+    printf 'auto-merge is not enabled\n' >&2
+    exit 44
+  fi
+
+  printf 'merge' >> "$MOCK_GH_LOG"
+  for argument in "$@"; do
+    printf ' %s' "$argument" >> "$MOCK_GH_LOG"
+  done
+  printf '\n' >> "$MOCK_GH_LOG"
+
   case "${MOCK_GH_MERGE_MODE:-merged}" in
     merged)
       printf 'MERGED\t2026-08-26T12:00:00Z\tNONE\n' > "$MOCK_GH_MERGE_STATE"
       ;;
     pending-auto)
-      if [[ "$has_disable_auto" == true ]]; then
-        printf 'OPEN\tNONE\tNONE\n' > "$MOCK_GH_MERGE_STATE"
-        printf 'required checks are pending\n' >&2
-        exit 78
-      fi
       printf 'OPEN\tNONE\tPRESENT\n' > "$MOCK_GH_MERGE_STATE"
       ;;
     implicit-auto)
@@ -181,10 +191,11 @@ write_identity "$valid_sha" main "$base_sha"
 output="$($script merge --repo KenWR/typing-roguelike --pr 7 --expected-head-sha "$valid_sha" --expected-base-ref main --expected-base-sha "$base_sha" --merge-method squash)"
 assert_contains "$output" "MERGE_ACCEPTED expected_head_sha=$valid_sha expected_base_ref=main expected_base_sha=$base_sha"
 merge_log="$(<"$MOCK_GH_LOG")"
+assert_contains "$merge_log" 'merge pr merge'
 assert_contains "$merge_log" '--match-head-commit'
 assert_contains "$merge_log" "$valid_sha"
 assert_contains "$merge_log" '--squash'
-assert_contains "$merge_log" '--disable-auto'
+assert_not_contains "$merge_log" '--disable-auto'
 
 write_identity 'invalid-head-sha' main "$base_sha"
 if output="$($script merge --repo KenWR/typing-roguelike --pr 7 --expected-head-sha "$valid_sha" --expected-base-ref main --expected-base-sha "$base_sha" 2>&1)"; then
@@ -222,10 +233,14 @@ if output="$($script merge --repo KenWR/typing-roguelike --pr 7 --expected-head-
   fail 'pending checks were accepted'
 else
   status=$?
-  [[ $status -eq 78 ]] || fail "pending checks status was $status"
-  assert_contains "$output" 'conditional merge failed'
+  [[ $status -eq 13 ]] || fail "pending checks status was $status"
+  assert_contains "$output" 'AUTO_MERGE_REFUSED'
   assert_not_contains "$output" 'MERGE_ACCEPTED'
-  assert_contains "$(<"$MOCK_GH_LOG")" '--disable-auto'
+  pending_log="$(<"$MOCK_GH_LOG")"
+  assert_contains "$pending_log" 'merge pr merge'
+  assert_not_contains "$(printf '%s\n' "$pending_log" | grep '^merge ' || true)" '--disable-auto'
+  assert_contains "$pending_log" 'cancel-auto'
+  assert_contains "$pending_log" '--disable-auto'
 fi
 
 export MOCK_GH_MERGE_MODE=implicit-auto
@@ -237,13 +252,20 @@ else
   [[ $status -eq 13 ]] || fail "implicit auto-merge status was $status"
   assert_contains "$output" 'AUTO_MERGE_REFUSED'
   assert_not_contains "$output" 'MERGE_ACCEPTED'
+  implicit_log="$(<"$MOCK_GH_LOG")"
+  assert_contains "$implicit_log" 'merge pr merge'
+  assert_not_contains "$(printf '%s\n' "$implicit_log" | grep '^merge ' || true)" '--disable-auto'
+  assert_contains "$implicit_log" 'cancel-auto'
+  assert_contains "$implicit_log" '--disable-auto'
 fi
 
 export MOCK_GH_MERGE_MODE=merged
 write_identity "$valid_sha" main "$base_sha"
 output="$($script merge --repo KenWR/typing-roguelike --pr 7 --expected-head-sha "$valid_sha" --expected-base-ref main --expected-base-sha "$base_sha" --dry-run)"
 assert_contains "$output" "MERGE_READY expected_head_sha=$valid_sha expected_base_ref=main expected_base_sha=$base_sha"
-assert_contains "$output" "--disable-auto --match-head-commit $valid_sha"
+assert_contains "$output" "--match-head-commit $valid_sha"
+assert_contains "$output" 'AUTO_MERGE_GUARD=detect-post-state-and-cancel-with-gh-pr-merge-disable-auto'
+assert_not_contains "$output" '--disable-auto'
 assert_not_contains "$(<"$MOCK_GH_LOG")" 'merge'
 
 printf 'verified-head-merge fixture tests passed\n'

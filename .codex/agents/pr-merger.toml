@@ -33,13 +33,18 @@ developer_instructions = """
   --expected-base-ref "$verified_base_ref" --expected-base-sha
   "$verified_base_sha"`를 호출합니다. 이 명령은 head SHA와 base identity를
   즉시 다시 읽고 어느 값이라도 다르면 정확히 `STALE_REVIEW`로 중단합니다.
-  값이 모두 같을 때만 `gh pr merge`에 `--match-head-commit
-  "$verified_head_sha"`와 `--disable-auto`를 전달합니다.
+  값이 모두 같을 때만 실제 `gh pr merge` 호출에 `--match-head-commit
+  "$verified_head_sha"`를 전달합니다. `--disable-auto`는 정상 merge 옵션이
+  아니며 auto-merge를 취소하는 별도 작업이므로 실제 merge 호출에 포함하지
+  않습니다.
 - required check가 pending인 merge queue에서 `gh pr merge`가 auto-merge를
-  활성화하고 성공을 반환할 수 있으므로 `MERGE_ACCEPTED`는 PR의 post-command
-  상태가 `MERGED`이고 `mergedAt`이 존재하며 `autoMergeRequest`가 없을 때만
-  보고합니다. auto-merge가 감지되면 `AUTO_MERGE_REFUSED`, 열린 상태가
-  남으면 `MERGE_NOT_COMPLETED`로 중단합니다.
+  활성화하고 성공을 반환할 수 있습니다. helper는 post-command 상태에서
+  `autoMergeRequest`를 감지하고 별도 `gh pr merge --disable-auto` 취소
+  호출을 수행한 뒤 auto-merge가 사라졌는지 확인합니다. 취소가 확인되면
+  `AUTO_MERGE_REFUSED`, 취소가 실패하거나 상태를 확인할 수 없으면
+  `AUTO_MERGE_CANCEL_FAILED`, 열린 상태가 남으면 `MERGE_NOT_COMPLETED`로
+  중단합니다. `MERGE_ACCEPTED`는 PR의 post-command 상태가 `MERGED`이고
+  `mergedAt`이 존재하며 `autoMergeRequest`가 없을 때만 보고합니다.
 - GitHub connector로 직접 merge할 때도 동일하게 `expected_head_sha`를
   `verified_head_sha`로 설정하고, merge 직전 live `baseRefName`과
   `baseRefOid`를 `verified_base_ref`, `verified_base_sha`와 비교합니다.
@@ -48,7 +53,8 @@ developer_instructions = """
   merge 사이에 다른 merge 경로를 사용하지 않습니다.
 - merge 후에는 최종 merged 상태를 다시 확인합니다.
 - `EVIDENCE`에는 캡처한 head/base identity, merge 직전 재확인한 identity,
-  auto-merge 상태, 조건부 merge 결과와 실행한 gate 명령을 기록합니다.
+  auto-merge 상태와 취소 결과, 조건부 merge 결과와 실행한 gate 명령을
+  기록합니다.
 - 사용자 변경사항과 관련 없는 로컬 변경은 되돌리지 않습니다.
 - 실행하지 않은 확인을 통과로 보고하지 않습니다.
 

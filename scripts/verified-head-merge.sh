@@ -14,7 +14,8 @@ The merge command re-reads all three values immediately before a conditional mer
 
 Exit status 2 means invalid arguments, 10 means STALE_REVIEW, and 12 means the
 live PR identity or merge state could not be read or validated. Exit status 13
-means the merge was refused because it did not complete or auto-merge was detected.
+means the merge was refused because it did not complete, auto-merge was detected,
+or auto-merge cancellation could not be safely verified.
 USAGE
 }
 
@@ -198,19 +199,20 @@ fi
 if [[ "$dry_run" == true ]]; then
   printf 'MERGE_READY expected_head_sha=%s expected_base_ref=%s expected_base_sha=%s\n' \
     "$expected_head_sha" "$expected_base_ref" "$expected_base_sha"
-  printf 'DRY_RUN=gh pr merge %s --repo %s --disable-auto --match-head-commit %s --%s\n' \
+  printf 'DRY_RUN=gh pr merge %s --repo %s --match-head-commit %s --%s\n' \
     "$pr_number" "$repo" "$expected_head_sha" "$merge_method"
+  printf 'AUTO_MERGE_GUARD=detect-post-state-and-cancel-with-gh-pr-merge-disable-auto\n'
   exit 0
 fi
 
 # `gh pr merge` can return success by enabling auto-merge for a merge-queue base
-# while required checks are pending. --disable-auto rejects that implicit path;
-# the post-command state check below prevents any non-merged result from being
-# reported as accepted.
+# while required checks are pending. The actual merge invocation must not include
+# --disable-auto because that flag selects the separate cancellation operation.
+# The post-command state check below detects an implicit auto-merge, cancels it,
+# and prevents any non-merged result from being reported as accepted.
 merge_args=(
   pr merge "$pr_number"
   --repo "$repo"
-  --disable-auto
   --match-head-commit "$expected_head_sha"
 )
 case "$merge_method" in
@@ -225,6 +227,32 @@ case "$merge_method" in
     ;;
 esac
 
+cancel_auto_merge() {
+  local cancel_status=0
+  local cancellation_state
+  local cancellation_final_auto_merge
+
+  if gh pr merge "$pr_number" --repo "$repo" --disable-auto >/dev/null; then
+    :
+  else
+    cancel_status=$?
+  fi
+
+  if ! cancellation_state="$(read_merge_state)"; then
+    printf 'AUTO_MERGE_CANCEL_FAILED expected_head_sha=%s expected_base_ref=%s expected_base_sha=%s status=%s state=UNREADABLE\n' \
+      "$expected_head_sha" "$expected_base_ref" "$expected_base_sha" "$cancel_status" >&2
+    return 1
+  fi
+  IFS=$'\t' read -r _ _ cancellation_final_auto_merge <<< "$cancellation_state"
+
+  if [[ "$cancel_status" -ne 0 || "$cancellation_final_auto_merge" == 'PRESENT' ]]; then
+    printf 'AUTO_MERGE_CANCEL_FAILED expected_head_sha=%s expected_base_ref=%s expected_base_sha=%s status=%s auto_merge=%s\n' \
+      "$expected_head_sha" "$expected_base_ref" "$expected_base_sha" \
+      "$cancel_status" "$cancellation_final_auto_merge" >&2
+    return 1
+  fi
+}
+
 merge_status=0
 if gh "${merge_args[@]}"; then
   :
@@ -238,6 +266,7 @@ fi
 IFS=$'\t' read -r final_state final_merged_at final_auto_merge <<< "$merge_state"
 
 if [[ "$final_auto_merge" == 'PRESENT' ]]; then
+  cancel_auto_merge || exit 13
   printf 'AUTO_MERGE_REFUSED expected_head_sha=%s expected_base_ref=%s expected_base_sha=%s\n' \
     "$expected_head_sha" "$expected_base_ref" "$expected_base_sha" >&2
   exit 13
