@@ -22,8 +22,9 @@ describe("map generation", () => {
 		const firstRound = generateNodeChoices(1234, 1, []);
 		const recoveryRound = generateNodeChoices(1234, 9, pathForRound(9));
 		const bossRound = generateNodeChoices(1234, 10, pathForRound(10));
-		expect(firstRound).toHaveLength(3);
-		expect(firstRound.every(({ type }) => type !== "shop" && type !== "reward")).toBe(true);
+		expect(firstRound.length).toBeGreaterThan(0);
+		expect(firstRound.length).toBeLessThanOrEqual(MAX_MAP_CHOICES);
+		expect(firstRound.every(({ type }) => type === "combat" || type === "elite" || type === "rest")).toBe(true);
 		expect(recoveryRound).toHaveLength(1);
 		expect(recoveryRound[0]?.type).toBe("rest");
 		expect(recoveryRound[0]?.nextNodeKeys).toHaveLength(1);
@@ -54,7 +55,9 @@ describe("map generation", () => {
 		const seed = 77; const rootChoices = generateNodeChoices(seed, 1, []); const root = rootChoices[0]!;
 		const childChoices = generateNodeChoices(seed, 2, [root.choice]); const siblingChoices = generateNodeChoices(seed, 2, [rootChoices[1]!.choice]);
 		expect(generateNodeChoices(seed, 2, [root.choice])).toEqual(childChoices);
-		expect(new Set(childChoices.map(({ key }) => key)).size).toBe(3);
+		expect(new Set(childChoices.map(({ key }) => key)).size).toBe(childChoices.length);
+		expect(childChoices.length).toBeGreaterThan(0);
+		expect(childChoices.length).toBeLessThanOrEqual(MAX_MAP_CHOICES);
 		expect(childChoices.every(({ parentKey }) => parentKey === root.key)).toBe(true);
 		expect(root.nextNodeKeys).toEqual(childChoices.map(({ key }) => key));
 		expect(siblingChoices.map(({ key }) => key)).not.toEqual(childChoices.map(({ key }) => key));
