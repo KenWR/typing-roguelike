@@ -94,6 +94,56 @@ describe("run restore normalization", () => {
     );
   });
 
+  test("keeps a locally completed floor when the server still has the entry checkpoint", async () => {
+    const localRun = initializeRunMap(createInitialRunState({ seed: 89 }));
+    const firstNode = generateNodeChoices(89, 1, [])[0]!;
+    const completedLocalRun: RunState = {
+      ...localRun,
+      map: {
+        ...localRun.map,
+        currentNodeId: firstNode.key,
+        currentRound: 2,
+        choicePath: [firstNode.choice],
+        nodeStatuses: {
+          [firstNode.key]: "cleared",
+          ...Object.fromEntries(
+            generateNodeChoices(89, 2, [firstNode.choice]).map((node) => [node.key, "available" as const]),
+          ),
+        },
+      },
+    };
+    const serverRun = {
+      ...completedLocalRun,
+      map: {
+        ...completedLocalRun.map,
+        currentRound: 1,
+        choicePath: [],
+        currentNodeId: firstNode.key,
+        nodeStatuses: { [firstNode.key]: "in_progress" as const },
+      },
+    };
+    const api = new RunApiClient("http://test", async () => new Response(JSON.stringify({
+      run: {
+        runId: "run-1",
+        nodeId: firstNode.key,
+        floor: 1,
+        state: serverRun,
+        stateVersion: 4,
+        savedAt: "2026-08-26T00:00:00.000Z",
+      },
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }), 100, 1);
+
+    const restored = await new RunRemotePersistence(api).restore(completedLocalRun);
+
+    expect(restored?.map.currentRound).toBe(2);
+    expect(availableNodeIds(restored!)).toEqual(
+      generateNodeChoices(89, 2, [firstNode.choice]).map((node) => node.key),
+    );
+  });
+
   test("does not change a normal active map with available choices", () => {
     const normal = initializeRunMap(createInitialRunState({ seed: 12 }));
     expect(normalizeRestoredRunState(normal)).toEqual(normal);

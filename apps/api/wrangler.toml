@@ -4,6 +4,8 @@ compatibility_date = "2026-08-26"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "typing-roguelike-local"
-database_id = "00000000-0000-0000-0000-000000000000"
-migrations_dir = "migrations"
+database_name = "typing-roguelike"
+database_id = "8f8dd5e8-7130-4c63-885c-63a52c3d5f9f"
+
+[vars]
+CORS_ORIGIN = "https://typing-roguelike-game.42cartel.workers.dev"

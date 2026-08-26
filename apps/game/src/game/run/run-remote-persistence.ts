@@ -113,6 +113,19 @@ export const preferLocalRunState = (
     : serverState as RunState;
 };
 
+const describeRestoreFailure = (error: unknown): string => {
+  if (error instanceof RunApiError) {
+    return `서버 복구 실패 · HTTP ${error.status} (${error.code})`;
+  }
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "서버 복구 실패 · 요청 시간 초과";
+  }
+  if (error instanceof TypeError) {
+    return "서버 복구 실패 · 네트워크 또는 CORS 오류";
+  }
+  return "서버 복구 실패 · 응답 처리 오류";
+};
+
 const toServerCheckpoint = (
   state: Readonly<RunState>,
   stateVersion: number,
@@ -237,8 +250,11 @@ export class RunRemotePersistence {
           : "저장: 서버 런 복구됨",
       );
       return restored;
-    } catch {
-      this.setStatus("local_fallback", "저장: 로컬 fallback · 서버 복구 실패");
+    } catch (error) {
+      this.setStatus(
+        "local_fallback",
+        `저장: 로컬 fallback · ${describeRestoreFailure(error)}`,
+      );
       return localFallback;
     }
   }
