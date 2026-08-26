@@ -28,7 +28,9 @@ export interface DamageCalculationResult {
 }
 
 const relicIdByName = new Map(RELIC_CONFIGS.map((relic) => [relic.name, relic.id]));
-const relicId = (name: string): string => {
+type RelicName = (typeof RELIC_CONFIGS)[number]["name"];
+
+const relicId = (name: RelicName): string => {
   const id = relicIdByName.get(name);
   if (id === undefined) throw new Error(`Missing relic config: ${name}`);
   return id;
