@@ -47,11 +47,17 @@ export class SettingsScene extends Phaser.Scene {
       color: "#f9fafb",
     }).setOrigin(0.5);
 
+    const updateDraft = (next: MenuSettings): void => {
+      this.draft = next;
+      applyMenuSettings(this, this.draft);
+      this.refresh();
+    };
+
     const actions = [
-      () => { this.draft = toggleSound(this.draft); this.refresh(); },
-      () => { this.draft = cycleVolume(this.draft); this.refresh(); },
-      () => { this.draft = toggleScreenShake(this.draft); this.refresh(); },
-      () => { this.draft = toggleCommandLanguage(this.draft); this.refresh(); },
+      () => updateDraft(toggleSound(this.draft)),
+      () => updateDraft(cycleVolume(this.draft)),
+      () => updateDraft(toggleScreenShake(this.draft)),
+      () => updateDraft(toggleCommandLanguage(this.draft)),
     ];
 
     this.labels = actions.map((action, index) => createButton(this, width / 2, 130 + index * 70, action));
