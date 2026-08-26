@@ -170,17 +170,18 @@ export type SkillImpactResult = Readonly<{
 }>;
 
 export class SkillImpactResolver {
-  private readonly resolvedActionIds = new Set<string>();
+  private readonly resolvedActionTargets = new Set<string>();
 
   resolve({ event, skill, actor, target, shields, damageMultiplier = 1 }: ResolveSkillImpactInput): SkillImpactResult {
     if (event.type !== "impact-resolved") {
       return this.emptyResult(event.actionId);
     }
-    if (this.resolvedActionIds.has(event.actionId)) {
-      return this.emptyResult(event.actionId);
-    }
     if (event.actorId !== actor.id || event.targetId !== target.id) {
       throw new Error(`Skill impact participants do not match action ${event.actionId}.`);
+    }
+    const resolutionKey = `${event.actionId}:${target.id}`;
+    if (this.resolvedActionTargets.has(resolutionKey)) {
+      return this.emptyResult(event.actionId);
     }
     if (!Number.isFinite(damageMultiplier) || damageMultiplier <= 0) {
       throw new RangeError("Skill damage multiplier must be positive and finite.");
@@ -234,7 +235,7 @@ export class SkillImpactResolver {
       }
     }
 
-    this.resolvedActionIds.add(event.actionId);
+    this.resolvedActionTargets.add(resolutionKey);
     return {
       applied: true,
       actionId: event.actionId,

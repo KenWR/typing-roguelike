@@ -2,10 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { defineSkill } from "@typing-roguelike/shared";
 import type { CombatActionEvent } from "../src/game/combat/combat-state";
 import { ShieldPool } from "../src/game/combat/shield-pool";
-import {
-  SkillCombatantState,
-  SkillImpactResolver,
-} from "../src/game/combat/skill-impact-resolver";
+import { SkillCombatantState, SkillImpactResolver } from "../src/game/combat/skill-impact-resolver";
+import { isAreaSkill } from "../src/game/combat/skill-targeting";
 
 const impactEvent = (actionId = "action.slash.1"): CombatActionEvent => ({
   type: "impact-resolved",
@@ -39,6 +37,23 @@ const createCombatants = () => ({
 });
 
 describe("skill impact resolver", () => {
+  test("recognizes area skills from their content description", () => {
+    const skill = defineSkill({
+      id: "skill.area",
+      name: "지면 가르기",
+      command: "지면가르기",
+      kind: "attack",
+      category: "special",
+      apCost: 2,
+      windupMs: 100,
+      recoveryMs: 100,
+      effects: [{ type: "damage", coefficient: 1 }],
+      description: "모든 적에게 광역 피해를 줍니다.",
+    });
+
+    expect(isAreaSkill(skill)).toBe(true);
+  });
+
   test("does not apply effects before the impact event", () => {
     const resolver = new SkillImpactResolver();
     const { actor, target } = createCombatants();
@@ -134,9 +149,7 @@ describe("skill impact resolver", () => {
 
     expect(result.statusEffectsApplied).toBe(1);
     expect(result.shieldAbsorbedDamage).toBe(0);
-    expect(target.snapshot.statuses).toEqual([
-      { statusId: "weakened", durationMs: 1200, stacks: 2 },
-    ]);
+    expect(target.snapshot.statuses).toEqual([{ statusId: "weakened", durationMs: 1200, stacks: 2 }]);
   });
 
   test("spends the target shield before its health and reports the broken shield", () => {

@@ -83,6 +83,7 @@ describe("command HUD state", () => {
   test("records immediate skill-start feedback after a completed command", () => {
     const buffer = new CommandInputBuffer("매직실드");
     const completed = buffer.updateInput("매직실드");
+    buffer.submit();
     const state = updateCommandHudState(createCommandHudState(buffer.snapshot), completed);
 
     const started = markSkillStarted(state);

@@ -112,7 +112,6 @@ export class CombatFoundationScene extends Phaser.Scene {
   private targeting?: CombatTargetingController;
   private commandInputCleanup?: () => void;
   private commandCompletionCleanup?: () => void;
-  private commandStatusCleanup?: () => void;
   private commandSubmitCleanup?: () => void;
   private combatInitialization?: CombatEncounterInitialization;
   private runState?: Readonly<RunState>;
@@ -341,6 +340,7 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.skillStarter = skillStarter;
     this.commandCompletionCleanup = skillStarter.connect(this.commandInputBuffer, (result) => {
       if (result.started) {
+        this.feedback?.trigger("command-success");
         const relicMultiplier = this.apEffects.resolveSkillDamageMultiplier(result.skill);
         this.apEffects.onSkillStarted(result.skill, result.combo.count);
         this.playerCombatRuntime?.registerAction(
@@ -356,11 +356,6 @@ export class CombatFoundationScene extends Phaser.Scene {
         this.commandHud.showSkillStarted();
       }
       this.combatHud.update({ ap: this.actionPoints.snapshot.currentAp });
-    });
-    this.commandStatusCleanup = this.commandInputBuffer.onStatusChanged(({ snapshot }) => {
-      if (snapshot.status === "complete") {
-        this.feedback?.trigger("command-success");
-      }
     });
     this.commandSubmitCleanup = this.commandInputBuffer.onSubmitted(({ snapshot }) => {
       if (snapshot.input.length === 0) return;
@@ -749,8 +744,6 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandInputCleanup?.();
     this.commandCompletionCleanup?.();
     this.commandCompletionCleanup = undefined;
-    this.commandStatusCleanup?.();
-    this.commandStatusCleanup = undefined;
     this.commandSubmitCleanup?.();
     this.commandSubmitCleanup = undefined;
     this.isComposing = false;
