@@ -211,6 +211,7 @@ export class SettingsScene extends Phaser.Scene {
   private statusMessage = "";
   private statusIsError = false;
   private selectedIndex = 0;
+  private hasLoadedSettings = false;
   private keyboardHandler?: (event: KeyboardEvent) => void;
   private resizeHandler?: () => void;
 
@@ -228,7 +229,10 @@ export class SettingsScene extends Phaser.Scene {
     this.statusMessage = "";
     this.statusIsError = false;
     this.selectedIndex = 0;
-    this.persistedSettings = loadMenuSettings(storage);
+    if (!this.hasLoadedSettings) {
+      this.persistedSettings = loadMenuSettings(storage);
+      this.hasLoadedSettings = true;
+    }
     this.draftSettings = this.persistedSettings;
     playRuntimeBgm("menu");
     const initialApplySucceeded = this.applySettings(this.draftSettings);
@@ -327,10 +331,12 @@ export class SettingsScene extends Phaser.Scene {
     this.renderLayout();
     this.resizeHandler = (): void => this.renderLayout();
     this.scale.on("resize", this.resizeHandler);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.releaseSceneResources, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.releaseSceneResources, this);
     this.installKeyboardHandler();
   }
 
-  shutdown(): void {
+  private releaseSceneResources(): void {
     this.removeResizeHandler();
     this.removeKeyboardHandler();
     this.menuButtons = [];
