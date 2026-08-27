@@ -1,8 +1,6 @@
+/* biome-ignore-all lint/style/noNonNullAssertion: static combat fixtures are asserted by the test setup. */
 import { describe, expect, test } from "bun:test";
-import {
-  defineSkill,
-  type GeneratedMapNode,
-} from "@typing-roguelike/shared";
+import { defineSkill, type GeneratedMapNode } from "@typing-roguelike/shared";
 import { CombatState } from "../src/game/combat/combat-state";
 import { EnemyAttackTimeline } from "../src/game/combat/enemy-attack-timeline";
 import { initializeCombatEncounter } from "../src/game/combat/encounter-initializer";
@@ -94,9 +92,11 @@ describe("PlayerCombatRuntime", () => {
       runState,
       initialization: multiInitialization,
       nextNodeIds: firstCombatNode.nextNodeKeys,
+      random: () => 0,
     });
     const skillConfig = initialization.player.skills.find((candidate) => candidate.kind === "attack")!;
     const skill = defineSkill(skillConfig);
+    runtime.start();
 
     let sequence = 1;
     while ((runtime.enemyHp[firstEnemy.instanceId] ?? 0) > 0) {
@@ -126,13 +126,24 @@ describe("PlayerCombatRuntime", () => {
 
     expect(runtime.enemyHp[firstEnemy.instanceId]).toBe(0);
     expect(runtime.enemyHp[secondEnemy.instanceId]).toBeLessThan(secondHpBefore);
+    expect(enemyTimeline.snapshot.attacks).not.toContainEqual(
+      expect.objectContaining({ enemyId: firstEnemy.instanceId }),
+    );
     expect(combat.snapshot.status).toBe("active");
   });
 
   test("does not apply the same impact twice", () => {
     const { combat, runtime, initialization } = createPlayableCombat();
     const skillConfig = initialization.player.skills.find((candidate) => candidate.kind === "attack")!;
-    const skill = defineSkill(skillConfig);
+    const skill = defineSkill({
+      ...skillConfig,
+      // Keep this regression focused on impact deduplication, independent of
+      // the separate bleed-over-time effect on the production sword.
+      effects:
+        skillConfig.damageCoefficient === undefined
+          ? []
+          : [{ type: "damage", coefficient: skillConfig.damageCoefficient }],
+    });
     const enemy = initialization.enemies[0]!;
     const actionId = "player:first-attack:dedupe";
     combat.startAction({

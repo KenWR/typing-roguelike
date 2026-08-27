@@ -1,4 +1,4 @@
-import type { GeneratedMapNode, ShopOffer } from "@typing-roguelike/shared";
+import type { GeneratedMapNode, LegacyShopOffer, ShopOffer } from "@typing-roguelike/shared";
 import { SCENE_KEYS } from "../scenes/scene-contract";
 
 export const RUN_RESUME_CHECKPOINT_STORAGE_KEY =
@@ -17,6 +17,7 @@ export type RunResumeCheckpoint = Readonly<{
   node: GeneratedMapNode;
   nextNodeIds: readonly string[];
   rewardEquipmentIds?: readonly string[];
+  rewardRelicIds?: readonly string[];
   shopOffers?: readonly ShopOffer[];
   purchasedOfferIds?: readonly string[];
   shopRerollCount?: number;
@@ -56,13 +57,16 @@ const isGeneratedMapNode = (value: unknown): value is GeneratedMapNode => {
   return value.monsterId === undefined || typeof value.monsterId === "string";
 };
 
-const isShopOffer = (value: unknown): value is ShopOffer =>
+/** kind 가 없던 시절 저장된 진열도 복원할 수 있게 두 형식을 모두 허용한다. */
+const isShopOffer = (value: unknown): value is ShopOffer | LegacyShopOffer =>
   isRecord(value) &&
   typeof value.id === "string" &&
-  typeof value.equipmentId === "string" &&
-  typeof value.price === "number";
+  typeof value.price === "number" &&
+  ((value.kind === "equipment" || value.kind === "relic") && typeof value.itemId === "string"
+    ? true
+    : value.kind === undefined && typeof value.equipmentId === "string");
 
-const isShopOfferArray = (value: unknown): value is ShopOffer[] =>
+const isShopOfferArray = (value: unknown): value is (ShopOffer | LegacyShopOffer)[] =>
   Array.isArray(value) && value.every(isShopOffer);
 
 const isRunResumeCheckpoint = (value: unknown): value is RunResumeCheckpoint => {
@@ -74,6 +78,9 @@ const isRunResumeCheckpoint = (value: unknown): value is RunResumeCheckpoint => 
     value.rewardEquipmentIds !== undefined &&
     !isStringArray(value.rewardEquipmentIds)
   ) {
+    return false;
+  }
+  if (value.rewardRelicIds !== undefined && !isStringArray(value.rewardRelicIds)) {
     return false;
   }
   if (value.shopOffers !== undefined && !isShopOfferArray(value.shopOffers)) {

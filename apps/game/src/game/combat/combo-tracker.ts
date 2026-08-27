@@ -21,6 +21,7 @@ export type ComboSnapshot = Readonly<{
 
 export const DEFAULT_COMBO_BONUS_TIERS = [
   { minimumCombo: 0, multiplier: 1 },
+  { minimumCombo: 2, multiplier: 1.05 },
   { minimumCombo: 5, multiplier: 1.1 },
   { minimumCombo: 10, multiplier: 1.25 },
   { minimumCombo: 20, multiplier: 1.5 },

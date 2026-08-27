@@ -9,8 +9,8 @@ describe("ComboTracker", () => {
     const combo = new ComboTracker();
 
     expect(combo.recordCorrectInput()).toMatchObject({ count: 1, multiplier: 1 });
-    expect(combo.recordCorrectInput()).toMatchObject({ count: 2, multiplier: 1 });
-    expect(combo.recordCorrectInput()).toMatchObject({ count: 3, multiplier: 1 });
+    expect(combo.recordCorrectInput()).toMatchObject({ count: 2, multiplier: 1.05 });
+    expect(combo.recordCorrectInput()).toMatchObject({ count: 3, multiplier: 1.05 });
   });
 
   test("resets combo when a configured break condition is reported", () => {
@@ -106,6 +106,7 @@ describe("ComboTracker", () => {
   test("keeps the default combo tuning exported as data", () => {
     expect(DEFAULT_COMBO_BONUS_TIERS).toEqual([
       { minimumCombo: 0, multiplier: 1 },
+      { minimumCombo: 2, multiplier: 1.05 },
       { minimumCombo: 5, multiplier: 1.1 },
       { minimumCombo: 10, multiplier: 1.25 },
       { minimumCombo: 20, multiplier: 1.5 },

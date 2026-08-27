@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { setRuntimeAudioSettings } from "../audio/runtime-audio";
 import {
   DEFAULT_MENU_SETTINGS,
   applyMenuSettings,
@@ -50,6 +51,10 @@ export class SettingsScene extends Phaser.Scene {
     const updateDraft = (next: MenuSettings): void => {
       this.draft = next;
       applyMenuSettings(this, this.draft);
+      setRuntimeAudioSettings({
+        muted: !this.draft.soundEnabled,
+        volume: this.draft.volume,
+      });
       this.refresh();
     };
 
@@ -66,6 +71,10 @@ export class SettingsScene extends Phaser.Scene {
     createButton(this, width / 2, 440, () => {
       saveMenuSettings(this.draft, storage);
       applyMenuSettings(this, this.draft);
+      setRuntimeAudioSettings({
+        muted: !this.draft.soundEnabled,
+        volume: this.draft.volume,
+      });
       this.refresh();
     }).setText("적용");
 

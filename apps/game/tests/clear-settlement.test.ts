@@ -96,7 +96,7 @@ describe("clear settlement", () => {
 
     runState.inventory.itemInstances = ["equipment_missing"];
     expect(() => settleClearedRun(runState, emptyWallet(), 0)).toThrow(
-      "Unknown equipment id in clear settlement: equipment_missing",
+      "Unknown equipment in run settlement: equipment_missing",
     );
   });
 });

@@ -18,22 +18,27 @@ describe("LobbyRunStarter", () => {
     expect(runState?.map.seed).toBe(4242);
     expect(runState?.status).toBe("active");
     expect(calls).toBe(1);
-    expect(starter.isStarting).toBe(true);
+    expect(starter.isStarting).toBe(false);
   });
 
-  test("locks duplicate start requests", () => {
+  test("locks reentrant requests but allows a later run to start", () => {
     let calls = 0;
-    const starter = new LobbyRunStarter(
+    let nestedStart: ReturnType<LobbyRunStarter["start"]> | undefined;
+    let starter!: LobbyRunStarter;
+    starter = new LobbyRunStarter(
       (seed) => {
         calls += 1;
+        nestedStart = starter.start();
         return createInitialRunState({ seed });
       },
       () => 7,
     );
 
     expect(starter.start()).not.toBeNull();
-    expect(starter.start()).toBeNull();
-    expect(calls).toBe(1);
+    expect(nestedStart).toBeNull();
+    expect(starter.isStarting).toBe(false);
+    expect(starter.start()).not.toBeNull();
+    expect(calls).toBe(2);
   });
 
   test("releases the lock when initialization fails", () => {

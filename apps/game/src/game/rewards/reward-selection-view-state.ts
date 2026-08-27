@@ -1,11 +1,6 @@
-export type RewardKind = "weapon" | "relic" | "skill" | "currency";
+export type RewardKind = "weapon" | "relic" | "ring" | "skill" | "currency";
 
-export type RewardRarity =
-  | "common"
-  | "uncommon"
-  | "rare"
-  | "epic"
-  | "legendary";
+export type RewardRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
 export type RewardCandidate = Readonly<{
   id: string;
@@ -14,6 +9,8 @@ export type RewardCandidate = Readonly<{
   rarity: RewardRarity;
   description: string;
   effect: string;
+  /** 호버 시 표시할 확장 정보입니다. 없으면 effect를 사용합니다. */
+  details?: string;
   icon?: string;
   imageKey?: string;
   value?: number;
@@ -59,9 +56,7 @@ const validateCandidate = (candidate: RewardCandidate): void => {
   }
 };
 
-export function createRewardSelectionViewState(
-  input: RewardSelectionViewStateInput,
-): RewardSelectionViewState {
+export function createRewardSelectionViewState(input: RewardSelectionViewStateInput): RewardSelectionViewState {
   if (!Number.isInteger(input.round) || input.round < 1) {
     throw new RangeError("Reward round must be a positive integer.");
   }
@@ -92,10 +87,7 @@ export function createRewardSelectionViewState(
   };
 }
 
-export function selectReward(
-  state: RewardSelectionViewState,
-  rewardId: string,
-): RewardSelectionViewState {
+export function selectReward(state: RewardSelectionViewState, rewardId: string): RewardSelectionViewState {
   if (state.status === "continued") {
     throw new Error("Reward selection is already complete.");
   }
@@ -110,9 +102,7 @@ export function selectReward(
   };
 }
 
-export function continueRewardSelection(
-  state: RewardSelectionViewState,
-): RewardSelectionViewState {
+export function continueRewardSelection(state: RewardSelectionViewState): RewardSelectionViewState {
   if (state.status === "continued") {
     throw new Error("Reward selection is already complete.");
   }

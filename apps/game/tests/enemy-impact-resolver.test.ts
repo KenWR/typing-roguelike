@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DefenseWindowTracker } from "../src/game/combat/defense-window";
+import { ShieldPool } from "../src/game/combat/shield-pool";
 import type { EnemyAttackEvent } from "../src/game/combat/enemy-attack-timeline";
 import { EnemyImpactResolver } from "../src/game/combat/enemy-impact-resolver";
 import { SkillCombatantState } from "../src/game/combat/skill-impact-resolver";
@@ -13,6 +13,12 @@ const impactEvent = (timelineId = "enemy.attack.1"): EnemyAttackEvent => ({
   attackType: "attack",
   atMs: 600,
 });
+
+const defenseImpactEvent: EnemyAttackEvent = {
+  ...impactEvent("enemy.defense.1"),
+  attackId: "guard",
+  attackType: "defense",
+};
 
 const castEvent: EnemyAttackEvent = {
   ...impactEvent(),
@@ -35,8 +41,7 @@ describe("enemy impact resolver", () => {
       event: castEvent,
       damage: 100,
       target: player,
-      defenseWindows: new DefenseWindowTracker(),
-      defendedDamageMultiplier: 0.4,
+      shields: new ShieldPool(),
     });
 
     expect(result.applied).toBe(false);
@@ -51,8 +56,7 @@ describe("enemy impact resolver", () => {
       event,
       damage: 100,
       target: player,
-      defenseWindows: new DefenseWindowTracker(),
-      defendedDamageMultiplier: 0.4,
+      shields: new ShieldPool(),
     } as const;
 
     expect(resolver.resolve(input)).toMatchObject({
@@ -64,22 +68,89 @@ describe("enemy impact resolver", () => {
     expect(player.snapshot.health.currentHp).toBe(50);
   });
 
-  test("checks the defense window at the exact impact time and reduces damage", () => {
+  test("does not damage the player when an enemy defense completes", () => {
     const player = createPlayer();
-    const defenseWindows = new DefenseWindowTracker();
-    defenseWindows.openWindow("guard.1", "player", 500, 200);
+
+    const result = new EnemyImpactResolver().resolve({
+      event: defenseImpactEvent,
+      damage: 0,
+      target: player,
+      shields: new ShieldPool(),
+    });
+
+    expect(result).toMatchObject({ applied: true, damageApplied: 0 });
+    expect(player.snapshot.health.currentHp).toBe(100);
+  });
+
+  test("spends the shield that is still active at the exact impact time", () => {
+    const player = createPlayer();
+    const shields = new ShieldPool();
+    shields.grant({
+      id: "shield.1",
+      ownerId: "player",
+      amount: 30,
+      durationMs: 200,
+      atMs: 500,
+    });
 
     const result = new EnemyImpactResolver().resolve({
       event: impactEvent(),
       damage: 100,
       target: player,
-      defenseWindows,
-      defendedDamageMultiplier: 0.4,
+      shields,
     });
 
     expect(result.defended).toBe(true);
+    expect(result.fullyAbsorbed).toBe(false);
+    expect(result.shieldAbsorbedDamage).toBe(30);
     expect(result.damageApplied).toBe(20);
     expect(player.snapshot.health.currentHp).toBe(80);
+  });
+
+  test("takes no health damage while the shield covers the whole hit", () => {
+    const player = createPlayer();
+    const shields = new ShieldPool();
+    shields.grant({
+      id: "shield.big",
+      ownerId: "player",
+      amount: 80,
+      durationMs: 400,
+      atMs: 400,
+    });
+
+    const result = new EnemyImpactResolver().resolve({
+      event: impactEvent(),
+      damage: 100,
+      target: player,
+      shields,
+    });
+
+    expect(result.fullyAbsorbed).toBe(true);
+    expect(result.damageApplied).toBe(0);
+    expect(player.snapshot.health.currentHp).toBe(100);
+    expect(shields.totalAmount("player", 600)).toBe(30);
+  });
+
+  test("ignores a shield that expired exactly when the hit lands", () => {
+    const player = createPlayer();
+    const shields = new ShieldPool();
+    shields.grant({
+      id: "shield.expired",
+      ownerId: "player",
+      amount: 80,
+      durationMs: 200,
+      atMs: 400,
+    });
+
+    const result = new EnemyImpactResolver().resolve({
+      event: impactEvent(),
+      damage: 100,
+      target: player,
+      shields,
+    });
+
+    expect(result.defended).toBe(false);
+    expect(result.damageApplied).toBe(50);
   });
 
   test("applies configured status effects only at impact", () => {
@@ -93,8 +164,7 @@ describe("enemy impact resolver", () => {
       event: castEvent,
       damage: 20,
       target: player,
-      defenseWindows: new DefenseWindowTracker(),
-      defendedDamageMultiplier: 0.4,
+      shields: new ShieldPool(),
       statusEffects,
     });
     expect(player.snapshot.statuses).toEqual([]);
@@ -103,8 +173,7 @@ describe("enemy impact resolver", () => {
       event: impactEvent(),
       damage: 20,
       target: player,
-      defenseWindows: new DefenseWindowTracker(),
-      defendedDamageMultiplier: 0.4,
+      shields: new ShieldPool(),
       statusEffects,
     });
 

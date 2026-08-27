@@ -23,6 +23,7 @@ describe("multi-command combat input", () => {
       command: "내려찍기",
       status: "complete",
     });
+    buffer.submit();
 
     buffer.reset();
     expect(buffer.updateInput("지면 ")).toMatchObject({
@@ -33,6 +34,7 @@ describe("multi-command combat input", () => {
       command: "지면 가르기",
       status: "complete",
     });
+    buffer.submit();
 
     expect(completed).toEqual(["내려찍기", "지면 가르기"]);
   });
@@ -43,12 +45,14 @@ describe("multi-command combat input", () => {
     buffer.onCompleted(({ command }) => completed.push(command));
 
     expect(buffer.updateInput("내려찍기").status).toBe("complete");
-    expect(buffer.updateInput("내려찍기내")).toMatchObject({
+    buffer.submit();
+    expect(buffer.updateInput("내")).toMatchObject({
       command: "내려찍기",
       input: "내",
       status: "matching",
     });
-    expect(buffer.updateInput("내려찍기내려찍기").status).toBe("complete");
+    expect(buffer.updateInput("내려찍기").status).toBe("complete");
+    buffer.submit();
 
     expect(completed).toEqual(["내려찍기", "내려찍기"]);
   });
@@ -86,6 +90,7 @@ describe("multi-command combat input", () => {
       committedInput: "내려찍기",
       status: "complete",
     });
+    buffer.submit();
     expect(completions).toBe(1);
   });
 
@@ -100,29 +105,20 @@ describe("multi-command combat input", () => {
 
   test("rejects an empty command list and NFC-equivalent duplicates", () => {
     expect(() => new CommandInputBuffer([])).toThrow(RangeError);
-    expect(() => new CommandInputBuffer(["é", "e\u0301"])).toThrow(
-      "Duplicate command",
-    );
+    expect(() => new CommandInputBuffer(["é", "e\u0301"])).toThrow("Duplicate command");
   });
 
   test("formats all HUD commands with comma-space separators", () => {
-    expect(formatAvailableCommands(COMMANDS)).toBe(
-      "휘두르기, 내려찍기, 지면 가르기",
-    );
+    expect(formatAvailableCommands(COMMANDS)).toBe("휘두르기, 내려찍기, 지면 가르기");
   });
 });
 
 describe("equipment combat command coverage", () => {
   test("recounts equipment commands and verifies every command maps to its exact skill action", () => {
     const equipmentCount = EQUIPMENT_CONFIGS.length;
-    const skillCount = EQUIPMENT_CONFIGS.reduce(
-      (total, equipment) => total + equipment.skills.length,
-      0,
-    );
+    const skillCount = EQUIPMENT_CONFIGS.reduce((total, equipment) => total + equipment.skills.length, 0);
 
-    console.info(
-      `[equipment-command-audit] equipment=${equipmentCount} skills=${skillCount}`,
-    );
+    console.info(`[equipment-command-audit] equipment=${equipmentCount} skills=${skillCount}`);
     expect(equipmentCount).toBe(78);
     expect(skillCount).toBe(197);
 
@@ -157,15 +153,15 @@ describe("equipment combat command coverage", () => {
         const snapshot = buffer.updateInput(expectedSkill.command);
         expect(snapshot.command).toBe(expectedSkill.command);
         expect(snapshot.status).toBe("complete");
+        expect(results).toHaveLength(0);
+        buffer.submit();
         expect(results).toHaveLength(1);
 
         const result = results[0];
         expect(result?.started).toBe(true);
         if (!result?.started) {
           disconnect();
-          throw new Error(
-            `Expected ${equipment.id}/${expectedSkill.id} to start.`,
-          );
+          throw new Error(`Expected ${equipment.id}/${expectedSkill.id} to start.`);
         }
 
         expect(result.skill.id).toBe(expectedSkill.id);
@@ -191,8 +187,9 @@ describe("equipment combat command coverage", () => {
       for (let leftIndex = 0; leftIndex < commands.length; leftIndex += 1) {
         for (let rightIndex = 0; rightIndex < commands.length; rightIndex += 1) {
           if (leftIndex === rightIndex) continue;
-          const left = commands[leftIndex]!;
-          const right = commands[rightIndex]!;
+          const left = commands[leftIndex];
+          const right = commands[rightIndex];
+          if (left === undefined || right === undefined) continue;
           if (right.startsWith(left)) {
             collisions.push(`${equipment.id}: ${left} -> ${right}`);
           }
@@ -200,9 +197,7 @@ describe("equipment combat command coverage", () => {
       }
     }
 
-    console.info(
-      `[equipment-command-audit] prefix-collisions=${collisions.length}`,
-    );
+    console.info(`[equipment-command-audit] prefix-collisions=${collisions.length}`);
     expect(collisions).toEqual([]);
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   createRewardSelectionAdapter,
+  usesRewardPickupSound,
   type RewardSelectionRunState,
 } from "../src/game/rewards/reward-selection-adapter";
 import {
@@ -68,9 +69,7 @@ describe("reward selection view state", () => {
       selectedRewardId: "ember-charm",
       status: "continued",
     });
-    expect(() => continueRewardSelection(createViewState())).toThrow(
-      "Select a reward before continuing.",
-    );
+    expect(() => continueRewardSelection(createViewState())).toThrow("Select a reward before continuing.");
     expect(() => selectReward(createViewState(), "unknown-reward")).toThrow(
       "Reward candidate not found: unknown-reward",
     );
@@ -78,6 +77,14 @@ describe("reward selection view state", () => {
 });
 
 describe("reward selection adapter", () => {
+  test("uses the relic pickup sound for equipment, relic, and ring rewards", () => {
+    expect(usesRewardPickupSound("weapon")).toBe(true);
+    expect(usesRewardPickupSound("relic")).toBe(true);
+    expect(usesRewardPickupSound("ring")).toBe(true);
+    expect(usesRewardPickupSound("skill")).toBe(false);
+    expect(usesRewardPickupSound("currency")).toBe(false);
+  });
+
   test("applies the selected reward to run state and advances the next step", () => {
     const initialRunState: RewardSelectionRunState = {
       inventory: [],

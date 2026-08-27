@@ -1,22 +1,10 @@
-import {
-  createSkillActionDefinition,
-  type SkillDefinition,
-} from "@typing-roguelike/shared";
-import {
-  type CommandInputBuffer,
-  type CommandCompletedEvent,
-} from "../input/command-input-buffer";
-import {
-  ActionPointResource,
-  type ActionPointSnapshot,
-} from "./action-point-resource";
-import { CombatState, type CombatUpdate } from "./combat-state";
+import { createSkillActionDefinition, type SkillDefinition } from "@typing-roguelike/shared";
+import type { CommandInputBuffer, CommandCompletedEvent } from "../input/command-input-buffer";
+import type { ActionPointResource, ActionPointSnapshot } from "./action-point-resource";
+import type { CombatState, CombatUpdate } from "./combat-state";
 import { ComboTracker, type ComboSnapshot } from "./combo-tracker";
 
-export type SkillStartFailureReason =
-  | "unknown-command"
-  | "combat-unavailable"
-  | "insufficient-ap";
+export type SkillStartFailureReason = "unknown-command" | "combat-unavailable" | "insufficient-ap";
 
 export type SkillStartResult =
   | Readonly<{
@@ -45,6 +33,9 @@ export type SkillCommandStarterConfig = Readonly<{
   targetId: string;
   combo?: ComboTracker;
   resolveApCost?: (skill: SkillDefinition) => number;
+  /** 커맨드를 완성할 때마다 대상을 다시 계산합니다. Tab 타게팅에 사용합니다. */
+  resolveTargetId?: (skill: SkillDefinition) => string;
+  preserveComboOnFailure?: () => boolean;
 }>;
 
 const normalizeCommand = (command: string): string => command.normalize("NFC");
@@ -69,6 +60,8 @@ export class SkillCommandStarter {
   private readonly actorId: string;
   private readonly targetId: string;
   private readonly resolveApCost: (skill: SkillDefinition) => number;
+  private readonly resolveTargetId: (skill: SkillDefinition) => string;
+  private readonly preserveComboOnFailure: () => boolean;
   private nextActionSequence = 1;
 
   constructor(config: SkillCommandStarterConfig) {
@@ -78,6 +71,8 @@ export class SkillCommandStarter {
     this.actorId = requireIdentifier("Actor id", config.actorId);
     this.targetId = requireIdentifier("Target id", config.targetId);
     this.resolveApCost = config.resolveApCost ?? ((skill) => skill.apCost);
+    this.resolveTargetId = config.resolveTargetId ?? (() => this.targetId);
+    this.preserveComboOnFailure = config.preserveComboOnFailure ?? (() => false);
 
     for (const skill of config.skills) {
       const command = normalizeCommand(skill.command);
@@ -86,15 +81,38 @@ export class SkillCommandStarter {
     }
   }
 
-  get comboSnapshot(): ComboSnapshot { return this.combo.snapshot; }
+  get comboSnapshot(): ComboSnapshot {
+    return this.combo.snapshot;
+  }
+
+  breakCombo(reason: Parameters<ComboTracker["breakCombo"]>[0]): ComboSnapshot {
+    return this.combo.breakCombo(reason);
+  }
 
   connect(inputBuffer: CommandInputBuffer, listener: SkillStartListener): () => void {
-    const disconnectCompleted = inputBuffer.onCompleted((event) => listener(this.tryStart(event)));
-    const disconnectStatus = inputBuffer.onStatusChanged((event) => {
-      if (event.snapshot.status === "incorrect") this.combo.breakCombo("incorrect-input");
+    let commandStarted = false;
+    const disconnectCompleted = inputBuffer.onCompleted((event) => {
+      const result = this.tryStart(event);
+      commandStarted = result.started;
+      listener(result);
+    });
+    const disconnectSubmitted = inputBuffer.onSubmitted(({ snapshot }) => {
+      // A typo should not break the combo while the player is still editing.
+      // The Enter submission ends the cycle; only a cycle that never started
+      // a skill is considered a failed command.
+      if (snapshot.input.length > 0 && !commandStarted && !this.preserveComboOnFailure()) {
+        this.combo.breakCombo("incorrect-input");
+      }
+      commandStarted = false;
+    });
+    const disconnectStatus = inputBuffer.onStatusChanged(({ snapshot }) => {
+      if (snapshot.status === "idle" && snapshot.input.length === 0) {
+        commandStarted = false;
+      }
     });
     return () => {
       disconnectCompleted();
+      disconnectSubmitted();
       disconnectStatus();
     };
   }
@@ -120,17 +138,14 @@ export class SkillCommandStarter {
       createSkillActionDefinition(skill, {
         actionId,
         actorId: this.actorId,
-        targetId: this.targetId,
+        targetId: requireIdentifier("Target id", this.resolveTargetId(skill)),
       }),
     );
     const combo = this.combo.recordCorrectInput();
     return { started: true, skill, actionId, ap: spend.snapshot, combat, combo };
   }
 
-  private failure(
-    command: string,
-    reason: Exclude<SkillStartFailureReason, "insufficient-ap">,
-  ): SkillStartResult {
+  private failure(command: string, reason: Exclude<SkillStartFailureReason, "insufficient-ap">): SkillStartResult {
     return {
       started: false,
       command,

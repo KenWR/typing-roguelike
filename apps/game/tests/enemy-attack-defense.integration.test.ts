@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DefenseWindowTracker } from "../src/game/combat/defense-window";
+import { ShieldPool } from "../src/game/combat/shield-pool";
 import { EnemyAttackTimeline } from "../src/game/combat/enemy-attack-timeline";
 import { EnemyImpactResolver } from "../src/game/combat/enemy-impact-resolver";
 import { SkillCombatantState } from "../src/game/combat/skill-impact-resolver";
@@ -32,7 +32,7 @@ describe("enemy attack and defense integration", () => {
   test("waits through windup and recovery before applying damage once", () => {
     const timeline = new EnemyAttackTimeline();
     const resolver = new EnemyImpactResolver();
-    const defenseWindows = new DefenseWindowTracker();
+    const shields = new ShieldPool();
     const player = createPlayer();
     startAttack(timeline);
 
@@ -52,8 +52,7 @@ describe("enemy attack and defense integration", () => {
         event: castEvent,
         damage: 40,
         target: player,
-        defenseWindows,
-        defendedDamageMultiplier: 0.5,
+        shields,
       }).applied,
     ).toBe(false);
     expect(player.snapshot.health.currentHp).toBe(100);
@@ -73,8 +72,7 @@ describe("enemy attack and defense integration", () => {
       event: impactEvent,
       damage: 40,
       target: player,
-      defenseWindows,
-      defendedDamageMultiplier: 0.5,
+      shields,
     });
     const hpAfterImpact = player.snapshot.health.currentHp;
 
@@ -86,14 +84,13 @@ describe("enemy attack and defense integration", () => {
         event: impactEvent,
         damage: 40,
         target: player,
-        defenseWindows,
-        defendedDamageMultiplier: 0.5,
+        shields,
       }).applied,
     ).toBe(false);
     expect(player.snapshot.health.currentHp).toBe(hpAfterImpact);
   });
 
-  test("reduces damage when the impact lands inside an active defense window", () => {
+  test("reduces damage when the impact lands while a shield is still up", () => {
     const undefendedTimeline = new EnemyAttackTimeline();
     const undefendedPlayer = createPlayer();
     startAttack(undefendedTimeline, { timelineId: "undefended" });
@@ -105,14 +102,19 @@ describe("enemy attack and defense integration", () => {
       event: undefendedEvent,
       damage: 40,
       target: undefendedPlayer,
-      defenseWindows: new DefenseWindowTracker(),
-      defendedDamageMultiplier: 0.5,
+      shields: new ShieldPool(),
     });
 
     const defendedTimeline = new EnemyAttackTimeline();
     const defendedPlayer = createPlayer();
-    const defenseWindows = new DefenseWindowTracker();
-    defenseWindows.openWindow("guard-1", "player", 450, 100);
+    const shields = new ShieldPool();
+    shields.grant({
+      id: "shield-1",
+      ownerId: "player",
+      amount: 15,
+      durationMs: 100,
+      atMs: 450,
+    });
     startAttack(defendedTimeline, { timelineId: "defended" });
     const defendedEvent = defendedTimeline
       .advance(500)
@@ -122,8 +124,7 @@ describe("enemy attack and defense integration", () => {
       event: defendedEvent,
       damage: 40,
       target: defendedPlayer,
-      defenseWindows,
-      defendedDamageMultiplier: 0.5,
+      shields,
     });
 
     expect(defended.defended).toBe(true);

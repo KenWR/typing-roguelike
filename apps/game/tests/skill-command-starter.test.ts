@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { defineSkill } from "@typing-roguelike/shared";
 import { ActionPointResource } from "../src/game/combat/action-point-resource";
 import { CombatState } from "../src/game/combat/combat-state";
-import {
-  SkillCommandStarter,
-  type SkillStartResult,
-} from "../src/game/combat/skill-command-starter";
+import { SkillCommandStarter, type SkillStartResult } from "../src/game/combat/skill-command-starter";
 import { CommandInputBuffer } from "../src/game/input/command-input-buffer";
 
 const magicShield = defineSkill({
@@ -17,7 +14,7 @@ const magicShield = defineSkill({
   apCost: 2,
   windupMs: 300,
   recoveryMs: 700,
-  effects: [{ type: "guard", damageMultiplier: 0.5, durationMs: 1_000 }],
+  effects: [{ type: "shield", amount: 20, durationMs: 1_000 }],
   description: "마법 보호막을 전개한다.",
 });
 
@@ -43,6 +40,7 @@ describe("SkillCommandStarter", () => {
     const { input, actionPoints, combat, results } = createFixture(6);
 
     input.updateInput("매직실드");
+    input.submit();
 
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({
@@ -66,10 +64,25 @@ describe("SkillCommandStarter", () => {
     expect(combat.snapshot.actions).toHaveLength(1);
   });
 
+  test("does not start a command repeated before Enter", () => {
+    const { input, combat, results } = createFixture(6);
+
+    input.updateInput("매직실드매직실드");
+
+    expect(input.snapshot.status).toBe("incorrect");
+    expect(results).toHaveLength(0);
+    expect(combat.snapshot.actions).toHaveLength(0);
+
+    input.submit();
+    expect(results).toHaveLength(0);
+    expect(combat.snapshot.actions).toHaveLength(0);
+  });
+
   test("does not increase combo when AP is insufficient", () => {
     const { input, actionPoints, combat, starter, results } = createFixture(1);
 
     input.updateInput("매직실드");
+    input.submit();
 
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({
@@ -89,6 +102,7 @@ describe("SkillCommandStarter", () => {
     combat.pause();
 
     input.updateInput("매직실드");
+    input.submit();
 
     expect(results[0]).toMatchObject({
       started: false,
@@ -105,19 +119,79 @@ describe("SkillCommandStarter", () => {
     const { input, starter, results } = createFixture(6);
 
     input.updateInput("매직실드");
+    input.submit();
     expect(results[0]).toMatchObject({ combo: { count: 1 } });
 
     input.reset();
     input.updateInput("매직실드");
+    input.submit();
     expect(results[1]).toMatchObject({ combo: { count: 2 } });
     expect(starter.comboSnapshot.count).toBe(2);
 
     input.reset();
     input.updateInput("매직X");
+    expect(starter.comboSnapshot.count).toBe(2);
+    input.submit();
     expect(starter.comboSnapshot).toEqual({
       count: 0,
       multiplier: 1,
       lastBreakReason: "incorrect-input",
     });
+  });
+
+  test("does not break a combo until an incomplete command is submitted", () => {
+    const { input, starter, results } = createFixture(6);
+
+    input.updateInput(input.snapshot.command);
+    input.submit();
+    expect(results[0]).toMatchObject({ started: true, combo: { count: 1 } });
+
+    input.reset();
+    input.updateInput(input.snapshot.command.slice(0, -1));
+    expect(starter.comboSnapshot.count).toBe(1);
+    input.submit();
+
+    expect(starter.comboSnapshot).toMatchObject({
+      count: 0,
+      lastBreakReason: "incorrect-input",
+    });
+  });
+
+  test("re-reads the target on every command so Tab targeting takes effect", () => {
+    const slash = defineSkill({
+      id: "skill.slash",
+      name: "베기",
+      command: "베기",
+      kind: "attack",
+      category: "basic",
+      apCost: 1,
+      windupMs: 100,
+      recoveryMs: 100,
+      damageCoefficient: 1,
+      description: "벤다.",
+    });
+    const input = new CommandInputBuffer([slash.command]);
+    const combat = new CombatState();
+    let targetId = "enemy:1";
+    const starter = new SkillCommandStarter({
+      skills: [slash],
+      actionPoints: new ActionPointResource({ maxAp: 6, initialAp: 6 }),
+      combat,
+      actorId: "player",
+      targetId: "enemy:fallback",
+      resolveTargetId: () => targetId,
+    });
+    const results: SkillStartResult[] = [];
+    starter.connect(input, (result) => results.push(result));
+
+    input.updateInput("베기");
+    input.submit();
+    input.reset();
+    targetId = "enemy:2";
+    input.updateInput("베기");
+    input.submit();
+
+    expect(combat.snapshot.actions.map((action) => action.targetId)).toEqual(["enemy:1", "enemy:2"]);
+    expect(results.every((result) => result.started)).toBe(true);
   });
 });

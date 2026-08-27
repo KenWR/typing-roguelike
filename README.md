@@ -78,9 +78,10 @@ D1 설정은 `apps/api/wrangler.toml`에 있으며, 실제 원격 database ID �
 ## 검증
 
 ```bash
-bun run typecheck
-bun run build
-bun run --filter @typing-roguelike/api test
+bun install --frozen-lockfile
+bun run validate
 ```
+
+`validate`는 변경 파일 포맷·린트, 타입 검사, 전체 테스트, Codex Hook 테스트, 프로덕션 빌드와 데스크톱·모바일 브라우저 smoke test를 실행합니다. 작업 중 사용할 범위별 명령은 [검증 지도](docs/agent/verification.md)에 정리되어 있습니다.
 
 게임 클라이언트는 정적 결과물인 `apps/game/dist`를 생성합니다. Cloudflare Workers Static Assets 배포 설정과 로컬 검증 절차는 [게임 Worker 배포 문서](docs/game-workers-static-assets.md)에 정리되어 있습니다.

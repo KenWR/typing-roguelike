@@ -1,6 +1,13 @@
 export const DEFAULT_MAX_AP = 6;
 export const DEFAULT_AP_REGENERATION_PER_SECOND = 1;
 
+export type TimedActionPointEffectSnapshot = Readonly<{
+  id: "temporary-ap-regeneration";
+  amountPerSecond: number;
+  durationMs: number;
+  remainingMs: number;
+}>;
+
 export type ActionPointResourceConfig = Readonly<{
   maxAp?: number;
   initialAp?: number;
@@ -12,6 +19,7 @@ export type ActionPointSnapshot = Readonly<{
   maxAp: number;
   regenerationPerSecond: number;
   paused: boolean;
+  timedEffects: readonly TimedActionPointEffectSnapshot[];
 }>;
 
 export type ActionPointSpendResult = Readonly<{
@@ -23,6 +31,7 @@ export type ActionPointSpendResult = Readonly<{
 
 type TimedRegenModifier = {
   amountPerSecond: number;
+  durationMs: number;
   remainingMs: number;
 };
 
@@ -65,6 +74,12 @@ export class ActionPointResource {
         this.regenerationPerSecond +
         this.timedRegenModifiers.reduce((sum, modifier) => sum + modifier.amountPerSecond, 0),
       paused: this.paused,
+      timedEffects: this.timedRegenModifiers.map((modifier) => ({
+        id: "temporary-ap-regeneration" as const,
+        amountPerSecond: modifier.amountPerSecond,
+        durationMs: modifier.durationMs,
+        remainingMs: Math.max(0, modifier.remainingMs),
+      })),
     };
   }
 
@@ -93,7 +108,7 @@ export class ActionPointResource {
     validateFinite("Temporary AP regeneration", amountPerSecond);
     validateNonNegative("Temporary AP regeneration duration", durationMs);
     if (durationMs > 0 && amountPerSecond !== 0) {
-      this.timedRegenModifiers.push({ amountPerSecond, remainingMs: durationMs });
+      this.timedRegenModifiers.push({ amountPerSecond, durationMs, remainingMs: durationMs });
     }
     return this.snapshot;
   }

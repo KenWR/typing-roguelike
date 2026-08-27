@@ -69,7 +69,24 @@ describe("combat encounter initializer", () => {
     if (boss.ok) {
       expect(boss.combat.encounterId).toBe("floor-10-boss");
       expect(boss.combat.rewardPolicy).toBe("boss");
+      expect(boss.combat.enemies.map(({ enemyId }) => enemyId)).toEqual([
+        "thousand-beat-chorus",
+        "hook-tentacle",
+        "hook-tentacle",
+      ]);
     }
+  });
+
+  test("initializes a floor-five normal combat encounter", () => {
+    const runState = createInitialRunState({ seed: 13 });
+    const result = initializeCombatEncounter(runState, createNode(5, "combat"));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.combat.floor).toBe(5);
+    expect(result.combat.nodeType).toBe("combat");
+    expect(result.combat.rewardPolicy).toBe("standard");
+    expect(result.combat.enemies.length).toBeGreaterThan(0);
   });
 
   test("recovers non-combat or missing encounter nodes to map", () => {

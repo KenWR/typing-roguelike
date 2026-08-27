@@ -16,3 +16,5 @@ apps/api/data/
 *.log
 .idea/
 .vscode/
+output/
+.codex/state/

@@ -19,10 +19,15 @@ type PersistedRunEnvelope = Readonly<{
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const isPersistedRunStatus = (
+  value: unknown,
+): value is Extract<RunState["status"], "active" | "dead" | "cleared"> =>
+  value === "active" || value === "dead" || value === "cleared";
+
 const isRunState = (value: unknown): value is RunState => {
   if (!isRecord(value)) return false;
   if (value.schemaVersion !== RUN_STATE_SCHEMA_VERSION) return false;
-  if (value.status !== "active") return false;
+  if (!isPersistedRunStatus(value.status)) return false;
   if (!isRecord(value.character) || typeof value.character.currentHp !== "number" || typeof value.character.maxHp !== "number") return false;
   if (!isRecord(value.inventory) || !Array.isArray(value.inventory.itemInstances) || !Array.isArray(value.inventory.relicInstances)) return false;
   if (!isRecord(value.loadout) || !isRecord(value.build) || !Array.isArray(value.build.equippedRelicIds)) return false;
@@ -100,7 +105,7 @@ export const normalizeRestoredRunState = (state: Readonly<RunState>): RunState =
 };
 
 export const saveRunState = (run: Readonly<RunState>, storage?: RunStorage): void => {
-  if (!storage || run.status !== "active") return;
+  if (!storage || !isPersistedRunStatus(run.status)) return;
   const envelope: PersistedRunEnvelope = { version: RUN_STORAGE_VERSION, run: run as RunState };
   try {
     storage.setItem(RUN_STORAGE_KEY, JSON.stringify(envelope));

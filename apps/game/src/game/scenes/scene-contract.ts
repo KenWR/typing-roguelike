@@ -2,7 +2,6 @@ export const SCENE_KEYS = {
   boot: "BootScene",
   start: "StartScene",
   settings: "SettingsScene",
-  lobby: "LobbyScene",
   map: "MapScene",
   combat: "CombatFoundationScene",
   reward: "RewardSelectionScene",
@@ -28,7 +27,6 @@ export type SceneRecoveryPayload = Readonly<{
 
 export type StartScenePayload = EmptyScenePayload | SceneRecoveryPayload;
 export type SettingsScenePayload = EmptyScenePayload | SceneObjectPayload;
-export type LobbyScenePayload = EmptyScenePayload | SceneObjectPayload;
 export type MapScenePayload = EmptyScenePayload | SceneObjectPayload;
 export type CombatScenePayload = EmptyScenePayload | SceneObjectPayload;
 export type RewardScenePayload = EmptyScenePayload | SceneObjectPayload;
@@ -41,7 +39,6 @@ export type ScenePayloadMap = {
   [SCENE_KEYS.boot]: EmptyScenePayload;
   [SCENE_KEYS.start]: StartScenePayload;
   [SCENE_KEYS.settings]: SettingsScenePayload;
-  [SCENE_KEYS.lobby]: LobbyScenePayload;
   [SCENE_KEYS.map]: MapScenePayload;
   [SCENE_KEYS.combat]: CombatScenePayload;
   [SCENE_KEYS.reward]: RewardScenePayload;

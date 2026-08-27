@@ -1,0 +1,39 @@
+prefix_rule(
+    pattern = ["git", "reset", "--hard"],
+    decision = "forbidden",
+    justification = "Preserve the worktree. Revert explicit files with a scoped patch after reviewing the diff.",
+    match = ["git reset --hard", "git reset --hard HEAD~1"],
+    not_match = ["git reset --soft HEAD~1", "git reset HEAD -- file.ts"],
+)
+
+prefix_rule(
+    pattern = ["git", "clean"],
+    decision = "forbidden",
+    justification = "Preserve untracked user files. Inspect exact paths and remove only an explicitly authorized target.",
+    match = ["git clean -fd", "git clean -fdx"],
+    not_match = ["git status --short"],
+)
+
+prefix_rule(
+    pattern = ["rm", "-rf"],
+    decision = "forbidden",
+    justification = "Use an explicit recoverable removal for a verified target.",
+    match = ["rm -rf build", "rm -rf /tmp/example"],
+    not_match = ["rm file.txt", "rmdir empty-directory"],
+)
+
+prefix_rule(
+    pattern = ["wrangler", "deploy"],
+    decision = "prompt",
+    justification = "Confirm the target environment and authorization before deploying.",
+    match = ["wrangler deploy", "wrangler deploy --env production"],
+    not_match = ["wrangler dev --local"],
+)
+
+prefix_rule(
+    pattern = ["wrangler", "d1"],
+    decision = "prompt",
+    justification = "Confirm the D1 target and require --local for local-only migration work.",
+    match = ["wrangler d1 migrations apply typing-roguelike", "wrangler d1 execute typing-roguelike"],
+    not_match = ["wrangler dev --local"],
+)

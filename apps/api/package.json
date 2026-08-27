@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit --pretty false",
     "test": "bun test tests",
     "test:worker": "bun test tests/worker.test.ts",
-    "db:migrate:local": "wrangler d1 migrations apply typing-roguelike-local --local"
+    "db:migrate:local": "wrangler d1 migrations apply typing-roguelike --local"
   },
   "dependencies": {
     "@typing-roguelike/shared": "workspace:*",

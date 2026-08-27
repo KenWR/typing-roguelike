@@ -5,9 +5,13 @@ export type SkillDamageEffect = Readonly<{
   coefficient: number;
 }>;
 
-export type SkillGuardEffect = Readonly<{
-  type: "guard";
-  damageMultiplier: number;
+/**
+ * 커맨드 입력을 완성하는 즉시 시전자에게 부여되는 실드입니다.
+ * `amount`만큼의 피해를 흡수하고 `durationMs`가 지나면 남은 양과 함께 사라집니다.
+ */
+export type SkillShieldEffect = Readonly<{
+  type: "shield";
+  amount: number;
   durationMs: number;
 }>;
 
@@ -20,7 +24,7 @@ export type SkillStatusEffect = Readonly<{
 
 export type SkillEffect =
   | SkillDamageEffect
-  | SkillGuardEffect
+  | SkillShieldEffect
   | SkillStatusEffect;
 
 export type SkillDefinitionInput = SkillConfig &
@@ -74,23 +78,12 @@ const normalizeEffect = (effect: SkillEffect): SkillEffect => {
           effect.coefficient,
         ),
       });
-    case "guard": {
-      const damageMultiplier = requireNonNegative(
-        "Guard damage multiplier",
-        effect.damageMultiplier,
-      );
-      if (damageMultiplier > 1) {
-        throw new RangeError(
-          "Guard damage multiplier must be less than or equal to 1.",
-        );
-      }
-
+    case "shield":
       return Object.freeze({
         type: effect.type,
-        damageMultiplier,
-        durationMs: requireNonNegative("Guard duration", effect.durationMs),
+        amount: requireNonNegative("Shield amount", effect.amount),
+        durationMs: requireNonNegative("Shield duration", effect.durationMs),
       });
-    }
     case "status": {
       const stacks = effect.stacks ?? 1;
       if (!Number.isInteger(stacks) || stacks <= 0) {

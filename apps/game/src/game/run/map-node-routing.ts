@@ -1,7 +1,10 @@
 import {
   beginMapNode,
   generateNodeChoices,
+  MAP_ROUND_COUNT,
+  selectCombatLoadout,
   type GeneratedMapNode,
+  type CombatLoadoutMode,
   type RunState,
 } from "@typing-roguelike/shared";
 import { enterBossCombat } from "../combat/boss-combat-flow";
@@ -32,6 +35,7 @@ const findCurrentNode = (
 export const routeMapNodeSelection = (
   runState: Readonly<RunState>,
   nodeId: string,
+  options: Readonly<{ combatLoadout?: CombatLoadoutMode }> = {},
 ): MapNodeRoute => {
   const node = findCurrentNode(runState, nodeId);
   if (node === undefined || runState.map.nodeStatuses[nodeId] !== "available") {
@@ -42,8 +46,12 @@ export const routeMapNodeSelection = (
     return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };
   }
 
-  if (node.type === "boss") {
-    const entry = enterBossCombat(runState as RunState, node);
+  const combatRunState = options.combatLoadout === undefined
+    ? runState as RunState
+    : selectCombatLoadout(runState, options.combatLoadout);
+
+  if (node.type === "boss" && node.round === MAP_ROUND_COUNT) {
+    const entry = enterBossCombat(combatRunState, node);
     if (!entry.ok) {
       return { applied: false, runState: runState as RunState, sceneKey: SCENE_KEYS.map, payload: { runState } };
     }
@@ -62,7 +70,7 @@ export const routeMapNodeSelection = (
     };
   }
 
-  const selectedRun: RunState = { ...runState, map: beginMapNode(runState.map, node.key) };
+  const selectedRun: RunState = { ...combatRunState, map: beginMapNode(combatRunState.map, node.key) };
   const commonPayload = {
     runState: selectedRun,
     nodeId: node.key,
