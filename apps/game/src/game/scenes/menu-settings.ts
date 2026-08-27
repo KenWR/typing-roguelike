@@ -51,6 +51,25 @@ export const resolveSettingsSnapshotAfterApply = (
   applied: boolean,
 ): MenuSettings => (applied ? draft : snapshot);
 
+export const resolveSettingsApplyFeedback = (
+  saved: boolean,
+  applied: boolean,
+): Readonly<{ message: string; isError: boolean }> => {
+  if (!saved && !applied) {
+    return { message: "설정을 저장하거나 현재 세션에 적용하지 못했습니다.", isError: true };
+  }
+  if (!saved) {
+    return {
+      message: "저장하지 못했습니다. 현재 세션에는 적용되지만 다시 실행하면 복원되지 않습니다.",
+      isError: true,
+    };
+  }
+  if (!applied) {
+    return { message: "설정을 저장했지만 현재 세션에 적용하지 못했습니다.", isError: true };
+  }
+  return { message: "설정을 저장했습니다.", isError: false };
+};
+
 export const loadMenuSettings = (storage?: Pick<Storage, "getItem">): MenuSettings => {
   if (!storage) return DEFAULT_MENU_SETTINGS;
 

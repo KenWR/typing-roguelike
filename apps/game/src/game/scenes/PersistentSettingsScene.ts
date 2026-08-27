@@ -5,6 +5,7 @@ import {
   applyMenuSettings,
   cycleVolume,
   loadMenuSettings,
+  resolveSettingsApplyFeedback,
   resolveSettingsSnapshotAfterApply,
   saveMenuSettings,
   toggleCommandLanguage,
@@ -478,14 +479,8 @@ export class SettingsScene extends Phaser.Scene {
     const saved = saveMenuSettings(this.draftSettings, this.settingsStorage);
     const applied = this.applySettings(this.draftSettings);
     this.persistedSettings = resolveSettingsSnapshotAfterApply(this.persistedSettings, this.draftSettings, applied);
-
-    if (!saved) {
-      this.setStatus("저장하지 못했습니다. 현재 세션에는 적용되지만 다시 실행하면 복원되지 않습니다.", true);
-    } else if (!applied) {
-      this.setStatus("설정을 저장했지만 현재 세션에 적용하지 못했습니다.", true);
-    } else {
-      this.setStatus("설정을 저장했습니다.", false);
-    }
+    const feedback = resolveSettingsApplyFeedback(saved, applied);
+    this.setStatus(feedback.message, feedback.isError);
     this.refresh();
   }
 
