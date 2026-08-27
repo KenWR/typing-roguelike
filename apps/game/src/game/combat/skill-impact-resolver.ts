@@ -36,6 +36,7 @@ type MutableStatusEffect = {
   durationMs: number;
   remainingMs: number;
   stacks: number;
+  tickRemainderMs: number;
 };
 
 const validateIdentifier = (name: string, value: string): string => {
@@ -95,12 +96,36 @@ export class SkillCombatantState {
   }
 
   applyStatus(effect: SkillStatusEffect): void {
+    const stacks = effect.stacks ?? 1;
+    const existing = this.statuses.find((status) => status.statusId === effect.statusId);
+    if (existing !== undefined) {
+      existing.remainingMs = Math.max(existing.remainingMs, effect.durationMs);
+      existing.durationMs = Math.max(existing.durationMs, effect.durationMs);
+      existing.stacks = Math.min(5, existing.stacks + stacks);
+      return;
+    }
     this.statuses.push({
       statusId: effect.statusId,
       durationMs: effect.durationMs,
       remainingMs: effect.durationMs,
-      stacks: effect.stacks ?? 1,
+      stacks: Math.min(5, stacks),
+      tickRemainderMs: 0,
     });
+  }
+
+  statusStacks(statusId: string): number {
+    return this.statuses.find((status) => status.statusId === statusId)?.stacks ?? 0;
+  }
+
+  consumeStatus(statusId: string, stacks = Number.POSITIVE_INFINITY): number {
+    const index = this.statuses.findIndex((status) => status.statusId === statusId);
+    if (index < 0) return 0;
+    const status = this.statuses[index];
+    if (status === undefined) return 0;
+    const consumed = Math.min(status.stacks, Math.max(0, stacks));
+    status.stacks -= consumed;
+    if (status.stacks <= 0) this.statuses.splice(index, 1);
+    return consumed;
   }
 
   /** 기존 상태만 경과시키며 0이 된 상태는 즉시 제거한다. */
@@ -110,6 +135,14 @@ export class SkillCombatantState {
       const status = this.statuses[index];
       if (status === undefined) continue;
       status.remainingMs = Math.max(0, status.remainingMs - delta);
+      if (status.statusId === "bleed") {
+        status.tickRemainderMs += delta;
+        const ticks = Math.floor(status.tickRemainderMs / 1_000);
+        if (ticks > 0) {
+          status.tickRemainderMs -= ticks * 1_000;
+          this.health.applyDamage(Math.max(1, Math.round(this.attackPower * 0.12 * status.stacks * ticks)));
+        }
+      }
       if (status.remainingMs === 0) this.statuses.splice(index, 1);
     }
   }
@@ -137,17 +170,18 @@ export type SkillImpactResult = Readonly<{
 }>;
 
 export class SkillImpactResolver {
-  private readonly resolvedActionIds = new Set<string>();
+  private readonly resolvedActionTargets = new Set<string>();
 
   resolve({ event, skill, actor, target, shields, damageMultiplier = 1 }: ResolveSkillImpactInput): SkillImpactResult {
     if (event.type !== "impact-resolved") {
       return this.emptyResult(event.actionId);
     }
-    if (this.resolvedActionIds.has(event.actionId)) {
-      return this.emptyResult(event.actionId);
-    }
     if (event.actorId !== actor.id || event.targetId !== target.id) {
       throw new Error(`Skill impact participants do not match action ${event.actionId}.`);
+    }
+    const resolutionKey = `${event.actionId}:${target.id}`;
+    if (this.resolvedActionTargets.has(resolutionKey)) {
+      return this.emptyResult(event.actionId);
     }
     if (!Number.isFinite(damageMultiplier) || damageMultiplier <= 0) {
       throw new RangeError("Skill damage multiplier must be positive and finite.");
@@ -157,6 +191,7 @@ export class SkillImpactResolver {
     let shieldAbsorbedDamage = 0;
     let statusEffectsApplied = 0;
     const brokenShieldIds: string[] = [];
+    const pendingStatusEffects: SkillStatusEffect[] = [];
 
     for (const effect of skill.effects) {
       switch (effect.type) {
@@ -166,7 +201,11 @@ export class SkillImpactResolver {
             damageCoefficient: effect.coefficient,
             defense: target.defense,
           });
-          const damage = Math.max(1, Math.round(baseDamage * damageMultiplier));
+          const crackStacks = target.statusStacks("crack");
+          const focusStacks = actor.statusStacks("focus");
+          const isMagic = skill.tags?.some((tag) => tag === "magic" || tag === "staff" || tag === "wand") ?? false;
+          const statusMultiplier = 1 + crackStacks * 0.15 + (isMagic ? focusStacks * 0.2 : 0);
+          const damage = Math.max(1, Math.round(baseDamage * damageMultiplier * statusMultiplier));
           const absorb = shields?.absorb(target.id, damage, event.atMs);
           if (absorb !== undefined) {
             shieldAbsorbedDamage += absorb.absorbedDamage;
@@ -174,19 +213,29 @@ export class SkillImpactResolver {
           }
           const throughDamage = absorb === undefined ? damage : absorb.remainingDamage;
           damageApplied += target.health.applyDamage(throughDamage).appliedDamage;
+          if (crackStacks > 0) target.consumeStatus("crack");
+          if (isMagic && focusStacks > 0) actor.consumeStatus("focus");
           break;
         }
         // 실드는 커맨드를 완성하는 순간 부여되므로 임팩트 시점에서는 처리하지 않습니다.
         case "shield":
           break;
         case "status":
-          target.applyStatus(effect);
-          statusEffectsApplied += 1;
+          pendingStatusEffects.push(effect);
           break;
       }
     }
 
-    this.resolvedActionIds.add(event.actionId);
+    // A fully shielded hit does not apply on-hit ailments; this keeps a blocked
+    // strike from ticking bleed or other damage-over-time effects behind the shield.
+    if (damageApplied > 0 || shieldAbsorbedDamage === 0) {
+      for (const effect of pendingStatusEffects) {
+        target.applyStatus(effect);
+        statusEffectsApplied += 1;
+      }
+    }
+
+    this.resolvedActionTargets.add(resolutionKey);
     return {
       applied: true,
       actionId: event.actionId,

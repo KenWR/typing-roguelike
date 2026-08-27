@@ -4,6 +4,7 @@ import { EQUIPMENT_ICON_ASSETS } from "./equipment-icon-assets";
 import { MAP_NODE_ICON_ASSET, MAP_NODE_ICON_TEXTURE_KEY } from "./map-node-assets";
 import { PLAYER_ATTACK_IMAGE_ASSETS, PLAYER_WEAPON_IMAGE_ASSETS } from "./player-visual-assets";
 import { RELIC_CONFIGS } from "@typing-roguelike/shared";
+import { RING_ICON_ASSETS } from "./ring-icon-assets";
 
 export const ASSET_PATHS = {
   backgrounds: {
@@ -87,7 +88,13 @@ export const RUNTIME_SPRITESHEET_ASSETS: readonly {
 export const RUNTIME_IMAGE_ASSETS: readonly {
   key: string;
   path: string;
-}[] = [...RELIC_ICON_ASSETS, ...EQUIPMENT_ICON_ASSETS, ...COMBAT_IMAGE_ASSETS, ...SCENE_BACKGROUND_ASSETS];
+}[] = [
+  ...RELIC_ICON_ASSETS,
+  ...RING_ICON_ASSETS,
+  ...EQUIPMENT_ICON_ASSETS,
+  ...COMBAT_IMAGE_ASSETS,
+  ...SCENE_BACKGROUND_ASSETS,
+];
 
 export const TEXTURE_KEYS = {
   brandLogo: BRAND_LOGO_ASSET.key,

@@ -11,8 +11,16 @@ export type EnemyHealthBarState = Readonly<{
   defeated: boolean;
   telegraphAttackName: string;
   telegraphAttackType: "attack" | "defense" | "buff" | "debuff" | null;
+  telegraphEffectLabel: EnemyTelegraphEffectLabel;
   telegraphProgress: number;
 }>;
+
+/** Status effects are shown by the actor effect HUD, never over the attack name. */
+export type EnemyTelegraphEffectLabel = "";
+
+export const resolveEnemyTelegraphEffectLabel = (
+  _attackType: EnemyHealthBarState["telegraphAttackType"],
+): EnemyTelegraphEffectLabel => "";
 
 export type EnemyHealthBarOptions = Readonly<{
   shield?: number;
@@ -65,6 +73,7 @@ export const createEnemyHealthBarState = (
     defeated: safeCurrentHp <= 0,
     telegraphAttackName: "",
     telegraphAttackType: null,
+    telegraphEffectLabel: "",
     telegraphProgress: 0,
   };
 };
@@ -160,6 +169,7 @@ export class EnemyHealthBar {
       ...this.state,
       telegraphAttackName: attackName?.trim() ?? "",
       telegraphAttackType: attackType,
+      telegraphEffectLabel: resolveEnemyTelegraphEffectLabel(attackType),
       telegraphProgress: safeProgress,
     };
     this.refresh();
@@ -171,7 +181,14 @@ export class EnemyHealthBar {
 
   private refresh(): void {
     const { healthRatio, shieldRatio } = this.state;
-    const telegraphColor = this.state.telegraphAttackType === "defense" ? 0x60a5fa : 0xef4444;
+    const telegraphColor =
+      this.state.telegraphAttackType === "defense"
+        ? 0x60a5fa
+        : this.state.telegraphAttackType === "buff"
+          ? 0xfcd34d
+          : this.state.telegraphAttackType === "debuff"
+            ? 0xc4b5fd
+            : 0xef4444;
     this.hpFill.setSize(ENEMY_HEALTH_BAR_TRACK_WIDTH * healthRatio, TRACK_HEIGHT);
     this.telegraphFill
       .setSize(ENEMY_HEALTH_BAR_TRACK_WIDTH * this.state.telegraphProgress, 6)

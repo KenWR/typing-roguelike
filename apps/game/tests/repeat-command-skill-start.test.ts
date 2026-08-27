@@ -37,8 +37,9 @@ describe("repeat command skill start", () => {
     });
 
     buffer.updateInput("베기");
-    buffer.reset();
+    buffer.submit();
     buffer.updateInput("베기");
+    buffer.submit();
 
     expect(actionIds).toHaveLength(2);
     expect(actionIds[0]).not.toBe(actionIds[1]);
@@ -66,9 +67,11 @@ describe("repeat command skill start", () => {
     });
 
     buffer.updateInput("베기");
+    buffer.submit();
     actionPoints.advance(2_000);
     buffer.reset();
     buffer.updateInput("베기");
+    buffer.submit();
 
     expect(results).toEqual(["insufficient-ap", "started"]);
   });

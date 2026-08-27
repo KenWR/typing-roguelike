@@ -78,20 +78,6 @@ export class CommandInputBuffer {
     this.bindEnterResetIfAvailable();
     const input = this.prepareInputForNextCycle(rawInput);
 
-    // A completed command has already been consumed by the combat runtime.
-    // If the user types another character before pressing Enter, begin a new
-    // cycle with that trailing input instead of keeping the consumed command
-    // stuck in the buffer or treating the whole string as another success.
-    if (this.status === "complete") {
-      const completedCommand = normalizeForMatching(this.command);
-      const normalizedInput = normalizeForMatching(input);
-      if (normalizedInput.startsWith(completedCommand) && normalizedInput.length > completedCommand.length) {
-        const trailingInput = input.slice(this.command.length);
-        this.reset();
-        return trailingInput.length === 0 ? this.snapshot : this.updateInput(trailingInput, options);
-      }
-    }
-
     this.input = input;
     this.command = this.resolveActiveCommand(input);
 
@@ -102,11 +88,6 @@ export class CommandInputBuffer {
 
     this.committedInput = input;
     this.updateStatus(this.resolveStatus(input));
-
-    if (this.status === "complete" && !this.completionEmitted) {
-      this.completionEmitted = true;
-      this.emitCompleted();
-    }
 
     return this.snapshot;
   }
@@ -123,6 +104,10 @@ export class CommandInputBuffer {
   /** Submit the current command cycle and then clear it for the next command. */
   submit(): CommandInputSnapshot {
     const submitted = this.snapshot;
+    if (submitted.status === "complete" && !this.completionEmitted) {
+      this.completionEmitted = true;
+      this.emitCompleted();
+    }
     for (const listener of this.submittedListeners) {
       listener({ snapshot: submitted });
     }

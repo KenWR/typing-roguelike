@@ -11,6 +11,7 @@ import { TEXTURE_KEYS } from "../assets/asset-catalog";
 import { resolveEnemyTextureKey, resolveEnemyVisualState } from "../assets/enemy-visual-assets";
 import { resolvePlayerAttackTextureKey, resolvePlayerTextureKey } from "../assets/player-visual-assets";
 import { EnemyAttackTimeline } from "../combat/enemy-attack-timeline";
+import { resolveEnemyAttackType } from "../combat/enemy-attack-type";
 import { ActionPointResource } from "../combat/action-point-resource";
 import { playComboBreakSound } from "../audio/runtime-audio";
 import { CombatApEffectController } from "../combat/combat-ap-effects";
@@ -111,7 +112,6 @@ export class CombatFoundationScene extends Phaser.Scene {
   private targeting?: CombatTargetingController;
   private commandInputCleanup?: () => void;
   private commandCompletionCleanup?: () => void;
-  private commandStatusCleanup?: () => void;
   private commandSubmitCleanup?: () => void;
   private combatInitialization?: CombatEncounterInitialization;
   private runState?: Readonly<RunState>;
@@ -206,7 +206,9 @@ export class CombatFoundationScene extends Phaser.Scene {
       placeholder.add(healthBar.container);
       this.enemyHealthBars.set(enemy.instanceId, healthBar);
       const effectHud = new ActorEffectHud(this);
-      effectHud.setPosition(0, -198);
+      // Status icons live above the HP/telegraph region so newly applied
+      // debuffs never cover the enemy's current attack name or target marker.
+      effectHud.setPosition(0, ENEMY_HEALTH_BAR_OFFSET_Y + ENEMY_HEALTH_BAR_REGION_TOP - 34);
       placeholder.add(effectHud.container);
       this.enemyEffectHuds.set(enemy.instanceId, effectHud);
       const marker = this.add
@@ -271,7 +273,7 @@ export class CombatFoundationScene extends Phaser.Scene {
           targetId: "player",
           attackId: action.id,
           attackName: action.name,
-          attackType: action.kind === "defense" ? "defense" : "attack",
+          attackType: resolveEnemyAttackType(action),
           windupMs: action.windupMs,
           recoveryMs: action.recoveryMs,
         });
@@ -335,12 +337,19 @@ export class CombatFoundationScene extends Phaser.Scene {
         skill.kind === "defense"
           ? "player"
           : (this.targeting?.refresh() ?? initialization.enemies[0]?.instanceId ?? "player"),
+      preserveComboOnFailure: () => this.apEffects.onCommandFailed(),
     });
     this.skillStarter = skillStarter;
     this.commandCompletionCleanup = skillStarter.connect(this.commandInputBuffer, (result) => {
       if (result.started) {
+        this.feedback?.trigger("command-success");
+        const relicMultiplier = this.apEffects.resolveSkillDamageMultiplier(result.skill);
         this.apEffects.onSkillStarted(result.skill, result.combo.count);
-        this.playerCombatRuntime?.registerAction(result.actionId, result.skill, result.combo.multiplier);
+        this.playerCombatRuntime?.registerAction(
+          result.actionId,
+          result.skill,
+          result.combo.multiplier * relicMultiplier,
+        );
         this.playPlayerAttackVisual(primaryWeaponId, result.skill);
         if (result.skill.kind === "defense") {
           this.feedback?.trigger("guard");
@@ -350,16 +359,10 @@ export class CombatFoundationScene extends Phaser.Scene {
       }
       this.combatHud.update({ ap: this.actionPoints.snapshot.currentAp });
     });
-    this.commandStatusCleanup = this.commandInputBuffer.onStatusChanged(({ snapshot }) => {
-      if (snapshot.status === "complete") {
-        this.feedback?.trigger("command-success");
-      }
-    });
     this.commandSubmitCleanup = this.commandInputBuffer.onSubmitted(({ snapshot }) => {
       if (snapshot.input.length === 0) return;
       const combo = this.skillStarter?.comboSnapshot;
       if (snapshot.status !== "complete" || combo?.lastBreakReason === "incorrect-input") {
-        this.apEffects.onCommandFailed();
         this.feedback?.trigger("command-failure");
         playComboBreakSound();
       }
@@ -743,8 +746,6 @@ export class CombatFoundationScene extends Phaser.Scene {
     this.commandInputCleanup?.();
     this.commandCompletionCleanup?.();
     this.commandCompletionCleanup = undefined;
-    this.commandStatusCleanup?.();
-    this.commandStatusCleanup = undefined;
     this.commandSubmitCleanup?.();
     this.commandSubmitCleanup = undefined;
     this.isComposing = false;

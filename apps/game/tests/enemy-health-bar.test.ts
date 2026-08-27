@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { createEnemyHealthBarState, formatEnemyHealthBarLabel } from "../src/game/combat/enemy-health-bar";
+import {
+  createEnemyHealthBarState,
+  formatEnemyHealthBarLabel,
+  resolveEnemyTelegraphEffectLabel,
+} from "../src/game/combat/enemy-health-bar";
 
 describe("enemy health bar", () => {
   test("keeps each enemy's hp and fill ratio independent", () => {
@@ -25,6 +29,13 @@ describe("enemy health bar", () => {
       telegraphAttackType: null,
       telegraphProgress: 0,
     });
+  });
+
+  test("does not put a buff or debuff label over the attack name", () => {
+    expect(resolveEnemyTelegraphEffectLabel("buff")).toBe("");
+    expect(resolveEnemyTelegraphEffectLabel("debuff")).toBe("");
+    expect(resolveEnemyTelegraphEffectLabel("attack")).toBe("");
+    expect(resolveEnemyTelegraphEffectLabel("defense")).toBe("");
   });
 
   test("formats hp and shield totals beside each other", () => {

@@ -1,6 +1,6 @@
 import type Phaser from "phaser";
 import { resolveEffectTextureKey } from "../assets/effect-visual-assets";
-import { RING_CONFIGS } from "@typing-roguelike/shared";
+import { RING_CONFIGS, type RingSkillModifier } from "@typing-roguelike/shared";
 import { MENU_SETTINGS_REGISTRY_KEYS, type CommandLanguage } from "../scenes/menu-settings";
 import type { CommandInputSnapshot, CommandInputStatus } from "../input/command-input-buffer";
 import {
@@ -64,6 +64,7 @@ type SkillPreviewInput = Readonly<{
   name: string;
   category: "basic" | "special" | "guard";
   apCost: number;
+  command?: string;
 }>;
 type SkillPreviewSkill = SkillLike & SkillPreviewInput;
 
@@ -181,20 +182,57 @@ export function formatAvailableSkillPreviews(
   resolveApCost: (skill: SkillPreviewInput) => number = (skill) => skill.apCost,
   resolveDamage: (skill: SkillPreviewInput) => number | null = () => null,
 ): string {
-  const sortedSkills = [...skills].sort((left, right) => {
-    const leftRank = left.category === "special" ? 1 : 0;
-    const rightRank = right.category === "special" ? 1 : 0;
-    return leftRank - rightRank;
+  const sortedSkills = [...skills]
+    .filter((skill) => {
+      if (skill.command === undefined) return true;
+      const segments = splitRingCommand(skill.command);
+      return segments.prefix === undefined && segments.suffix === undefined;
+    })
+    .sort((left, right) => {
+      const leftRank = left.category === "special" ? 1 : 0;
+      const rightRank = right.category === "special" ? 1 : 0;
+      return leftRank - rightRank;
+    });
+  const skillRows = sortedSkills.map((skill) => {
+    const label = skill.category === "special" ? "특수기술" : "기본기술";
+    const ap = Math.max(0, Math.round(resolveApCost(skill)));
+    const damage = resolveDamage(skill);
+    return `${label} : ${skill.name} : ${ap} : ${damage === null ? "-" : Math.max(0, Math.round(damage))}`;
   });
-  return [
-    "TYPE // COMMAND // COST // DAMAGE",
-    ...sortedSkills.map((skill) => {
-      const label = skill.category === "special" ? "특수기술" : "기본기술";
-      const ap = Math.max(0, Math.round(resolveApCost(skill)));
-      const damage = resolveDamage(skill);
-      return `${label} : ${skill.name} : ${ap} : ${damage === null ? "-" : Math.max(0, Math.round(damage))}`;
-    }),
-  ].join("\n");
+  const ringRows = skills.flatMap((skill) => {
+    if (skill.command === undefined) return [];
+    const segments = splitRingCommand(skill.command);
+    if (
+      (segments.prefix === undefined && segments.suffix === undefined) ||
+      (segments.prefix !== undefined && segments.suffix !== undefined)
+    ) {
+      return [];
+    }
+    const affix = segments.prefix ?? segments.suffix;
+    const ring = RING_CONFIGS.find((candidate) => candidate.commandAffix === affix);
+    if (ring === undefined) return [];
+    const modifiers = (ring.modifiers as readonly RingSkillModifier[]).filter(
+      (modifier) => modifier.skillCategories === undefined || modifier.skillCategories.includes(skill.category),
+    );
+    const effects = modifiers.flatMap((modifier) => [
+      ...(modifier.damageMultiplier === undefined
+        ? []
+        : [`${modifier.damageMultiplier >= 1 ? "+" : ""}${Math.round((modifier.damageMultiplier - 1) * 100)}% 데미지`]),
+      ...(modifier.apCostDelta === undefined
+        ? []
+        : [`${modifier.apCostDelta >= 0 ? "+" : ""}${modifier.apCostDelta} AP`]),
+      ...(modifier.windupMultiplier === undefined
+        ? []
+        : [`선딜 ${Math.round((modifier.windupMultiplier - 1) * 100)}%`]),
+      ...(modifier.onHitStatus === undefined ? [] : [`${modifier.onHitStatus.statusId} 부여`]),
+    ]);
+    if (effects.length === 0) return [];
+    const displayName = [segments.prefix, skill.name, segments.suffix]
+      .filter((part): part is string => part !== undefined)
+      .join(" ");
+    return [`${segments.prefix === undefined ? "접미사" : "접두사"} : ${displayName} : ${effects.join(", ")}`];
+  });
+  return ["TYPE // COMMAND // COST // DAMAGE", ...skillRows, ...ringRows].join("\n");
 }
 
 export function createSkillCommandEffects(skill: SkillLike | undefined): CommandHudEffect[] {
@@ -324,10 +362,11 @@ export class CommandHud {
       .rectangle(0, 0, this.panelWidth, this.panelHeight, 0x0b1220, 0.94)
       .setOrigin(0)
       .setStrokeStyle(2, 0x64748b, 0.95);
-    this.title = scene.add.text(18, 10, "COMMAND // AVAILABLE", {
-      color: "#94a3b8",
-      fontFamily: "Galmuri9, monospace",
-      fontSize: "13px",
+    this.title = scene.add.text(18, 10, "TYPE // COMMAND // COST // DAMAGE", {
+      color: "#64748b",
+      fontFamily: "monospace",
+      fontSize: "11px",
+      fontStyle: "bold",
     });
     this.commandText = scene.add.text(18, 30, "", {
       color: "#f8fafc",
@@ -424,7 +463,10 @@ export class CommandHud {
   private resolveEffects(): CommandHudEffect[] {
     const effectScene = this.scene as EffectAwareScene;
     const currentSkill = this.skills.find((skill) => skill.command === this.state.command);
-    const skillEffects = createSkillCommandEffects(currentSkill);
+    // Status icons in the command panel describe a possible result, not an
+    // active status. Active bleed/weaken/etc. effects are rendered by the
+    // actor HUD, so they must not appear beside damage previews while idle.
+    const skillEffects = createSkillCommandEffects(currentSkill).filter((effect) => !effect.id.includes(":status:"));
     const timedApEffects = createTimedApCommandEffects(effectScene.actionPoints?.snapshot.timedEffects);
     return [...skillEffects, ...timedApEffects];
   }
@@ -471,7 +513,7 @@ export class CommandHud {
     frame.strokeRoundedRect(0, 0, EFFECT_SIZE, EFFECT_SIZE, EFFECT_RADIUS);
     const icon = this.scene.add
       .image(EFFECT_SIZE / 2, EFFECT_SIZE / 2, MISSING_ASSET_TEXTURE_KEY)
-      .setDisplaySize(EFFECT_SIZE - 4, EFFECT_SIZE - 4);
+      .setDisplaySize(EFFECT_SIZE - 8, EFFECT_SIZE - 8);
 
     const maskShape = this.scene.make.graphics({ x: 0, y: 0 });
     maskShape.setVisible(false);
@@ -557,8 +599,11 @@ export class CommandHud {
     this.title.setX(contentLeft);
     const inputY = Math.max(58, this.panelHeight - 42);
     const listHeight = Math.max(24, inputY - 34);
-    const previewText = formatAvailableSkillPreviews(this.skills, this.resolveApCost, this.resolveDamage);
-    const previewLineCount = Math.max(1, previewText.split("\n").length);
+    const previewLines = formatAvailableSkillPreviews(this.skills, this.resolveApCost, this.resolveDamage).split("\n");
+    const previewHeader = previewLines.shift() ?? "TYPE // COMMAND // COST // DAMAGE";
+    const previewText = previewLines.join("\n");
+    this.title.setText(previewHeader);
+    const previewLineCount = Math.max(1, previewLines.length);
     const previewFontSize = Math.max(10, Math.min(commandFontSize, Math.floor(listHeight / previewLineCount)));
     this.commandText
       .setPosition(contentLeft, 30)

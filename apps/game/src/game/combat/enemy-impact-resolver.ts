@@ -2,7 +2,7 @@ import type { SkillStatusEffect } from "@typing-roguelike/shared";
 import { calculateDamage } from "./damage-formula";
 import type { EnemyAttackEvent } from "./enemy-attack-timeline";
 import type { ShieldPool } from "./shield-pool";
-import { SkillCombatantState } from "./skill-impact-resolver";
+import type { SkillCombatantState } from "./skill-impact-resolver";
 
 export type ResolveEnemyImpactInput = Readonly<{
   event: EnemyAttackEvent;
@@ -11,7 +11,20 @@ export type ResolveEnemyImpactInput = Readonly<{
   /** 대상의 실드 풀. 남은 실드가 피해를 먼저 흡수합니다. */
   shields?: ShieldPool;
   statusEffects?: readonly SkillStatusEffect[];
+  damageMultiplier?: number;
+  description?: string;
 }>;
+
+const inferStatusEffects = (description: string): readonly SkillStatusEffect[] => {
+  const effects: SkillStatusEffect[] = [];
+  if (/(출혈|bleed)/iu.test(description))
+    effects.push({ type: "status", statusId: "bleed", durationMs: 3_000, stacks: 1 });
+  if (/(약화|weaken)/iu.test(description))
+    effects.push({ type: "status", statusId: "weaken", durationMs: 4_000, stacks: 1 });
+  if (/(기절|stun)/iu.test(description))
+    effects.push({ type: "status", statusId: "stun", durationMs: 2_000, stacks: 1 });
+  return effects;
+};
 
 export type EnemyImpactResult = Readonly<{
   applied: boolean;
@@ -42,6 +55,8 @@ export class EnemyImpactResolver {
     target,
     shields,
     statusEffects = [],
+    damageMultiplier = 1,
+    description = "",
   }: ResolveEnemyImpactInput): EnemyImpactResult {
     if (event.type !== "impact-resolved") {
       return this.emptyResult(event.timelineId);
@@ -50,9 +65,7 @@ export class EnemyImpactResolver {
       return this.emptyResult(event.timelineId);
     }
     if (event.targetId !== target.id) {
-      throw new Error(
-        `Enemy impact target does not match timeline ${event.timelineId}.`,
-      );
+      throw new Error(`Enemy impact target does not match timeline ${event.timelineId}.`);
     }
 
     if (event.attackType === "defense") {
@@ -68,11 +81,14 @@ export class EnemyImpactResolver {
       damageCoefficient: 1,
       defense: target.defense,
     });
-    const absorb = shields?.absorb(target.id, baseDamage, event.atMs);
-    const throughDamage = absorb === undefined ? baseDamage : absorb.remainingDamage;
+    const weakenMultiplier = Math.max(0.1, 1 - target.statusStacks("weaken") * 0.1);
+    const adjustedDamage = Math.max(0, Math.round(baseDamage * weakenMultiplier * damageMultiplier));
+    const absorb = shields?.absorb(target.id, adjustedDamage, event.atMs);
+    const throughDamage = absorb === undefined ? adjustedDamage : absorb.remainingDamage;
     const damageApplied = target.health.applyDamage(throughDamage).appliedDamage;
 
-    for (const statusEffect of statusEffects) {
+    const appliedStatuses = statusEffects.length > 0 ? statusEffects : inferStatusEffects(description);
+    for (const statusEffect of appliedStatuses) {
       target.applyStatus(statusEffect);
     }
 
@@ -85,7 +101,7 @@ export class EnemyImpactResolver {
       shieldAbsorbedDamage: absorb?.absorbedDamage ?? 0,
       brokenShieldIds: absorb?.brokenShieldIds ?? [],
       damageApplied,
-      statusEffectsApplied: statusEffects.length,
+      statusEffectsApplied: appliedStatuses.length,
     };
   }
 

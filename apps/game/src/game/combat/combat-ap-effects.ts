@@ -1,5 +1,5 @@
 import type { SkillDefinition } from "@typing-roguelike/shared";
-import { ActionPointResource } from "./action-point-resource";
+import type { ActionPointResource } from "./action-point-resource";
 
 const MELEE_TAGS = new Set(["sword", "greatsword", "mace", "club"]);
 
@@ -31,6 +31,11 @@ export class CombatApEffectController {
   private deleteKeyTriggered = false;
   private typoCorrectionCharges = 0;
   private typoCorrectionTriggerCount = 0;
+  private blankSpaceUsed = false;
+  private nextSkillDamageMultiplier = 1;
+  private scabbardTriggered = false;
+  private incomingProtectionUsed = false;
+  private shieldAbsorbTriggers = 0;
 
   constructor(config: CombatApEffectControllerConfig) {
     this.actionPoints = config.actionPoints;
@@ -95,11 +100,16 @@ export class CombatApEffectController {
    * 커맨드 입력 실패를 기록합니다. 오타 교정 부적은 실패할 때마다 다음 실드량을
    * 늘려 주고, 전투당 두 번까지만 발동합니다.
    */
-  onCommandFailed(): void {
-    if (!this.relicIds.has("relic_typo_correction_charm")) return;
-    if (this.typoCorrectionTriggerCount >= 2) return;
+  onCommandFailed(): boolean {
+    if (this.relicIds.has("relic_blank_space") && !this.blankSpaceUsed) {
+      this.blankSpaceUsed = true;
+      return true;
+    }
+    if (!this.relicIds.has("relic_typo_correction_charm")) return false;
+    if (this.typoCorrectionTriggerCount >= 2) return false;
     this.typoCorrectionTriggerCount += 1;
     this.typoCorrectionCharges += 1;
+    return false;
   }
 
   /** 실드를 실제로 부여한 뒤 1회성 실드량 보정을 소모합니다. */
@@ -114,6 +124,71 @@ export class CombatApEffectController {
       this.metronomeTriggered = true;
       this.actionPoints.addTemporaryRegeneration(0.5, 3_000);
     }
+    if (this.relicIds.has("relic_editor_seal")) this.nextSkillDamageMultiplier *= 1.18;
+    if (this.relicIds.has("relic_combo_type") && comboCount >= 5) this.nextSkillDamageMultiplier *= 1.4;
+    if (this.relicIds.has("relic_scabbard") && skill.category === "basic" && !this.scabbardTriggered) {
+      this.scabbardTriggered = true;
+      this.nextSkillDamageMultiplier *= 1.35;
+    }
+  }
+
+  /** Resolves combat-only damage bonuses and consumes one-shot triggers. */
+  resolveSkillDamageMultiplier(skill: SkillDefinition): number {
+    let multiplier = this.nextSkillDamageMultiplier;
+    this.nextSkillDamageMultiplier = 1;
+    if (this.relicIds.has("relic_red_ink")) multiplier *= 1.1;
+    if (this.relicIds.has("relic_whetstone") && skill.category === "basic") multiplier *= 1.2;
+    if (this.relicIds.has("relic_gamblers_dice")) multiplier *= skill.category === "basic" ? 1.15 : 0.85;
+    return multiplier;
+  }
+
+  /** Returns a reflected amount after an enemy hit was absorbed by a player shield. */
+  onShieldAbsorbed(absorbedDamage: number, fullyAbsorbed: boolean): number {
+    if (absorbedDamage <= 0) return 0;
+    this.shieldAbsorbTriggers += 1;
+    if (this.relicIds.has("relic_veteran_shield") && this.shieldAbsorbTriggers <= 2) {
+      this.actionPoints.adjust(1);
+    }
+    if (this.relicIds.has("relic_counter_inscription") && absorbedDamage >= 0) {
+      this.nextSkillDamageMultiplier *= 1.3;
+    }
+    if (this.relicIds.has("relic_perfect_period") && fullyAbsorbed) {
+      this.actionPoints.adjust(1);
+      this.nextSkillDamageMultiplier *= 1.3;
+    }
+    if (this.relicIds.has("relic_mirror_shield")) return Math.round(absorbedDamage * 0.3);
+    if (this.relicIds.has("relic_wavering_thorn_shield")) return Math.round(absorbedDamage * 0.5);
+    return 0;
+  }
+
+  resolveIncomingDamage(currentHp: number, maxHp: number, damage: number): number {
+    if (this.incomingProtectionUsed || damage <= 0) return damage;
+    const ratio = maxHp <= 0 ? 1 : currentHp / maxHp;
+    let multiplier = 1;
+    if (this.relicIds.has("relic_prophets_eye")) multiplier *= 0.75;
+    if (this.relicIds.has("relic_reversing_clock") && ratio <= 0.3) multiplier *= 0.5;
+    if (this.relicIds.has("relic_mask_of_forgetting")) multiplier *= 0.8;
+    if (multiplier === 1) return damage;
+    this.incomingProtectionUsed = true;
+    return Math.max(0, Math.round(damage * multiplier));
+  }
+
+  resolveIncomingDamageMultiplier(currentHp: number, maxHp: number): number {
+    if (this.incomingProtectionUsed) return 1;
+    const ratio = maxHp <= 0 ? 1 : currentHp / maxHp;
+    if (
+      this.relicIds.has("relic_prophets_eye") ||
+      (this.relicIds.has("relic_reversing_clock") && ratio <= 0.3) ||
+      this.relicIds.has("relic_mask_of_forgetting")
+    ) {
+      this.incomingProtectionUsed = true;
+      let multiplier = 1;
+      if (this.relicIds.has("relic_prophets_eye")) multiplier *= 0.75;
+      if (this.relicIds.has("relic_reversing_clock") && ratio <= 0.3) multiplier *= 0.5;
+      if (this.relicIds.has("relic_mask_of_forgetting")) multiplier *= 0.8;
+      return multiplier;
+    }
+    return 1;
   }
 
   onSkillImpact(skill: SkillDefinition): number {

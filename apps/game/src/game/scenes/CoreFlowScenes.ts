@@ -57,14 +57,25 @@ const createCoverBackground = (
 
 export class StartScene extends EmptyCoreScene {
   private readonly runStarter = new LobbyRunStarter();
+  private helpModal?: Phaser.GameObjects.Container;
+  private helpKeyHandler?: (event: KeyboardEvent) => void;
+
   constructor() {
     super(SCENE_KEYS.start);
   }
+
   create(): void {
     playRuntimeBgm("menu");
     const { width, height } = this.scale.gameSize;
     createCoverBackground(this, TEXTURE_KEYS.mainBackground, width, height);
     this.add.rectangle(0, 0, width, height, 0x08101b, 0.28).setOrigin(0);
+    this.add
+      .text(width / 2, height * 0.28, "TYPING ROGUELIKE", {
+        fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
+        fontSize: "48px",
+        color: "#f9fafb",
+      })
+      .setOrigin(0.5);
     const startRunButton = createMenuButton(this, width / 2, height * 0.52, "게임 시작", async () => {
       startRunButton.disableInteractive();
       startRunButton.setText("게임 시작 중...");
@@ -80,7 +91,8 @@ export class StartScene extends EmptyCoreScene {
         startRunButton.setInteractive({ useHandCursor: true });
       }
     });
-    createMenuButton(this, width / 2, height * 0.66, "설정", () => {
+    createMenuButton(this, width / 2, height * 0.66, "플레이 방법", () => this.showHelpModal());
+    createMenuButton(this, width / 2, height * 0.8, "설정", () => {
       const transition = resolveSceneTransition(SCENE_KEYS.settings, undefined);
       this.scene.start(transition.key, transition.payload);
     });
@@ -98,6 +110,95 @@ export class StartScene extends EmptyCoreScene {
     const preferredLogoTop = height * 0.24 - logoHeight / 2;
     const logoTop = Phaser.Math.Clamp(preferredLogoTop, logoTopMargin, maxLogoTop);
     logo.setPosition(width / 2, logoTop + logoHeight / 2).setDisplaySize(logoWidth, logoHeight);
+  }
+
+  shutdown(): void {
+    if (this.helpKeyHandler !== undefined) {
+      this.input.keyboard?.off("keydown", this.helpKeyHandler);
+      this.helpKeyHandler = undefined;
+    }
+    this.helpModal?.destroy();
+    this.helpModal = undefined;
+  }
+
+  private showHelpModal(): void {
+    if (this.helpModal !== undefined) return;
+
+    const { width, height } = this.scale.gameSize;
+    const fontFamily = 'Galmuri9, "Apple SD Gothic Neo", monospace';
+    const panelWidth = Math.min(720, Math.max(300, width - 40));
+    const maxPanelHeight = width < 520 ? 680 : 570;
+    const minimumPanelHeight = width < 520 ? 560 : 420;
+    const panelHeight = Math.min(maxPanelHeight, Math.max(minimumPanelHeight, height - 32));
+    const panelX = width / 2;
+    const panelY = height / 2;
+    const contentWidth = panelWidth - 56;
+    const modal = this.add.container(0, 0).setDepth(100);
+
+    const backdrop = this.add.rectangle(0, 0, width, height, 0x020617, 0.76).setOrigin(0).setInteractive();
+    backdrop.on("pointerdown", (pointer: Phaser.Input.Pointer) => pointer.event.stopPropagation());
+    modal.add(backdrop);
+
+    const panel = this.add
+      .rectangle(panelX, panelY, panelWidth, panelHeight, 0x111827, 0.98)
+      .setStrokeStyle(2, 0x4fd1c5, 0.85)
+      .setInteractive();
+    panel.on("pointerdown", (pointer: Phaser.Input.Pointer) => pointer.event.stopPropagation());
+    modal.add(panel);
+
+    modal.add(
+      this.add
+        .text(panelX, panelY - panelHeight / 2 + 38, "플레이 방법", {
+          fontFamily,
+          fontSize: "30px",
+          fontStyle: "bold",
+          color: "#f9fafb",
+        })
+        .setOrigin(0.5),
+    );
+
+    const instructions = [
+      "1. 맵에서 갈 수 있는 노드를 클릭해 다음 장소로 이동합니다.",
+      "2. 전투에서는 기술 목록의 커맨드를 그대로 입력한 뒤 Enter를 누릅니다.",
+      "   예시: 베기 입력 → Enter  (기본 기술 · 베기)",
+      "   예시: 이중 베기 입력 → Enter  (특수 기술 · 이중 베기)",
+      "3. Tab으로 공격할 적을 바꿀 수 있습니다. Shift + Tab은 이전 대상입니다.",
+      "4. 커맨드를 성공시키면 콤보가 쌓이고, 틀린 커맨드를 Enter로 제출하면 콤보가 초기화됩니다.",
+      "5. 전투가 끝나면 보상을 하나 선택하고, 다시 맵에서 다음 노드를 선택합니다.",
+    ].join("\n");
+
+    modal.add(
+      this.add
+        .text(panelX - contentWidth / 2, panelY - panelHeight / 2 + 88, instructions, {
+          fontFamily,
+          fontSize: width < 520 ? "14px" : "17px",
+          color: "#d7e2ee",
+          lineSpacing: width < 520 ? 5 : 10,
+          wordWrap: { width: contentWidth },
+        })
+        .setOrigin(0, 0),
+    );
+
+    const closeButton = createMenuButton(this, panelX, panelY + panelHeight / 2 - 48, "닫기", () =>
+      this.hideHelpModal(),
+    );
+    closeButton.setStyle({ fontSize: width < 520 ? "22px" : "26px" });
+    modal.add(closeButton);
+    this.helpModal = modal;
+
+    this.helpKeyHandler = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") this.hideHelpModal();
+    };
+    this.input.keyboard?.on("keydown", this.helpKeyHandler);
+  }
+
+  private hideHelpModal(): void {
+    if (this.helpKeyHandler !== undefined) {
+      this.input.keyboard?.off("keydown", this.helpKeyHandler);
+      this.helpKeyHandler = undefined;
+    }
+    this.helpModal?.destroy();
+    this.helpModal = undefined;
   }
 }
 

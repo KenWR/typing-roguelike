@@ -7,10 +7,7 @@ import {
   createRewardTransitionPointerGuard,
   type RewardTransitionPointerGuard,
 } from "../rewards/reward-transition-pointer-guard";
-import {
-  RewardSelectionScene,
-  type RewardSelectionSceneData,
-} from "./RewardSelectionScene";
+import { RewardSelectionScene, type RewardSelectionSceneData } from "./RewardSelectionScene";
 
 export type RunRewardSelectionSceneData = RewardSelectionSceneData &
   Readonly<{
@@ -22,18 +19,17 @@ export type RunRewardSelectionSceneData = RewardSelectionSceneData &
 
 const persistedAdapters = new WeakMap<object, RewardSelectionAdapter<unknown>>();
 
-const withRunPersistence = (
-  adapter: RewardSelectionAdapter<unknown>,
-): RewardSelectionAdapter<unknown> => {
+const withRunPersistence = (adapter: RewardSelectionAdapter<unknown>): RewardSelectionAdapter<unknown> => {
   const cached = persistedAdapters.get(adapter as object);
   if (cached !== undefined) return cached;
 
   const wrapped: RewardSelectionAdapter<unknown> = {
     getViewState: adapter.getViewState,
     getRunState: adapter.getRunState,
+    getRingReplacementOptions: adapter.getRingReplacementOptions,
     selectReward: adapter.selectReward,
-    continue: () => {
-      const state = adapter.continue();
+    continue: (replacementRingId) => {
+      const state = adapter.continue(replacementRingId);
       const completedRun = adapter.getRunState() as RunState;
       persistCompletedRunReward(completedRun);
       return state;
@@ -47,22 +43,15 @@ const withRunPersistence = (
 export class RunRewardSelectionScene extends RewardSelectionScene {
   private runAdapter?: RewardSelectionAdapter<RunState>;
   private routeData: RunRewardSelectionSceneData = {};
-  private transitionPointerGuard: RewardTransitionPointerGuard =
-    createRewardTransitionPointerGuard();
+  private transitionPointerGuard: RewardTransitionPointerGuard = createRewardTransitionPointerGuard();
 
   override init(data: RunRewardSelectionSceneData = {}): void {
     this.routeData = data;
-    this.transitionPointerGuard = createRewardTransitionPointerGuard(
-      data.suppressPointerUntilRelease === true,
-    );
+    this.transitionPointerGuard = createRewardTransitionPointerGuard(data.suppressPointerUntilRelease === true);
 
     if (data.adapter !== undefined) {
-      const adapter = data.runState === undefined
-        ? data.adapter
-        : withRunPersistence(data.adapter);
-      this.runAdapter = data.runState === undefined
-        ? undefined
-        : adapter as RewardSelectionAdapter<RunState>;
+      const adapter = data.runState === undefined ? data.adapter : withRunPersistence(data.adapter);
+      this.runAdapter = data.runState === undefined ? undefined : (adapter as RewardSelectionAdapter<RunState>);
       this.routeData = { ...data, adapter };
       super.init(this.routeData);
       return;
@@ -127,20 +116,26 @@ export class RunRewardSelectionScene extends RewardSelectionScene {
     const digit = Number.parseInt(event.key, 10);
     if (Number.isInteger(digit) && digit >= 1 && digit <= candidates.length) {
       event.preventDefault();
-      this.selectReward(candidates[digit - 1]!.id);
+      const candidate = candidates[digit - 1];
+      if (candidate !== undefined) this.selectReward(candidate.id);
       return;
     }
 
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Enter") return;
     event.preventDefault();
     const selectedId = adapter.getViewState().selectedRewardId;
-    const currentIndex = Math.max(0, candidates.findIndex((candidate) => candidate.id === selectedId));
-    const nextIndex = event.key === "ArrowLeft"
-      ? (currentIndex - 1 + candidates.length) % candidates.length
-      : event.key === "ArrowRight"
-        ? (currentIndex + 1) % candidates.length
-        : currentIndex;
-    this.selectReward(candidates[nextIndex]!.id);
+    const currentIndex = Math.max(
+      0,
+      candidates.findIndex((candidate) => candidate.id === selectedId),
+    );
+    const nextIndex =
+      event.key === "ArrowLeft"
+        ? (currentIndex - 1 + candidates.length) % candidates.length
+        : event.key === "ArrowRight"
+          ? (currentIndex + 1) % candidates.length
+          : currentIndex;
+    const candidate = candidates[nextIndex];
+    if (candidate !== undefined) this.selectReward(candidate.id);
   }
 
   private selectReward(rewardId: string): void {

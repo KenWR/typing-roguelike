@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { EnemyConfig } from "@typing-roguelike/shared";
 import { EnemyAttackSelectionLoop } from "../src/game/combat/enemy-attack-selection-loop";
 import { EnemyAttackTimeline } from "../src/game/combat/enemy-attack-timeline";
+import { resolveEnemyAttackType } from "../src/game/combat/enemy-attack-type";
 
 const enemy: EnemyConfig = {
   id: "test-enemy",
@@ -38,6 +39,36 @@ const enemy: EnemyConfig = {
 };
 
 describe("EnemyAttackSelectionLoop", () => {
+  test("classifies buff and debuff actions for the per-enemy telegraph", () => {
+    expect(
+      resolveEnemyAttackType({
+        kind: "special",
+        name: "회복 의식",
+        damage: 0,
+        apDelta: undefined,
+        description: "자신의 HP를 회복합니다.",
+      }),
+    ).toBe("buff");
+    expect(
+      resolveEnemyAttackType({
+        kind: "special",
+        name: "약화 주문",
+        damage: 4,
+        apDelta: -1,
+        description: "플레이어를 약화합니다.",
+      }),
+    ).toBe("debuff");
+    expect(
+      resolveEnemyAttackType({
+        kind: "special",
+        name: "철갑 돌진",
+        damage: 20,
+        apDelta: undefined,
+        description: "갑각을 열고 공격 강화 효과",
+      }),
+    ).toBe("attack");
+  });
+
   test("selects an action for a living enemy and starts its timeline", () => {
     const timeline = new EnemyAttackTimeline();
     const loop = new EnemyAttackSelectionLoop(timeline, () => 0);
@@ -102,8 +133,6 @@ describe("EnemyAttackSelectionLoop", () => {
     const timeline = new EnemyAttackTimeline();
     const loop = new EnemyAttackSelectionLoop(timeline, () => 1);
 
-    expect(() => loop.selectAndStart({ enemy, currentHp: 50 }, "player")).toThrow(
-      RangeError,
-    );
+    expect(() => loop.selectAndStart({ enemy, currentHp: 50 }, "player")).toThrow(RangeError);
   });
 });
