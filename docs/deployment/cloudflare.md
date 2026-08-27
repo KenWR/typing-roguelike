@@ -14,12 +14,12 @@ The workflow uses repository-level GitHub Actions secrets and variables. It does
 
 ## Cloudflare resource contract
 
-| Resource | Contract |
-| --- | --- |
-| API Worker | `typing-roguelike-api`, entrypoint `apps/api/src/worker.ts` |
-| D1 binding | `DB`, migrations in `apps/api/migrations` |
-| Game Worker | `typing-roguelike-game`, assets in `apps/game/dist` |
-| Game routing | `not_found_handling = "single-page-application"` |
+| Resource     | Contract                                                    |
+| ------------ | ----------------------------------------------------------- |
+| API Worker   | `typing-roguelike-api`, entrypoint `apps/api/src/worker.ts` |
+| D1 binding   | `DB`, migrations in `apps/api/migrations`                   |
+| Game Worker  | `typing-roguelike-game`, assets in `apps/game/dist`         |
+| Game routing | `not_found_handling = "single-page-application"`            |
 
 The workflow creates a temporary Wrangler config on the Actions runner, injects the configured production D1 name and ID, and preserves the checked-in `DB` binding. If production D1 metadata is already checked into `apps/api/wrangler.toml`, the repository Actions variables must match it.
 
@@ -35,8 +35,8 @@ Do not commit secrets or `.env` files.
 
 Add this under **Secrets**:
 
-| Name | Purpose |
-| --- | --- |
+| Name                   | Purpose                                                                   |
+| ---------------------- | ------------------------------------------------------------------------- |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token used for remote D1 migrations and Worker deployments |
 
 Use a scoped Cloudflare API token rather than a Global API Key. Grant only the permissions required for Workers deployment and D1 migration operations for the target account.
@@ -45,15 +45,15 @@ Use a scoped Cloudflare API token rather than a Global API Key. Grant only the p
 
 Add these under **Variables**:
 
-| Name | Value contract |
-| --- | --- |
-| `CLOUDFLARE_ACCOUNT_ID` | 32-character Cloudflare account ID |
-| `CLOUDFLARE_API_WORKER_NAME` | Must match `apps/api/wrangler.toml`; production value is `typing-roguelike-api` |
+| Name                          | Value contract                                                                    |
+| ----------------------------- | --------------------------------------------------------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID`       | 32-character Cloudflare account ID                                                |
+| `CLOUDFLARE_API_WORKER_NAME`  | Must match `apps/api/wrangler.toml`; production value is `typing-roguelike-api`   |
 | `CLOUDFLARE_GAME_WORKER_NAME` | Must match `apps/game/wrangler.toml`; production value is `typing-roguelike-game` |
-| `CLOUDFLARE_D1_DATABASE_NAME` | Actual production D1 database name |
-| `CLOUDFLARE_D1_DATABASE_ID` | Actual production D1 database UUID |
-| `PRODUCTION_API_URL` | Public HTTPS API origin with no trailing slash |
-| `PRODUCTION_GAME_URL` | Public HTTPS game origin with no trailing slash |
+| `CLOUDFLARE_D1_DATABASE_NAME` | Actual production D1 database name                                                |
+| `CLOUDFLARE_D1_DATABASE_ID`   | Actual production D1 database UUID                                                |
+| `PRODUCTION_API_URL`          | Public HTTPS API origin with no trailing slash                                    |
+| `PRODUCTION_GAME_URL`         | Public HTTPS game origin with no trailing slash                                   |
 
 `PRODUCTION_API_URL` is embedded into the game build as `VITE_API_BASE_URL`.
 The API deployment receives `API_ORIGIN`, `CORS_ORIGIN=$PRODUCTION_GAME_URL`, and `COOKIE_SECURE=true`.
