@@ -20,7 +20,7 @@ export const MENU_SETTINGS_REGISTRY_KEYS = Object.freeze({
 });
 
 const STORAGE_KEY = "typing-roguelike.menu-settings";
-const VOLUME_STEPS = [0, 0.5, 1] as const;
+const VOLUME_STEPS: readonly number[] = [0, 0.5, 1];
 
 const clampVolume = (value: number): number => Math.min(1, Math.max(0, value));
 
@@ -30,7 +30,7 @@ export const toggleSound = (settings: MenuSettings): MenuSettings => ({
 });
 
 export const cycleVolume = (settings: MenuSettings): MenuSettings => {
-  const currentIndex = VOLUME_STEPS.findIndex((value) => value === settings.volume);
+  const currentIndex = VOLUME_STEPS.indexOf(settings.volume);
   const nextIndex = currentIndex < 0 ? VOLUME_STEPS.length - 1 : (currentIndex + 1) % VOLUME_STEPS.length;
   return { ...settings, volume: VOLUME_STEPS[nextIndex] };
 };
@@ -45,6 +45,12 @@ export const toggleCommandLanguage = (settings: MenuSettings): MenuSettings => (
   commandLanguage: settings.commandLanguage === "ko" ? "en" : "ko",
 });
 
+export const resolveSettingsSnapshotAfterApply = (
+  snapshot: MenuSettings,
+  draft: MenuSettings,
+  applied: boolean,
+): MenuSettings => (applied ? draft : snapshot);
+
 export const loadMenuSettings = (storage?: Pick<Storage, "getItem">): MenuSettings => {
   if (!storage) return DEFAULT_MENU_SETTINGS;
 
@@ -54,18 +60,17 @@ export const loadMenuSettings = (storage?: Pick<Storage, "getItem">): MenuSettin
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     if (typeof parsed !== "object" || parsed === null) return DEFAULT_MENU_SETTINGS;
 
-    const soundEnabled = typeof parsed.soundEnabled === "boolean"
-      ? parsed.soundEnabled
-      : DEFAULT_MENU_SETTINGS.soundEnabled;
-    const volume = typeof parsed.volume === "number"
-      ? clampVolume(parsed.volume)
-      : DEFAULT_MENU_SETTINGS.volume;
-    const screenShakeEnabled = typeof parsed.screenShakeEnabled === "boolean"
-      ? parsed.screenShakeEnabled
-      : DEFAULT_MENU_SETTINGS.screenShakeEnabled;
-    const commandLanguage = parsed.commandLanguage === "en" || parsed.commandLanguage === "ko"
-      ? parsed.commandLanguage
-      : DEFAULT_MENU_SETTINGS.commandLanguage;
+    const soundEnabled =
+      typeof parsed.soundEnabled === "boolean" ? parsed.soundEnabled : DEFAULT_MENU_SETTINGS.soundEnabled;
+    const volume = typeof parsed.volume === "number" ? clampVolume(parsed.volume) : DEFAULT_MENU_SETTINGS.volume;
+    const screenShakeEnabled =
+      typeof parsed.screenShakeEnabled === "boolean"
+        ? parsed.screenShakeEnabled
+        : DEFAULT_MENU_SETTINGS.screenShakeEnabled;
+    const commandLanguage =
+      parsed.commandLanguage === "en" || parsed.commandLanguage === "ko"
+        ? parsed.commandLanguage
+        : DEFAULT_MENU_SETTINGS.commandLanguage;
 
     return { soundEnabled, volume, screenShakeEnabled, commandLanguage };
   } catch {
@@ -73,15 +78,14 @@ export const loadMenuSettings = (storage?: Pick<Storage, "getItem">): MenuSettin
   }
 };
 
-export const saveMenuSettings = (
-  settings: MenuSettings,
-  storage?: Pick<Storage, "setItem">,
-): void => {
-  if (!storage) return;
+export const saveMenuSettings = (settings: MenuSettings, storage?: Pick<Storage, "setItem">): boolean => {
+  if (!storage) return false;
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    return true;
   } catch {
     // Settings still apply for the current session even if persistence fails.
+    return false;
   }
 };
 
@@ -90,9 +94,15 @@ export type MenuSettingsRuntime = {
   registry: { set: (key: string, value: unknown) => unknown };
 };
 
-export const applyMenuSettings = (runtime: MenuSettingsRuntime, settings: MenuSettings): void => {
-  runtime.sound.mute = !settings.soundEnabled;
-  runtime.sound.volume = settings.volume;
-  runtime.registry.set(MENU_SETTINGS_REGISTRY_KEYS.screenShakeEnabled, settings.screenShakeEnabled);
-  runtime.registry.set(MENU_SETTINGS_REGISTRY_KEYS.commandLanguage, settings.commandLanguage);
+export const applyMenuSettings = (runtime: MenuSettingsRuntime, settings: MenuSettings): boolean => {
+  try {
+    runtime.sound.mute = !settings.soundEnabled;
+    runtime.sound.volume = settings.volume;
+    runtime.registry.set(MENU_SETTINGS_REGISTRY_KEYS.screenShakeEnabled, settings.screenShakeEnabled);
+    runtime.registry.set(MENU_SETTINGS_REGISTRY_KEYS.commandLanguage, settings.commandLanguage);
+    return true;
+  } catch {
+    // A runtime integration failure must not prevent the menu from recovering.
+    return false;
+  }
 };
