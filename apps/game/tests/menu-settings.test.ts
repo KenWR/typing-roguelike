@@ -4,6 +4,7 @@ import {
   applyMenuSettings,
   cycleVolume,
   loadMenuSettings,
+  resolveSettingsSnapshotAfterApply,
   saveMenuSettings,
   toggleCommandLanguage,
   toggleScreenShake,
@@ -27,6 +28,13 @@ describe("menu settings", () => {
   test("loads defaults when storage is empty or corrupt", () => {
     expect(loadMenuSettings({ getItem: () => null })).toEqual(DEFAULT_MENU_SETTINGS);
     expect(loadMenuSettings({ getItem: () => "not-json" })).toEqual(DEFAULT_MENU_SETTINGS);
+    expect(
+      loadMenuSettings({
+        getItem: () => {
+          throw new Error("storage unavailable");
+        },
+      }),
+    ).toEqual(DEFAULT_MENU_SETTINGS);
   });
 
   test("loads legacy settings with new defaults", () => {
@@ -41,8 +49,32 @@ describe("menu settings", () => {
   test("saves and restores all supported settings", () => {
     let stored = "";
     const settings = { soundEnabled: false, volume: 0.5, screenShakeEnabled: false, commandLanguage: "en" as const };
-    saveMenuSettings(settings, { setItem: (_key, value) => { stored = value; } });
+    expect(
+      saveMenuSettings(settings, {
+        setItem: (_key, value) => {
+          stored = value;
+        },
+      }),
+    ).toBe(true);
     expect(loadMenuSettings({ getItem: () => stored })).toEqual(settings);
+  });
+
+  test("reports persistence failures while keeping the caller in control", () => {
+    const settings = { ...DEFAULT_MENU_SETTINGS, soundEnabled: false };
+    expect(saveMenuSettings(settings)).toBe(false);
+    expect(
+      saveMenuSettings(settings, {
+        setItem: () => {
+          throw new Error("quota exceeded");
+        },
+      }),
+    ).toBe(false);
+  });
+
+  test("keeps applied settings as the cancel baseline after a persistence failure", () => {
+    const draft = { ...DEFAULT_MENU_SETTINGS, volume: 0.5 };
+    expect(resolveSettingsSnapshotAfterApply(DEFAULT_MENU_SETTINGS, draft, true)).toEqual(draft);
+    expect(resolveSettingsSnapshotAfterApply(DEFAULT_MENU_SETTINGS, draft, false)).toEqual(DEFAULT_MENU_SETTINGS);
   });
 
   test("applies audio and runtime settings immediately", () => {
@@ -55,5 +87,18 @@ describe("menu settings", () => {
     expect(runtime.sound).toEqual({ mute: true, volume: 0.5 });
     expect(registry.get("settings.screenShakeEnabled")).toBe(false);
     expect(registry.get("settings.commandLanguage")).toBe("en");
+  });
+
+  test("reports runtime application failures without throwing", () => {
+    const runtime = {
+      sound: { mute: false, volume: 1 },
+      registry: {
+        set: () => {
+          throw new Error("registry unavailable");
+        },
+      },
+    };
+    expect(applyMenuSettings(runtime, { ...DEFAULT_MENU_SETTINGS, volume: 0.5 })).toBe(false);
+    expect(runtime.sound).toEqual({ mute: false, volume: 0.5 });
   });
 });
