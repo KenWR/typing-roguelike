@@ -69,14 +69,9 @@ export class StartScene extends EmptyCoreScene {
     const { width, height } = this.scale.gameSize;
     createCoverBackground(this, TEXTURE_KEYS.mainBackground, width, height);
     this.add.rectangle(0, 0, width, height, 0x08101b, 0.28).setOrigin(0);
-    this.add
-      .text(width / 2, height * 0.28, "TYPING ROGUELIKE", {
-        fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
-        fontSize: "48px",
-        color: "#f9fafb",
-      })
-      .setOrigin(0.5);
-    const startRunButton = createMenuButton(this, width / 2, height * 0.52, "게임 시작", async () => {
+    const compact = height < 540;
+    const startButtonY = compact ? height * 0.5 : height * 0.52;
+    const startRunButton = createMenuButton(this, width / 2, startButtonY, "게임 시작", async () => {
       startRunButton.disableInteractive();
       startRunButton.setText("게임 시작 중...");
       startRunButton.setStyle({ backgroundColor: "#4b5563" });
@@ -91,8 +86,10 @@ export class StartScene extends EmptyCoreScene {
         startRunButton.setInteractive({ useHandCursor: true });
       }
     });
-    createMenuButton(this, width / 2, height * 0.66, "플레이 방법", () => this.showHelpModal());
-    createMenuButton(this, width / 2, height * 0.8, "설정", () => {
+    createMenuButton(this, width / 2, compact ? height * 0.68 : height * 0.66, "플레이 방법", () =>
+      this.showHelpModal(),
+    );
+    createMenuButton(this, width / 2, compact ? height * 0.86 : height * 0.8, "설정", () => {
       const transition = resolveSceneTransition(SCENE_KEYS.settings, undefined);
       this.scene.start(transition.key, transition.payload);
     });
