@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { RELIC_CONFIGS } from "@typing-roguelike/shared";
 import {
   ASSET_PATHS,
+  BRAND_LOGO_ASSET,
   COMBAT_IMAGE_ASSETS,
+  LOADING_SCREEN_ASSET,
   RELIC_ICON_ASSETS,
   RUNTIME_IMAGE_ASSETS,
   SCENE_BACKGROUND_ASSETS,
@@ -65,6 +67,12 @@ describe("relic icon asset catalog", () => {
     expect(new Set(RUNTIME_IMAGE_ASSETS.map((asset) => asset.key)).size).toBe(RUNTIME_IMAGE_ASSETS.length);
 
     for (const asset of SCENE_BACKGROUND_ASSETS) {
+      expect(await Bun.file(`${import.meta.dir}/../public${asset.path}`).exists()).toBe(true);
+    }
+  });
+
+  test("keeps the pre-boot assets in the asset contract", async () => {
+    for (const asset of [LOADING_SCREEN_ASSET, BRAND_LOGO_ASSET]) {
       expect(await Bun.file(`${import.meta.dir}/../public${asset.path}`).exists()).toBe(true);
     }
   });

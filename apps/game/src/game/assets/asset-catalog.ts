@@ -8,6 +8,7 @@ import { RING_ICON_ASSETS } from "./ring-icon-assets";
 
 export const ASSET_PATHS = {
   backgrounds: {
+    loading: "/assets/background/로딩 화면.webp",
     main: "/assets/background/메인 화면.png",
     map: "/assets/background/노드 선택 배경.png",
     shop: "/assets/background/상점.png",
@@ -23,7 +24,22 @@ export const ASSET_PATHS = {
     detail: "/assets/images/relic_icons/192",
     manifest: "/assets/images/relic_icons/manifest.csv",
   },
+  ui: {
+    brandLogo: "/assets/images/ui/typing-roguelike-logo.png",
+  },
   fonts: "/assets/fonts",
+} as const;
+
+/** Loaded by PreBootScene so it is visible while the runtime asset queue runs. */
+export const LOADING_SCREEN_ASSET = {
+  key: "background:loading",
+  path: ASSET_PATHS.backgrounds.loading,
+} as const;
+
+/** Loaded before BootScene so every entry screen uses the same brand mark. */
+export const BRAND_LOGO_ASSET = {
+  key: "ui:brand-logo",
+  path: ASSET_PATHS.ui.brandLogo,
 } as const;
 
 export const getRelicIconTextureKey = (relicId: string): string => `relic-icon:${relicId}`;
@@ -81,6 +97,8 @@ export const RUNTIME_IMAGE_ASSETS: readonly {
 ];
 
 export const TEXTURE_KEYS = {
+  brandLogo: BRAND_LOGO_ASSET.key,
+  loadingBackground: LOADING_SCREEN_ASSET.key,
   mainBackground: "background:main",
   mapBackground: "background:map",
   mapNodeIcons: MAP_NODE_ICON_TEXTURE_KEY,

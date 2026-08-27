@@ -69,14 +69,9 @@ export class StartScene extends EmptyCoreScene {
     const { width, height } = this.scale.gameSize;
     createCoverBackground(this, TEXTURE_KEYS.mainBackground, width, height);
     this.add.rectangle(0, 0, width, height, 0x08101b, 0.28).setOrigin(0);
-    this.add
-      .text(width / 2, height * 0.28, "TYPING ROGUELIKE", {
-        fontFamily: 'Galmuri9, "Apple SD Gothic Neo", monospace',
-        fontSize: "48px",
-        color: "#f9fafb",
-      })
-      .setOrigin(0.5);
-    const startRunButton = createMenuButton(this, width / 2, height * 0.52, "게임 시작", async () => {
+    const compact = height < 540;
+    const startButtonY = compact ? height * 0.5 : height * 0.52;
+    const startRunButton = createMenuButton(this, width / 2, startButtonY, "게임 시작", async () => {
       startRunButton.disableInteractive();
       startRunButton.setText("게임 시작 중...");
       startRunButton.setStyle({ backgroundColor: "#4b5563" });
@@ -91,11 +86,27 @@ export class StartScene extends EmptyCoreScene {
         startRunButton.setInteractive({ useHandCursor: true });
       }
     });
-    createMenuButton(this, width / 2, height * 0.66, "플레이 방법", () => this.showHelpModal());
-    createMenuButton(this, width / 2, height * 0.8, "설정", () => {
+    createMenuButton(this, width / 2, compact ? height * 0.68 : height * 0.66, "플레이 방법", () =>
+      this.showHelpModal(),
+    );
+    createMenuButton(this, width / 2, compact ? height * 0.86 : height * 0.8, "설정", () => {
       const transition = resolveSceneTransition(SCENE_KEYS.settings, undefined);
       this.scene.start(transition.key, transition.payload);
     });
+
+    const logo = this.add.image(width / 2, 0, TEXTURE_KEYS.brandLogo);
+    const logoAspect = logo.height / logo.width;
+    const desiredLogoWidth = Math.min(Phaser.Math.Clamp(width * 0.42, 300, 580), Math.max(1, width - 32));
+    const logoTopMargin = height < 540 ? 14 : 20;
+    const logoButtonGap = height < 540 ? 16 : 24;
+    const startButtonTop = startRunButton.getBounds().top;
+    const maxLogoHeight = Math.max(1, startButtonTop - logoTopMargin - logoButtonGap);
+    const logoHeight = Math.min(desiredLogoWidth * logoAspect, maxLogoHeight);
+    const logoWidth = logoHeight / logoAspect;
+    const maxLogoTop = Math.max(logoTopMargin, startButtonTop - logoButtonGap - logoHeight);
+    const preferredLogoTop = height * 0.24 - logoHeight / 2;
+    const logoTop = Phaser.Math.Clamp(preferredLogoTop, logoTopMargin, maxLogoTop);
+    logo.setPosition(width / 2, logoTop + logoHeight / 2).setDisplaySize(logoWidth, logoHeight);
   }
 
   shutdown(): void {
