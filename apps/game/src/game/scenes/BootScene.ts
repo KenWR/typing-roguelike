@@ -125,7 +125,7 @@ export class BootScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setDepth(14);
     this.loadingMeta = this.add
-      .text(0, 0, "0 / 0", {
+      .text(0, 0, `${this.loadedAssetCount} / ${this.totalAssetCount}`, {
         color: "#c5a4dc",
         fontFamily: BootScene.FONT_FAMILY,
         fontSize: "11px",
