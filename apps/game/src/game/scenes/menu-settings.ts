@@ -20,7 +20,7 @@ export const MENU_SETTINGS_REGISTRY_KEYS = Object.freeze({
 });
 
 const STORAGE_KEY = "typing-roguelike.menu-settings";
-const VOLUME_STEPS = [0, 0.5, 1] as const;
+const VOLUME_STEPS: readonly number[] = [0, 0.5, 1];
 
 const clampVolume = (value: number): number => Math.min(1, Math.max(0, value));
 
@@ -30,7 +30,7 @@ export const toggleSound = (settings: MenuSettings): MenuSettings => ({
 });
 
 export const cycleVolume = (settings: MenuSettings): MenuSettings => {
-  const currentIndex = VOLUME_STEPS.findIndex((value) => value === settings.volume);
+  const currentIndex = VOLUME_STEPS.indexOf(settings.volume);
   const nextIndex = currentIndex < 0 ? VOLUME_STEPS.length - 1 : (currentIndex + 1) % VOLUME_STEPS.length;
   return { ...settings, volume: VOLUME_STEPS[nextIndex] };
 };

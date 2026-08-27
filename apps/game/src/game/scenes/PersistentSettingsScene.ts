@@ -21,6 +21,7 @@ const SELECTED_ROW_BACKGROUND = 0x512d70;
 const SELECTED_ROW_MARKER = 0xc8a96b;
 const SELECTED_TEXT_COLOR = "#fff4d6";
 const ROW_TEXT_COLOR = "#d7e2ee";
+const VOLUME_STEPS: readonly number[] = [0, 0.5, 1];
 
 type SettingsStorage = Pick<Storage, "getItem" | "setItem">;
 
@@ -31,7 +32,11 @@ type SettingsButton = {
   marker: Phaser.GameObjects.Rectangle;
   label: Phaser.GameObjects.Text;
   value?: Phaser.GameObjects.Text;
+  leftHitZone?: Phaser.GameObjects.Zone;
+  rightHitZone?: Phaser.GameObjects.Zone;
 };
+
+type SettingsPointerHandler = (pointer: Phaser.Input.Pointer, button: SettingsButton, direction?: -1 | 1) => void;
 
 type SettingsLayout = {
   compact: boolean;
@@ -58,23 +63,24 @@ type SettingsLayout = {
 
 const resolveSettingsLayout = (width: number, height: number): SettingsLayout => {
   const compact = width < 640 || height < 620;
+  const microCompact = compact && height <= 320;
   const ultraCompact = compact && height <= 420;
   const tightCompact = compact && !ultraCompact && height <= 520;
   const horizontalMargin = compact ? (width <= 320 ? 12 : 16) : 0;
   const panelWidth = Math.max(1, Math.min(compact ? width - horizontalMargin * 2 : 660, width - 24));
-  const panelHeight = Math.max(1, Math.min(560, height - (ultraCompact ? 16 : 32)));
-  const panelTop = Math.max(ultraCompact ? 8 : 16, (height - panelHeight) / 2);
+  const panelHeight = Math.max(1, Math.min(560, height - (microCompact ? 8 : ultraCompact ? 16 : 32)));
+  const panelTop = Math.max(microCompact ? 4 : ultraCompact ? 8 : 16, (height - panelHeight) / 2);
   const panelX = width / 2;
-  const panelPadding = compact ? (ultraCompact ? 12 : tightCompact ? 16 : 24) : 44;
+  const panelPadding = compact ? (microCompact ? 8 : ultraCompact ? 12 : tightCompact ? 16 : 24) : 44;
   const rowWidth = Math.max(1, Math.min(compact ? 320 : 460, panelWidth - panelPadding * 2));
-  const rowHeight = compact ? (ultraCompact ? 28 : tightCompact ? 34 : 44) : 48;
-  const rowGap = compact ? (ultraCompact ? 2 : tightCompact ? 4 : 8) : 10;
-  const actionGap = compact ? (ultraCompact ? 6 : tightCompact ? 10 : 20) : 24;
-  const titleOffset = compact ? (ultraCompact ? 16 : tightCompact ? 22 : 36) : 44;
-  const descriptionOffset = compact ? (ultraCompact ? 40 : tightCompact ? 54 : 73) : 86;
-  const firstSettingOffset = compact ? (ultraCompact ? 62 : tightCompact ? 78 : 102) : 112;
-  const statusGap = compact ? (ultraCompact ? 18 : tightCompact ? 22 : 32) : 30;
-  const footerInset = compact ? (ultraCompact ? 14 : tightCompact ? 22 : 36) : 30;
+  const rowHeight = compact ? (microCompact ? 22 : ultraCompact ? 28 : tightCompact ? 34 : 44) : 48;
+  const rowGap = compact ? (microCompact ? 1 : ultraCompact ? 2 : tightCompact ? 4 : 8) : 10;
+  const actionGap = compact ? (microCompact ? 3 : ultraCompact ? 6 : tightCompact ? 10 : 20) : 24;
+  const titleOffset = compact ? (microCompact ? 12 : ultraCompact ? 16 : tightCompact ? 22 : 36) : 44;
+  const descriptionOffset = compact ? (microCompact ? 30 : ultraCompact ? 40 : tightCompact ? 54 : 73) : 86;
+  const firstSettingOffset = compact ? (microCompact ? 45 : ultraCompact ? 62 : tightCompact ? 78 : 102) : 112;
+  const statusGap = compact ? (microCompact ? 8 : ultraCompact ? 18 : tightCompact ? 22 : 32) : 30;
+  const footerInset = compact ? (microCompact ? 10 : ultraCompact ? 14 : tightCompact ? 22 : 36) : 30;
 
   const settingsBottom = panelTop + firstSettingOffset + 4 * rowHeight + 3 * rowGap;
   const actionBottom = settingsBottom + actionGap + 2 * rowHeight + rowGap;
@@ -90,11 +96,19 @@ const resolveSettingsLayout = (width: number, height: number): SettingsLayout =>
     rowHeight,
     rowGap,
     actionGap,
-    rowFontSize: compact ? (ultraCompact ? "11px" : tightCompact ? "13px" : "16px") : "20px",
-    titleFontSize: compact ? (ultraCompact ? "20px" : tightCompact ? "24px" : "32px") : "40px",
-    descriptionFontSize: compact ? (ultraCompact ? "9px" : tightCompact ? "10px" : "12px") : "14px",
-    statusFontSize: compact ? (ultraCompact ? "8px" : tightCompact ? "9px" : "12px") : "14px",
-    helpFontSize: compact ? (ultraCompact ? "8px" : tightCompact ? "9px" : "11px") : "13px",
+    rowFontSize: compact ? (microCompact ? "9px" : ultraCompact ? "11px" : tightCompact ? "13px" : "16px") : "20px",
+    titleFontSize: compact ? (microCompact ? "16px" : ultraCompact ? "20px" : tightCompact ? "24px" : "32px") : "40px",
+    descriptionFontSize: compact
+      ? microCompact
+        ? "7px"
+        : ultraCompact
+          ? "9px"
+          : tightCompact
+            ? "10px"
+            : "12px"
+      : "14px",
+    statusFontSize: compact ? (microCompact ? "7px" : ultraCompact ? "8px" : tightCompact ? "9px" : "12px") : "14px",
+    helpFontSize: compact ? (microCompact ? "7px" : ultraCompact ? "8px" : tightCompact ? "9px" : "11px") : "13px",
     titleY: panelTop + titleOffset,
     descriptionY: panelTop + descriptionOffset,
     firstSettingTop: panelTop + firstSettingOffset,
@@ -117,7 +131,7 @@ const createButton = (
   y: number,
   width: number,
   height: number,
-  onClick: () => void,
+  onClick: SettingsPointerHandler,
   fontSize: string,
   splitLabel: boolean,
 ): SettingsButton => {
@@ -151,20 +165,35 @@ const createButton = (
         })
         .setOrigin(1, 0.5)
     : undefined;
+  const leftHitZone = splitLabel
+    ? scene.add.zone(-width / 4, 0, width / 2, height).setInteractive({ useHandCursor: true })
+    : undefined;
+  const rightHitZone = splitLabel
+    ? scene.add.zone(width / 4, 0, width / 2, height).setInteractive({ useHandCursor: true })
+    : undefined;
 
   container.add(background);
   container.add(marker);
   container.add(label);
   if (value !== undefined) container.add(value);
-  container
-    .setInteractive({
-      hitArea,
-      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
-      useHandCursor: true,
-    })
-    .on("pointerdown", onClick);
+  if (leftHitZone !== undefined) container.add(leftHitZone);
+  if (rightHitZone !== undefined) container.add(rightHitZone);
+  const button = { container, hitArea, background, marker, label, value, leftHitZone, rightHitZone };
 
-  return { container, hitArea, background, marker, label, value };
+  if (splitLabel && leftHitZone !== undefined && rightHitZone !== undefined) {
+    leftHitZone.on("pointerdown", (pointer: Phaser.Input.Pointer) => onClick(pointer, button, -1));
+    rightHitZone.on("pointerdown", (pointer: Phaser.Input.Pointer) => onClick(pointer, button, 1));
+  } else {
+    container
+      .setInteractive({
+        hitArea,
+        hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+        useHandCursor: true,
+      })
+      .on("pointerdown", (pointer: Phaser.Input.Pointer) => onClick(pointer, button));
+  }
+
+  return button;
 };
 
 export class SettingsScene extends Phaser.Scene {
@@ -252,18 +281,28 @@ export class SettingsScene extends Phaser.Scene {
         this.resolveButtonY(layout, index),
         layout.rowWidth,
         layout.rowHeight,
-        () => {
+        (_pointer, _button, direction) => {
           this.selectedIndex = index;
           this.refresh();
+          if (index < 4) {
+            if (direction !== undefined) this.adjustSelectedSetting(direction);
+            return;
+          }
           this.menuActions[index]?.();
         },
         layout.rowFontSize,
         index < 4,
       );
-      button.container.on("pointerover", () => {
+      const handlePointerOver = (): void => {
         this.selectedIndex = index;
         this.refresh();
-      });
+      };
+      if (button.leftHitZone !== undefined && button.rightHitZone !== undefined) {
+        button.leftHitZone.on("pointerover", handlePointerOver);
+        button.rightHitZone.on("pointerover", handlePointerOver);
+      } else {
+        button.container.on("pointerover", handlePointerOver);
+      }
       return button;
     });
 
@@ -278,7 +317,7 @@ export class SettingsScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.helpLabel = this.add
-      .text(layout.panelX, layout.helpY, "↑ ↓ 선택   Enter / Space 실행   Esc 뒤로", {
+      .text(layout.panelX, layout.helpY, "↑ ↓ 선택   ← → 변경   Enter / Space 실행   Esc 뒤로", {
         fontFamily: FONT_FAMILY,
         fontSize: layout.helpFontSize,
         color: "#94a3b8",
@@ -314,6 +353,15 @@ export class SettingsScene extends Phaser.Scene {
         const direction = event.key === "ArrowUp" ? -1 : 1;
         this.selectedIndex = (this.selectedIndex + direction + this.menuButtons.length) % this.menuButtons.length;
         this.refresh();
+        return;
+      }
+
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        if (this.selectedIndex < 4) {
+          const direction = event.key === "ArrowLeft" ? -1 : 1;
+          this.adjustSelectedSetting(direction);
+        }
         return;
       }
 
@@ -374,6 +422,8 @@ export class SettingsScene extends Phaser.Scene {
       button.marker.setPosition(-layout.rowWidth / 2 + 3, 0).setSize(3, Math.max(8, layout.rowHeight - 12));
       button.label.setPosition(splitLabel ? -layout.rowWidth / 2 + textInset : 0, 0).setFontSize(layout.rowFontSize);
       button.value?.setPosition(layout.rowWidth / 2 - textInset, 0).setFontSize(layout.rowFontSize);
+      button.leftHitZone?.setPosition(-layout.rowWidth / 4, 0).setSize(layout.rowWidth / 2, layout.rowHeight);
+      button.rightHitZone?.setPosition(layout.rowWidth / 4, 0).setSize(layout.rowWidth / 2, layout.rowHeight);
     });
 
     this.statusLabel
@@ -393,6 +443,29 @@ export class SettingsScene extends Phaser.Scene {
       this.clearStatus();
     }
     this.refresh();
+  }
+
+  private adjustSelectedSetting(direction: -1 | 1): void {
+    switch (this.selectedIndex) {
+      case 0:
+        this.updateDraft(toggleSound(this.draftSettings));
+        return;
+      case 1: {
+        const currentIndex = VOLUME_STEPS.indexOf(this.draftSettings.volume);
+        const safeIndex = currentIndex < 0 ? (direction > 0 ? 0 : VOLUME_STEPS.length - 1) : currentIndex;
+        const nextIndex = (safeIndex + direction + VOLUME_STEPS.length) % VOLUME_STEPS.length;
+        this.updateDraft({ ...this.draftSettings, volume: VOLUME_STEPS[nextIndex] });
+        return;
+      }
+      case 2:
+        this.updateDraft(toggleScreenShake(this.draftSettings));
+        return;
+      case 3:
+        this.updateDraft(toggleCommandLanguage(this.draftSettings));
+        return;
+      default:
+        return;
+    }
   }
 
   private applyDraftSettings(): void {
@@ -464,7 +537,7 @@ export class SettingsScene extends Phaser.Scene {
       if (index < settingRows.length) {
         const [label, value] = settingRows[index];
         button.label.setText(label);
-        button.value?.setText(value);
+        button.value?.setText(`‹ ${value} ›`);
       } else {
         button.label.setText(labels[index] ?? "");
       }
