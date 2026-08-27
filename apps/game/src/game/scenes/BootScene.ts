@@ -12,10 +12,15 @@ export class BootScene extends Phaser.Scene {
   private static readonly MIN_LOADING_DURATION_MS = 1200;
   private static readonly FONT_FAMILY = 'Galmuri9, "Apple SD Gothic Neo", monospace';
   private failedAssetKeys = new Set<string>();
+  private completedAssetKeys = new Set<string>();
   private loadingStartedAt = 0;
   private loadedAssetCount = 0;
   private totalAssetCount = 0;
   private loadingProgress = 0;
+  private minimumLoadingTimer?: number;
+  private minimumLoadingTimerResolve?: () => void;
+  private bootGeneration = 0;
+  private isShuttingDown = false;
   private loadingBackground?: Phaser.GameObjects.Image;
   private loadingLogo?: Phaser.GameObjects.Image;
   private loadingShade?: Phaser.GameObjects.Graphics;
@@ -32,6 +37,12 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    this.bootGeneration += 1;
+    this.failedAssetKeys.clear();
+    this.completedAssetKeys.clear();
+    this.loadedAssetCount = 0;
+    this.loadingProgress = 0;
+    this.isShuttingDown = false;
     this.loadingStartedAt = performance.now();
     this.totalAssetCount = RUNTIME_IMAGE_ASSETS.length + RUNTIME_SPRITESHEET_ASSETS.length;
     this.createLoadingView();
@@ -53,10 +64,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    void this.finishBoot();
+    void this.finishBoot(this.bootGeneration);
   }
 
-  private async finishBoot(): Promise<void> {
+  private async finishBoot(bootGeneration: number): Promise<void> {
     const storage = typeof localStorage === "undefined" ? undefined : localStorage;
     const settings = loadMenuSettings(storage);
     applyMenuSettings(this, settings);
@@ -76,11 +87,24 @@ export class BootScene extends Phaser.Scene {
     const restoredRunPromise = runRemotePersistence.restore(localRun);
     const remainingLoadingTime = BootScene.MIN_LOADING_DURATION_MS - (performance.now() - this.loadingStartedAt);
     if (remainingLoadingTime > 0) {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, remainingLoadingTime));
+      await this.waitForMinimumLoadingDuration(remainingLoadingTime);
     }
 
+    if (!this.isBootActive(bootGeneration)) return;
     const restoredRun = await restoredRunPromise;
-    this.continueFromRestoredRun(restoredRun);
+    if (!this.isBootActive(bootGeneration)) return;
+    this.continueFromRestoredRun(restoredRun, bootGeneration);
+  }
+
+  private waitForMinimumLoadingDuration(durationMs: number): Promise<void> {
+    return new Promise<void>((resolve) => {
+      this.minimumLoadingTimerResolve = resolve;
+      this.minimumLoadingTimer = window.setTimeout(() => {
+        this.minimumLoadingTimer = undefined;
+        this.minimumLoadingTimerResolve = undefined;
+        resolve();
+      }, durationMs);
+    });
   }
 
   private createLoadingView(): void {
@@ -126,18 +150,27 @@ export class BootScene extends Phaser.Scene {
   }
 
   private layoutLoadingView(): void {
-    const width = Math.max(320, this.scale.gameSize.width || this.scale.width);
-    const height = Math.max(420, this.scale.gameSize.height || this.scale.height);
+    const width = Math.max(1, this.scale.gameSize.width || this.scale.width);
+    const height = Math.max(1, this.scale.gameSize.height || this.scale.height);
     const compact = width < 680 || height < 540;
-    const logoWidth = compact ? Math.min(width - 36, 400) : Phaser.Math.Clamp(width * 0.42, 420, 620);
-    const logoX = width < 520 ? (width - logoWidth) / 2 : Math.max(30, width * 0.04);
-    const logoY = compact ? 14 : Math.max(20, height * 0.035);
-    const panelWidth = Math.min(width - (compact ? 24 : 80), 720);
     const panelHeight = compact ? 66 : 72;
+    const panelMargin = compact ? 12 : 24;
+    const panelWidth = Math.max(1, Math.min(width - (compact ? 24 : 80), 720));
     const panelX = (width - panelWidth) / 2;
-    const panelY = height - panelHeight - (compact ? 12 : 24);
+    const panelY = Math.max(0, height - panelHeight - panelMargin);
+    const logoTopMargin = compact ? 14 : 20;
+    const logoBottomGap = compact ? 16 : 24;
+    const logoAspect = this.loadingLogo === undefined ? 1 : this.loadingLogo.height / this.loadingLogo.width;
+    const desiredLogoWidth = compact
+      ? Math.min(Math.max(1, width - 36), 400)
+      : Phaser.Math.Clamp(width * 0.42, 420, 620);
+    const availableLogoHeight = Math.max(1, panelY - logoTopMargin - logoBottomGap);
+    const logoHeight = Math.min(desiredLogoWidth * logoAspect, availableLogoHeight);
+    const logoWidth = Math.max(1, logoHeight / logoAspect);
+    const logoX = width < 520 ? (width - logoWidth) / 2 : Math.max(30, width * 0.04);
+    const logoY = logoTopMargin;
     const barX = panelX + (compact ? 16 : 22);
-    const barWidth = panelWidth - (compact ? 32 : 44);
+    const barWidth = Math.max(1, panelWidth - (compact ? 32 : 44));
 
     if (this.loadingBackground !== undefined) {
       const coverScale = Math.max(width / this.loadingBackground.width, height / this.loadingBackground.height);
@@ -186,13 +219,20 @@ export class BootScene extends Phaser.Scene {
     this.refreshLoadingProgress();
   }
 
-  private handleFileComplete(): void {
+  private handleFileComplete(key: string): void {
+    this.markAssetComplete(key);
+  }
+
+  private markAssetComplete(key: string): void {
+    if (this.completedAssetKeys.has(key)) return;
+    this.completedAssetKeys.add(key);
     this.loadedAssetCount = Math.min(this.totalAssetCount, this.loadedAssetCount + 1);
     this.loadingMeta?.setText(`${this.loadedAssetCount} / ${this.totalAssetCount}`);
   }
 
   private handleFileLoadError(file: Phaser.Loader.File): void {
     this.failedAssetKeys.add(file.key);
+    this.markAssetComplete(file.key);
   }
 
   private handleLoadComplete(): void {
@@ -215,13 +255,30 @@ export class BootScene extends Phaser.Scene {
   }
 
   private releaseLoadingListeners(): void {
+    this.bootGeneration += 1;
+    this.isShuttingDown = true;
+    if (this.minimumLoadingTimer !== undefined) {
+      window.clearTimeout(this.minimumLoadingTimer);
+      this.minimumLoadingTimer = undefined;
+    }
+    const resolveMinimumLoadingTimer = this.minimumLoadingTimerResolve;
+    this.minimumLoadingTimerResolve = undefined;
+    resolveMinimumLoadingTimer?.();
     this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.load.off(Phaser.Loader.Events.PROGRESS, this.handleLoadProgress, this);
     this.load.off(Phaser.Loader.Events.FILE_COMPLETE, this.handleFileComplete, this);
     this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, this.handleFileLoadError, this);
+    if (this.progressGlow !== undefined) {
+      this.tweens.killTweensOf(this.progressGlow);
+    }
   }
 
-  private continueFromRestoredRun(restoredRun: Readonly<RunState> | null): void {
+  private isBootActive(bootGeneration: number): boolean {
+    return !this.isShuttingDown && bootGeneration === this.bootGeneration;
+  }
+
+  private continueFromRestoredRun(restoredRun: Readonly<RunState> | null, bootGeneration: number): void {
+    if (!this.isBootActive(bootGeneration)) return;
     if (restoredRun === null) {
       const transition = resolveSceneTransition(SCENE_KEYS.start, undefined);
       this.scene.start(transition.key, transition.payload);
