@@ -4,6 +4,7 @@ import {
   applyMenuSettings,
   cycleVolume,
   loadMenuSettings,
+  resolveSettingsApplyFeedback,
   resolveSettingsSnapshotAfterApply,
   saveMenuSettings,
   toggleCommandLanguage,
@@ -71,7 +72,26 @@ describe("menu settings", () => {
     ).toBe(false);
   });
 
-  test("keeps applied settings as the cancel baseline after a persistence failure", () => {
+  test("reports each save and apply outcome accurately", () => {
+    expect(resolveSettingsApplyFeedback(true, true)).toEqual({
+      message: "설정을 저장했습니다.",
+      isError: false,
+    });
+    expect(resolveSettingsApplyFeedback(false, true)).toEqual({
+      message: "저장하지 못했습니다. 현재 세션에는 적용되지만 다시 실행하면 복원되지 않습니다.",
+      isError: true,
+    });
+    expect(resolveSettingsApplyFeedback(true, false)).toEqual({
+      message: "설정을 저장했지만 현재 세션에 적용하지 못했습니다.",
+      isError: true,
+    });
+    expect(resolveSettingsApplyFeedback(false, false)).toEqual({
+      message: "설정을 저장하거나 현재 세션에 적용하지 못했습니다.",
+      isError: true,
+    });
+  });
+
+  test("uses application success, not persistence success, for the cancel baseline", () => {
     const draft = { ...DEFAULT_MENU_SETTINGS, volume: 0.5 };
     expect(resolveSettingsSnapshotAfterApply(DEFAULT_MENU_SETTINGS, draft, true)).toEqual(draft);
     expect(resolveSettingsSnapshotAfterApply(DEFAULT_MENU_SETTINGS, draft, false)).toEqual(DEFAULT_MENU_SETTINGS);
