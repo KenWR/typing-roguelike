@@ -197,5 +197,8 @@ describe("command HUD state", () => {
     expect(getEffectDarknessRatio({ durationMs: 3_000, remainingMs: 0 })).toBe(1);
     expect(formatEffectRemainingTime(750)).toBe("남은 시간: 750ms");
     expect(formatEffectRemainingTime(1_250)).toBe("남은 시간: 1.3초");
+    expect(formatEffectRemainingTime(null, "en")).toBe("Duration: applied on activation");
+    expect(formatEffectRemainingTime(750, "en")).toBe("Time remaining: 750ms");
+    expect(formatEffectRemainingTime(1_250, "en")).toBe("Time remaining: 1.3s");
   });
 });
