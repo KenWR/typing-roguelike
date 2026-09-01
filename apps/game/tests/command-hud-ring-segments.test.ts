@@ -17,9 +17,7 @@ describe("command HUD ring segments", () => {
       baseCommand: "베기",
       suffix: "연속으로",
     });
-    expect(formatSegmentedCommand("신속한 베기 연속으로")).toBe(
-      "접두사: 신속한  |  명령어: 베기  |  접미사: 연속으로",
-    );
+    expect(formatSegmentedCommand("신속한 베기 연속으로")).toBe("접두사: 신속한  |  명령어: 베기  |  접미사: 연속으로");
   });
 
   test("keeps a base-only command clearly identified as the command segment", () => {
@@ -28,16 +26,22 @@ describe("command HUD ring segments", () => {
   });
 
   test("renders each available command as its own segmented row", () => {
-    expect(formatSegmentedAvailableCommands([
-      "베기",
-      "신속한 베기",
-      "베기 연속으로",
-      "신속한 베기 연속으로",
-    ])).toBe([
-      "명령어: 베기",
-      "접두사: 신속한  |  명령어: 베기",
-      "명령어: 베기  |  접미사: 연속으로",
-      "접두사: 신속한  |  명령어: 베기  |  접미사: 연속으로",
-    ].join("\n"));
+    expect(formatSegmentedAvailableCommands(["베기", "신속한 베기", "베기 연속으로", "신속한 베기 연속으로"])).toBe(
+      [
+        "명령어: 베기",
+        "접두사: 신속한  |  명령어: 베기",
+        "명령어: 베기  |  접미사: 연속으로",
+        "접두사: 신속한  |  명령어: 베기  |  접미사: 연속으로",
+      ].join("\n"),
+    );
+  });
+
+  test("localizes segment labels without changing canonical command text", () => {
+    expect(formatSegmentedCommand("신속한 베기 연속으로", "en")).toBe(
+      "PREFIX: 신속한  |  COMMAND: 베기  |  SUFFIX: 연속으로",
+    );
+    expect(formatSegmentedAvailableCommands(["베기", "신속한 베기"], "en")).toBe(
+      ["COMMAND: 베기", "PREFIX: 신속한  |  COMMAND: 베기"].join("\n"),
+    );
   });
 });

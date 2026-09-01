@@ -122,6 +122,34 @@ const POINTER_OVER_EVENT = "pointerover";
 
 const clamp = (value: number, minimum: number, maximum: number): number => Math.min(Math.max(value, minimum), maximum);
 
+const HUD_COPY = {
+  ko: {
+    header: "유형 // 명령어 // 비용 // 피해",
+    basicSkill: "기본기술",
+    specialSkill: "특수기술",
+    prefix: "접두사",
+    command: "명령어",
+    suffix: "접미사",
+    damage: "데미지",
+    windup: "선딜",
+    inflict: "부여",
+  },
+  en: {
+    header: "TYPE // COMMAND // COST // DAMAGE",
+    basicSkill: "BASIC SKILL",
+    specialSkill: "SPECIAL SKILL",
+    prefix: "PREFIX",
+    command: "COMMAND",
+    suffix: "SUFFIX",
+    damage: "damage",
+    windup: "windup",
+    inflict: "inflicted",
+  },
+} as const satisfies Record<CommandLanguage, Record<string, string>>;
+
+// Commands and content names are gameplay data and may not have translations.
+// Keep the source string as a stable fallback while localizing all HUD-owned copy.
+
 export function formatAvailableCommands(commands: readonly string[]): string {
   return commands.join(", ");
 }
@@ -162,26 +190,32 @@ export function splitRingCommand(command: string): CommandHudSegments {
   };
 }
 
-export function formatSegmentedCommand(command: string): string {
+export function formatSegmentedCommand(command: string, language: CommandLanguage = "ko"): string {
   const segments = splitRingCommand(command);
+  const copy = HUD_COPY[language];
   return [
-    segments.prefix === undefined ? null : `접두사: ${segments.prefix}`,
-    `명령어: ${segments.baseCommand}`,
-    segments.suffix === undefined ? null : `접미사: ${segments.suffix}`,
+    segments.prefix === undefined ? null : `${copy.prefix}: ${segments.prefix}`,
+    `${copy.command}: ${segments.baseCommand}`,
+    segments.suffix === undefined ? null : `${copy.suffix}: ${segments.suffix}`,
   ]
     .filter((part): part is string => part !== null)
     .join("  |  ");
 }
 
-export function formatSegmentedAvailableCommands(commands: readonly string[]): string {
-  return commands.map(formatSegmentedCommand).join("\n");
+export function formatSegmentedAvailableCommands(
+  commands: readonly string[],
+  language: CommandLanguage = "ko",
+): string {
+  return commands.map((command) => formatSegmentedCommand(command, language)).join("\n");
 }
 
 export function formatAvailableSkillPreviews(
   skills: readonly SkillPreviewInput[],
   resolveApCost: (skill: SkillPreviewInput) => number = (skill) => skill.apCost,
   resolveDamage: (skill: SkillPreviewInput) => number | null = () => null,
+  language: CommandLanguage = "ko",
 ): string {
+  const copy = HUD_COPY[language];
   const sortedSkills = [...skills]
     .filter((skill) => {
       if (skill.command === undefined) return true;
@@ -194,7 +228,7 @@ export function formatAvailableSkillPreviews(
       return leftRank - rightRank;
     });
   const skillRows = sortedSkills.map((skill) => {
-    const label = skill.category === "special" ? "특수기술" : "기본기술";
+    const label = skill.category === "special" ? copy.specialSkill : copy.basicSkill;
     const ap = Math.max(0, Math.round(resolveApCost(skill)));
     const damage = resolveDamage(skill);
     return `${label} : ${skill.name} : ${ap} : ${damage === null ? "-" : Math.max(0, Math.round(damage))}`;
@@ -217,25 +251,30 @@ export function formatAvailableSkillPreviews(
     const effects = modifiers.flatMap((modifier) => [
       ...(modifier.damageMultiplier === undefined
         ? []
-        : [`${modifier.damageMultiplier >= 1 ? "+" : ""}${Math.round((modifier.damageMultiplier - 1) * 100)}% 데미지`]),
+        : [
+            `${modifier.damageMultiplier >= 1 ? "+" : ""}${Math.round((modifier.damageMultiplier - 1) * 100)}% ${copy.damage}`,
+          ]),
       ...(modifier.apCostDelta === undefined
         ? []
         : [`${modifier.apCostDelta >= 0 ? "+" : ""}${modifier.apCostDelta} AP`]),
       ...(modifier.windupMultiplier === undefined
         ? []
-        : [`선딜 ${Math.round((modifier.windupMultiplier - 1) * 100)}%`]),
-      ...(modifier.onHitStatus === undefined ? [] : [`${modifier.onHitStatus.statusId} 부여`]),
+        : [`${copy.windup} ${Math.round((modifier.windupMultiplier - 1) * 100)}%`]),
+      ...(modifier.onHitStatus === undefined ? [] : [`${modifier.onHitStatus.statusId} ${copy.inflict}`]),
     ]);
     if (effects.length === 0) return [];
     const displayName = [segments.prefix, skill.name, segments.suffix]
       .filter((part): part is string => part !== undefined)
       .join(" ");
-    return [`${segments.prefix === undefined ? "접미사" : "접두사"} : ${displayName} : ${effects.join(", ")}`];
+    return [`${segments.prefix === undefined ? copy.suffix : copy.prefix} : ${displayName} : ${effects.join(", ")}`];
   });
-  return ["TYPE // COMMAND // COST // DAMAGE", ...skillRows, ...ringRows].join("\n");
+  return [copy.header, ...skillRows, ...ringRows].join("\n");
 }
 
-export function createSkillCommandEffects(skill: SkillLike | undefined): CommandHudEffect[] {
+export function createSkillCommandEffects(
+  skill: SkillLike | undefined,
+  language: CommandLanguage = "ko",
+): CommandHudEffect[] {
   if (skill === undefined) return [];
   return (skill.effects ?? []).flatMap((effect, index) => {
     if (effect.type === "damage") return [];
@@ -244,8 +283,11 @@ export function createSkillCommandEffects(skill: SkillLike | undefined): Command
       return [
         {
           id: `${skill.id}:guard:${index}`,
-          name: "피해 감소",
-          description: `${skill.name}: 받는 피해 ${reduction}% 감소 · ${effect.durationMs / 1_000}초`,
+          name: language === "ko" ? "피해 감소" : "Damage reduction",
+          description:
+            language === "ko"
+              ? `${skill.name}: 받는 피해 ${reduction}% 감소 · ${effect.durationMs / 1_000}초`
+              : `${skill.name}: ${reduction}% less damage taken · ${effect.durationMs / 1_000}s`,
           durationMs: effect.durationMs,
           remainingMs: null,
           textureKey: effectTextureKey("guard"),
@@ -256,8 +298,11 @@ export function createSkillCommandEffects(skill: SkillLike | undefined): Command
       return [
         {
           id: `${skill.id}:shield:${index}`,
-          name: "실드",
-          description: `${skill.name}: 실드 ${effect.amount} · ${effect.durationMs / 1_000}초`,
+          name: language === "ko" ? "실드" : "Shield",
+          description:
+            language === "ko"
+              ? `${skill.name}: 실드 ${effect.amount} · ${effect.durationMs / 1_000}초`
+              : `${skill.name}: ${effect.amount} shield · ${effect.durationMs / 1_000}s`,
           durationMs: effect.durationMs,
           remainingMs: null,
           textureKey: effectTextureKey("shield"),
@@ -268,7 +313,10 @@ export function createSkillCommandEffects(skill: SkillLike | undefined): Command
       {
         id: `${skill.id}:status:${effect.statusId}:${index}`,
         name: effect.statusId,
-        description: `${skill.name}: ${effect.statusId} ${effect.stacks ?? 1}중첩 · ${effect.durationMs / 1_000}초`,
+        description:
+          language === "ko"
+            ? `${skill.name}: ${effect.statusId} ${effect.stacks ?? 1}중첩 · ${effect.durationMs / 1_000}초`
+            : `${skill.name}: ${effect.statusId} ×${effect.stacks ?? 1} · ${effect.durationMs / 1_000}s`,
         durationMs: effect.durationMs,
         remainingMs: null,
         textureKey: effectTextureKey(effect.statusId),
@@ -277,11 +325,24 @@ export function createSkillCommandEffects(skill: SkillLike | undefined): Command
   });
 }
 
-export function createTimedApCommandEffects(effects: readonly TimedApEffectLike[] = []): CommandHudEffect[] {
+export function createTimedApCommandEffects(
+  effects: readonly TimedApEffectLike[] = [],
+  language: CommandLanguage = "ko",
+): CommandHudEffect[] {
   return effects.map((effect, index) => ({
     id: `${effect.id}:${index}`,
-    name: effect.amountPerSecond >= 0 ? "AP 재생 증가" : "AP 재생 감소",
-    description: `AP 재생 ${effect.amountPerSecond >= 0 ? "+" : ""}${effect.amountPerSecond}/초`,
+    name:
+      language === "ko"
+        ? effect.amountPerSecond >= 0
+          ? "AP 재생 증가"
+          : "AP 재생 감소"
+        : effect.amountPerSecond >= 0
+          ? "AP regeneration up"
+          : "AP regeneration down",
+    description:
+      language === "ko"
+        ? `AP 재생 ${effect.amountPerSecond >= 0 ? "+" : ""}${effect.amountPerSecond}/초`
+        : `AP regeneration ${effect.amountPerSecond >= 0 ? "+" : ""}${effect.amountPerSecond}/s`,
     durationMs: effect.durationMs,
     remainingMs: effect.remainingMs,
     textureKey: effectTextureKey(effect.amountPerSecond >= 0 ? "ap-regen-up" : "ap-regen-down"),
@@ -350,6 +411,7 @@ export class CommandHud {
   private panelWidth = 420;
   private panelHeight = 152;
   private hoveredEffectId: string | null = null;
+  private renderedLanguage: CommandLanguage;
 
   constructor(scene: Phaser.Scene, initialSnapshot: CommandInputSnapshot, options: CommandHudOptions = {}) {
     this.scene = scene;
@@ -357,6 +419,7 @@ export class CommandHud {
     this.resolveApCost = options.resolveApCost ?? ((skill) => skill.apCost);
     this.resolveDamage = options.resolveDamage ?? (() => null);
     this.state = createCommandHudState(initialSnapshot);
+    this.renderedLanguage = this.getLanguage();
     this.container = scene.add.container(0, 0);
     this.panel = scene.add
       .rectangle(0, 0, this.panelWidth, this.panelHeight, 0x0b1220, 0.94)
@@ -418,7 +481,7 @@ export class CommandHud {
       this.tooltipText,
     ]);
     this.container.setSize(this.panelWidth, this.panelHeight);
-    scene.events.on(SCENE_UPDATE_EVENT, this.refreshEffects, this);
+    scene.events.on(SCENE_UPDATE_EVENT, this.refreshRuntimePresentation, this);
     scene.events.once(SCENE_SHUTDOWN_EVENT, this.release, this);
     scene.events.once(SCENE_DESTROY_EVENT, this.release, this);
     this.refresh();
@@ -461,14 +524,27 @@ export class CommandHud {
   }
 
   private resolveEffects(): CommandHudEffect[] {
+    const language = this.getLanguage();
     const effectScene = this.scene as EffectAwareScene;
     const currentSkill = this.skills.find((skill) => skill.command === this.state.command);
     // Status icons in the command panel describe a possible result, not an
     // active status. Active bleed/weaken/etc. effects are rendered by the
     // actor HUD, so they must not appear beside damage previews while idle.
-    const skillEffects = createSkillCommandEffects(currentSkill).filter((effect) => !effect.id.includes(":status:"));
-    const timedApEffects = createTimedApCommandEffects(effectScene.actionPoints?.snapshot.timedEffects);
+    const skillEffects = createSkillCommandEffects(currentSkill, language).filter(
+      (effect) => !effect.id.includes(":status:"),
+    );
+    const timedApEffects = createTimedApCommandEffects(effectScene.actionPoints?.snapshot.timedEffects, language);
     return [...skillEffects, ...timedApEffects];
+  }
+
+  private refreshRuntimePresentation(): void {
+    const language = this.getLanguage();
+    if (language !== this.renderedLanguage) {
+      this.renderedLanguage = language;
+      this.refresh();
+      return;
+    }
+    this.refreshEffects();
   }
 
   private refreshEffects(): void {
@@ -555,7 +631,15 @@ export class CommandHud {
       8,
       Math.max(8, this.panelWidth - tooltipWidth - 8),
     );
-    const label = `${effect.name}\n${effect.description}\n${formatEffectRemainingTime(effect.remainingMs)}`;
+    const remainingTime =
+      this.getLanguage() === "ko"
+        ? formatEffectRemainingTime(effect.remainingMs)
+        : effect.remainingMs === null
+          ? "Duration: applied on activation"
+          : effect.remainingMs >= 1_000
+            ? `Time remaining: ${(effect.remainingMs / 1_000).toFixed(1)}s`
+            : `Time remaining: ${Math.ceil(Math.max(0, effect.remainingMs))}ms`;
+    const label = `${effect.name}\n${effect.description}\n${remainingTime}`;
     this.tooltipText
       .setText(label)
       .setPosition(x + 12, EFFECT_TOP + EFFECT_SIZE + 13)
@@ -575,7 +659,7 @@ export class CommandHud {
   }
 
   private release(): void {
-    this.scene.events.off(SCENE_UPDATE_EVENT, this.refreshEffects, this);
+    this.scene.events.off(SCENE_UPDATE_EVENT, this.refreshRuntimePresentation, this);
     for (const visual of this.effectVisuals) visual.darknessMask.destroy();
   }
 
@@ -599,8 +683,13 @@ export class CommandHud {
     this.title.setX(contentLeft);
     const inputY = Math.max(58, this.panelHeight - 42);
     const listHeight = Math.max(24, inputY - 34);
-    const previewLines = formatAvailableSkillPreviews(this.skills, this.resolveApCost, this.resolveDamage).split("\n");
-    const previewHeader = previewLines.shift() ?? "TYPE // COMMAND // COST // DAMAGE";
+    const previewLines = formatAvailableSkillPreviews(
+      this.skills,
+      this.resolveApCost,
+      this.resolveDamage,
+      language,
+    ).split("\n");
+    const previewHeader = previewLines.shift() ?? HUD_COPY[language].header;
     const previewText = previewLines.join("\n");
     this.title.setText(previewHeader);
     const previewLineCount = Math.max(1, previewLines.length);
