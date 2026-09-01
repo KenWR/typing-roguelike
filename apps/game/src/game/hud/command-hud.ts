@@ -631,14 +631,7 @@ export class CommandHud {
       8,
       Math.max(8, this.panelWidth - tooltipWidth - 8),
     );
-    const remainingTime =
-      this.getLanguage() === "ko"
-        ? formatEffectRemainingTime(effect.remainingMs)
-        : effect.remainingMs === null
-          ? "Duration: applied on activation"
-          : effect.remainingMs >= 1_000
-            ? `Time remaining: ${(effect.remainingMs / 1_000).toFixed(1)}s`
-            : `Time remaining: ${Math.ceil(Math.max(0, effect.remainingMs))}ms`;
+    const remainingTime = formatEffectRemainingTime(effect.remainingMs, this.getLanguage());
     const label = `${effect.name}\n${effect.description}\n${remainingTime}`;
     this.tooltipText
       .setText(label)
