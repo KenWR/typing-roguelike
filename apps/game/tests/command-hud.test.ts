@@ -26,8 +26,22 @@ describe("command HUD state", () => {
         (skill) => (skill.name === "베기" ? 9 : skill.category === "special" ? 17 : null),
       ),
     ).toBe(
-      "TYPE // COMMAND // COST // DAMAGE\n기본기술 : 방어 : 1 : -\n기본기술 : 베기 : 1 : 9\n특수기술 : 이중 베기 : 2 : 17",
+      "유형 // 명령어 // 비용 // 피해\n기본기술 : 방어 : 1 : -\n기본기술 : 베기 : 1 : 9\n특수기술 : 이중 베기 : 2 : 17",
     );
+  });
+
+  test("localizes the full skill preview while retaining untranslated content as fallback", () => {
+    expect(
+      formatAvailableSkillPreviews(
+        [
+          { name: "베기", command: "베기", category: "basic", apCost: 1 },
+          { name: "이중 베기", command: "이중 베기", category: "special", apCost: 2 },
+        ],
+        (skill) => skill.apCost,
+        () => null,
+        "en",
+      ),
+    ).toBe("TYPE // COMMAND // COST // DAMAGE\nBASIC SKILL : 베기 : 1 : -\nSPECIAL SKILL : 이중 베기 : 2 : -");
   });
 
   test("shows ring effects as descriptive rows instead of duplicate commands", () => {
@@ -152,6 +166,24 @@ describe("command HUD state", () => {
         textureKey: "effect:bleed",
       },
     ]);
+  });
+
+  test("localizes command effect descriptions in English", () => {
+    const [effect] = createSkillCommandEffects(
+      {
+        id: "skill.guard",
+        name: "방어",
+        command: "방어",
+        description: "fallback",
+        effects: [{ type: "guard", damageMultiplier: 0.6, durationMs: 2_000 }],
+      },
+      "en",
+    );
+
+    expect(effect).toMatchObject({
+      name: "Damage reduction",
+      description: "방어: 40% less damage taken · 2s",
+    });
   });
 
   test("fills the dark overlay from bottom to top as timed effects expire", () => {
