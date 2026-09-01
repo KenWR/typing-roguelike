@@ -176,7 +176,12 @@ export function getEffectDarknessRatio(effect: Pick<EffectPresentation, "duratio
   return 1 - remainingRatio;
 }
 
-export function formatEffectRemainingTime(remainingMs: number | null): string {
+export function formatEffectRemainingTime(remainingMs: number | null, language: "ko" | "en" = "ko"): string {
+  if (language === "en") {
+    if (remainingMs === null) return "Duration: applied on activation";
+    if (remainingMs >= 1_000) return `Time remaining: ${(remainingMs / 1_000).toFixed(1)}s`;
+    return `Time remaining: ${Math.ceil(Math.max(0, remainingMs))}ms`;
+  }
   if (remainingMs === null) return "지속시간: 발동 시 적용";
   if (remainingMs >= 1_000) return `남은 시간: ${(remainingMs / 1_000).toFixed(1)}초`;
   return `남은 시간: ${Math.ceil(Math.max(0, remainingMs))}ms`;
