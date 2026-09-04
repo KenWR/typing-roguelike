@@ -1,13 +1,16 @@
 name: PR validation
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     types: [opened, synchronize, reopened, edited]
 
 # Stable required check/job name: PR validation (job id: pr-validation).
 # Keep this workflow path-unfiltered so shared-package changes run every consumer check.
 # The root validation command discovers the complete game/API/shared suite and browser smoke tests.
-# QUALITY_BASE_SHA keeps changed-file lint and whitespace checks scoped to the PR merge base.
+# QUALITY_BASE_SHA keeps changed-file lint and whitespace checks scoped to the PR merge base or previous main commit.
 # The dry-run below verifies non-zero command propagation without failing this validation job.
 # Runtime evidence still requires external PR activity for superseded-run cancellation and a
 # shared-package-only change; reproduce those cases by pushing a second head during an active
@@ -25,10 +28,10 @@ jobs:
     name: PR validation
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout PR
+      - name: Checkout validated commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Set up Bun from package.json
@@ -44,8 +47,16 @@ jobs:
 
       - name: Report validated commit
         run: |
-          echo "PR head SHA: ${{ github.event.pull_request.head.sha }}"
+          echo "Validated SHA: ${{ github.event.pull_request.head.sha || github.sha }}"
           echo "Checked-out SHA: $(git rev-parse HEAD)"
+
+      - name: Validate whitespace and static diff
+        if: github.event_name == 'pull_request'
+        run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+
+      - name: Validate whitespace on main push
+        if: github.event_name == 'push'
+        run: git diff --check "${{ github.event.before }}...${{ github.sha }}"
 
       - name: Verify command failure propagation (safe dry-run)
         shell: bash
@@ -79,5 +90,5 @@ jobs:
       - name: Validate repository
         env:
           CI: "true"
-          QUALITY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          QUALITY_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: bun run validate
